@@ -4,9 +4,3 @@
 [submodule "src/backend/lib/OpenCL-Headers"]
 	path = src/backend/lib/OpenCL-Headers
 	url = https://github.com/KhronosGroup/OpenCL-Headers
-[submodule "src/backend/lib/OpenCL-Wrapper"]
-	path = src/backend/lib/OpenCL-Wrapper
-	url = https://github.com/ProjectPhysX/OpenCL-Wrapper.git
-[submodule "src/backend/lib/CLErrorLookup"]
-	path = src/backend/lib/CLErrorLookup
-	url = https://github.com/otto-link/CLErrorLookup.git

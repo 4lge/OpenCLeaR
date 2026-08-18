@@ -10,59 +10,32 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// CLDistanceMatrix2
-NumericMatrix CLDistanceMatrix2(const NumericMatrix& mat);
-RcppExport SEXP _CMakeOpenCLRcppTemplate_CLDistanceMatrix2(SEXP matSEXP) {
+// CLDistanceMatrix
+NumericMatrix CLDistanceMatrix(const NumericMatrix& mat);
+RcppExport SEXP _CMakeOpenCLRcppTemplate_CLDistanceMatrix(SEXP matSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const NumericMatrix& >::type mat(matSEXP);
-    rcpp_result_gen = Rcpp::wrap(CLDistanceMatrix2(mat));
+    rcpp_result_gen = Rcpp::wrap(CLDistanceMatrix(mat));
     return rcpp_result_gen;
 END_RCPP
 }
-// rnormCL
-NumericVector rnormCL(const int n, const double mean, const double sd);
-RcppExport SEXP _CMakeOpenCLRcppTemplate_rnormCL(SEXP nSEXP, SEXP meanSEXP, SEXP sdSEXP) {
+// SetKernelsPath
+SEXP SetKernelsPath(String kernelsPath);
+RcppExport SEXP _CMakeOpenCLRcppTemplate_SetKernelsPath(SEXP kernelsPathSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const int >::type n(nSEXP);
-    Rcpp::traits::input_parameter< const double >::type mean(meanSEXP);
-    Rcpp::traits::input_parameter< const double >::type sd(sdSEXP);
-    rcpp_result_gen = Rcpp::wrap(rnormCL(n, mean, sd));
+    Rcpp::traits::input_parameter< String >::type kernelsPath(kernelsPathSEXP);
+    rcpp_result_gen = Rcpp::wrap(SetKernelsPath(kernelsPath));
     return rcpp_result_gen;
 END_RCPP
 }
-// runifCL
-NumericVector runifCL(const int n, const double lower, const double upper);
-RcppExport SEXP _CMakeOpenCLRcppTemplate_runifCL(SEXP nSEXP, SEXP lowerSEXP, SEXP upperSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const int >::type n(nSEXP);
-    Rcpp::traits::input_parameter< const double >::type lower(lowerSEXP);
-    Rcpp::traits::input_parameter< const double >::type upper(upperSEXP);
-    rcpp_result_gen = Rcpp::wrap(runifCL(n, lower, upper));
-    return rcpp_result_gen;
-END_RCPP
-}
-
-RcppExport SEXP ActivateDeviceWithID(SEXP);
-RcppExport SEXP ActivateDeviceWithMostFlops(void);
-RcppExport SEXP ActivateDeviceWithMostMemory(void);
-RcppExport SEXP InitCL(void);
-RcppExport SEXP SetKernelsPath(SEXP);
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_CMakeOpenCLRcppTemplate_CLDistanceMatrix2", (DL_FUNC) &_CMakeOpenCLRcppTemplate_CLDistanceMatrix2, 1},
-    {"_CMakeOpenCLRcppTemplate_rnormCL", (DL_FUNC) &_CMakeOpenCLRcppTemplate_rnormCL, 3},
-    {"_CMakeOpenCLRcppTemplate_runifCL", (DL_FUNC) &_CMakeOpenCLRcppTemplate_runifCL, 3},
-    {"ActivateDeviceWithID",         (DL_FUNC) &ActivateDeviceWithID,         1},
-    {"ActivateDeviceWithMostFlops",  (DL_FUNC) &ActivateDeviceWithMostFlops,  0},
-    {"ActivateDeviceWithMostMemory", (DL_FUNC) &ActivateDeviceWithMostMemory, 0},
-    {"InitCL",                       (DL_FUNC) &InitCL,                       0},
-    {"SetKernelsPath",               (DL_FUNC) &SetKernelsPath,               1},
+    {"_CMakeOpenCLRcppTemplate_CLDistanceMatrix", (DL_FUNC) &_CMakeOpenCLRcppTemplate_CLDistanceMatrix, 1},
+    {"_CMakeOpenCLRcppTemplate_SetKernelsPath", (DL_FUNC) &_CMakeOpenCLRcppTemplate_SetKernelsPath, 1},
     {NULL, NULL, 0}
 };
 

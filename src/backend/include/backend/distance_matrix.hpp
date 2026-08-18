@@ -1,7 +1,7 @@
 #pragma once
 
 #include "backend/export.hpp"
-#include <vector>
+
 #include <string>
 
 namespace backend {
@@ -12,9 +12,6 @@ namespace backend {
 	 * 	data is a 1d array of length rows * cols.
 	 * 	res is a 1d array of length rows * rows.
 	 */
-
-  extern "C" EXPORT void distance_matrix1(double* data, int rows, int cols, double* res);
-  
-  void EXPORT distance_matrix2(std::vector<double> data, std::vector<double> res);
+	extern "C" EXPORT void distance_matrix(double* data, int rows, int cols, double* res);
 
 }

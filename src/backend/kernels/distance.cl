@@ -1,4 +1,3 @@
-
 __kernel void distance_matrix(
     __global real_t* output,
     __global real_t* input,

@@ -1,6 +1,4 @@
 import(Rcpp)
 
 useDynLib(CMakeOpenCLRcppTemplate, .registration = TRUE)
-export(runifCL)
-export(rnormCL)
-export(distanceMatrixCL)
+export(CLDistanceMatrix)

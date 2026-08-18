@@ -1,7 +1,7 @@
 Package: CMakeOpenCLRcppTemplate
 Type: Package
 Title: A Project Template for using CMake with Rcpp
-Version: 0.1.0
+Version: 0.1.1
 Author: Julian Märte
 Authors@R: person(given = "Albrecht",
                 family = "Gebhardt",
