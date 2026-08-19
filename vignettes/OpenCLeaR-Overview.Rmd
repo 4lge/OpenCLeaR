@@ -1,0 +1,182 @@
+---
+title: "OpenCLeaR"
+author: "AG"
+date: "2026-07-30"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{OpenCLear Overview}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# OpenCLeaR package overview
+
+This document summarizes the most important files in the package.
+
+## R-Code and basic configuration
+
+### DESCRIPTION
+```{r, code=readLines('../DESCRIPTION'), eval=FALSE, echo=TRUE}
+```
+
+### R/OpenCLeaR.R (onload initialization etc)
+```{r, code=readLines('../R/OpenCLeaR.R', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
+```
+
+### R/debug.R (debug etc)
+#```{r, code=readLines('../R/debug.R', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
+#```
+
+### R/print.R (print methods)
+#```{r, code=readLines('../R/print.R', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
+#```
+
+### src/RcppInterface.cpp (some declarations) (TODO, currently not needed)
+#```{r, code=readLines('../src/RcppInterface.cpp', warn=FALSE), eval=FALSE, echo=TRUE, comment="", class.source="cpp"}
+#```
+
+## Build-System (Makevars etc)
+
+automated tasks, generate src/RcppExport.cpp, NAMESPACE and Rd files:
+
+### Makefile
+```{r, code=readLines('../Makefile', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
+```
+
+Unix style compiler settings
+
+### src/Makevars
+```{r, code=readLines('../src/Makevars', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
+```
+
+Windows style compiler settings
+
+### src/Makevars.win
+```{r, code=readLines('../src/Makevars.win', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
+```
+
+## CMake Konfiguration
+
+add all third-party code via git and collect it in the backend:
+
+### src/backend/CMakeLists.txt
+```{r, code=readLines('../src/backend/CMakeLists.txt', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
+```
+
+get compiler configuration:
+
+### src/backend/cmake/find_toolchain.cmake
+```{r, code=readLines('../src/backend/cmake/find_toolchain.cmake', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
+```
+
+
+## Rcpp Interface to OpenCL kernels
+
+parallel distance example.
+
+### src/CLDistanceMatrix.cpp
+```{r, code=readLines('../src/CLDistanceMatrix.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+```
+
+### R/*,R currently empty
+#```{r, code=readLines('../R/rnormCL.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+#```
+
+## C++ Backend
+
+### src/backend/src/internal/CL_context.hpp
+```{r, code=readLines('../src/backend/src/internal/CL_context.hpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+```
+
+### src/backend/src/CL_context.cpp
+```{r, code=readLines('../src/backend/src/CL_context.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+```
+
+### src/backend/src/init.cpp
+```{r, code=readLines('../src/backend/src/init.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+```
+
+### src/backend/include/backend/init.hpp
+```{r, code=readLines('../src/backend/include/backend/init.hpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+```
+
+### src/backend/include/backend/export.hpp
+```{r, code=readLines('../src/backend/include/backend/export.hpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+```
+
+
+Kernel library, TODO
+
+### src/backend/kernel/libkernel.cpp
+#```{r, code=readLines('../src/backend/kernels/libkernel.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+#```
+
+Finally a real OpenCL kernel
+
+### src/backend/kernels/distance.cl
+```{r, code=readLines('../src/backend/kernels/distance.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="c", comment=""}
+```
+
+
+## inline Interface
+
+inline plugin definition
+
+### R/inline.R
+```{r, code=readLines('../R/inline.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+```
+
+examples, TODO
+
+### inst/examples/rnormCLinline.R
+#```{r, code=readLines('../inst/examples/rnormCLinline.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+#```
+
+### inst/examples/parallel_mh.R
+#```{r, code=readLines('../inst/examples/parallel_mh.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+#```
+
+### inst/examples/parallel_mh_generic.R
+#```{r, code=readLines('../inst/examples/parallel_mh_generic.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+#```
+examples in Rd files>
+
+### man/generateInlineCL.Rd
+#```{r, code=readLines('../man/generateInlineCL.Rd', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+#```
+
+### man/makeAdaptiveCL.Rd
+#```{r, code=readLines('../man/makeAdaptiveCL.Rd', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+#```
+
+### kernel/idw_kernel.cl
+#```{r, code=readLines('../inst/kernels/idw_kernel.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+#```
+
+### interface/idw_rcpp.cpp
+#```{r, code=readLines('../inst/interface/idw_rcpp.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+#```
+
+## Tests (TODO)
+
+configuration
+
+### tests/testthat.R
+#```{r, code=readLines('../tests/testthat.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+#```
+
+finally a test (TODO)
+
+### tests/testthat/test-rnormCL.R
+#```{r, code=readLines('../tests/testthat/test-rnormCL.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+#```
+
+
+An **inline** call could look like this: (TODO)
+
+source(paste(system.file("inst/examples", package = "OpenCLeaR"),"rnormCLinline.R",sep="/"))
+
+using 
+### inst/examples/rnormCLinline.R
+#```{r, code=readLines('../inst/examples/rnormCLinline.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+#```

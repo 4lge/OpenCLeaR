@@ -1,7 +1,7 @@
-Package: CMakeOpenCLRcppTemplate
+Package: OpenCLeaR
 Type: Package
-Title: A Project Template for using CMake with Rcpp
-Version: 0.5.3
+Title: An OpenCL Enhanced Accelerated R-Package
+Version: 0.5.4
 Author: Albrecht Gebhardt
 Authors@R: person(given = "Albrecht",
                 family = "Gebhardt",
@@ -9,10 +9,21 @@ Authors@R: person(given = "Albrecht",
                 email = "albrecht.gebhardt@aau.at")
 Authors@R: person(given = "Julian",
                 family = "Märte",
-                role = c("aut", "cre"),
+                role = c("aut", "cph"),
                 email = "mail@maertej.com")
+Authors@R: person(given = "Moritz",
+                family = "Lehmann",
+                role = c("aut", "cph"),
+                email = "moritz.lehmann@uni-bayreuth.de")
 Maintainer: Albrecht Gebhardt <albrecht.gebhardt@aau.at>
-Description: A template for building CRAN-ready R packages using Rcpp and CMake. Provides a modular structure to integrate external C/C++ libraries (e.g., OpenCL, OpenGL) in a platform-independent way. Designed for projects requiring high-performance native code without manual environment configuration or complex Makefiles.
+Description: 
+  This package aims to provide easy access to OpenCL coding 
+  using a C++ abstraction layer via classes inherited from 
+  OpenCL-Wrapper <https://github.com/ProjectPhysX/OpenCL-Wrapper>
+  by Dr. Moritz Lehmann to interact with low level OpenCL functions. 
+  Configuration is done automatically via CMake based on
+  J. Maertes template package from which this package is a
+  fork of, see <https://github.com/jmaerte/cmake-rcpp-template>). 
 LinkingTo: Rcpp
 Imports: Rcpp
 SystemRequirements: OpenCL, CMake

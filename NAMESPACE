@@ -1,4 +1,4 @@
 import(Rcpp)
 
-useDynLib(CMakeOpenCLRcppTemplate, .registration = TRUE)
+useDynLib(OpenCLeaR, .registration = TRUE)
 export(CLDistanceMatrix)
