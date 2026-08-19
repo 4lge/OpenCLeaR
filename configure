@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 # Compile the Backend library first:
@@ -6,6 +6,16 @@ echo "** COMPILING THE OPENCL BACKEND CODE NOW! **"
 
 BUILD_DIR="src/backend/build"
 INSTALL_DIR="src"
+
+# Detect OS and set appropriate extension and rpath flags.
+UNAME=$(uname)
+if [ ${UNAME} == "Darwin" ]; then
+    # macOS settings
+    SHLIB_EXT="dylib"
+else
+    # Linux settings
+    SHLIB_EXT="so"
+fi
 
 mkdir -p "$BUILD_DIR"
 mkdir -p "$INSTALL_DIR"
@@ -26,7 +36,7 @@ cmake --build . || {
 }
 
 # Copy the binary in src/
-DLL_NAME="libBACKEND.so"
+DLL_NAME="libBACKEND."${SHLIB_EXT}
 if [ -f "$DLL_NAME" ]; then
 	cp "$DLL_NAME" ../../$DLL_NAME
 elif [ -f "Release/$DLL_NAME" ]; then
@@ -48,5 +58,6 @@ mkdir -p inst/kernels
 cp src/backend/kernels/*.cl inst/kernels/ 2>/dev/null || echo "No .cl files found."
 
 echo "** SUCCESSFULLY COPIED KERNELS! **"
+
 
 exit 0

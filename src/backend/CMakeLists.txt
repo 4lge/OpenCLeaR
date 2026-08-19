@@ -27,14 +27,36 @@ ExternalProject_Add(OpenCL_CLHPP
     INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory ${EXTERNAL_LIB_LOCATION}/OpenCL-CLHPP/include/CL ${CMAKE_CURRENT_BINARY_DIR}/local_install/include/CL
 
 )
+execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install/include/")
+ExternalProject_Add(OpenCL_Wrapper
+    GIT_REPOSITORY https://github.com/ProjectPhysX/OpenCL-Wrapper
+    GIT_TAG e90fd46f07118c235ce1cc9274035948185da4df
+    SOURCE_DIR ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
 
+    CONFIGURE_COMMAND ""  # Don't run cmake
+    BUILD_COMMAND ""      # Don't build
+    INSTALL_COMMAND ${CMAKE_COMMAND} -E copy ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/opencl.hpp ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/utilities.hpp ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/kernel.hpp ${CMAKE_CURRENT_BINARY_DIR}/local_install/include/
 
+)
 
+ExternalProject_Add(CLErrorLookup
+    GIT_REPOSITORY https://github.com/otto-link/CLErrorLookup.git
+    GIT_TAG 27adbb9217e2a9e31b08fe32acc21df9d2b53e84
+    SOURCE_DIR ${EXTERNAL_LIB_LOCATION}/CLErrorLookup
+
+    CONFIGURE_COMMAND ""  # Don't run cmake
+    BUILD_COMMAND ""      # Don't build
+    
+    # 🚀 NUR NOCH DIE HEADER KOPIEREN (Das läuft zu 100% fehlerfrei durch):
+    INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory ${EXTERNAL_LIB_LOCATION}/CLErrorLookup/CLErrorLookup/include ${CMAKE_CURRENT_BINARY_DIR}/local_install/include/
+)
 
 # Include the external library headers in the lib folder
 include_directories(
   ${CMAKE_SOURCE_DIR}/lib/OpenCL-Headers
   ${CMAKE_SOURCE_DIR}/lib/OpenCL-CLHPP/include
+  ${CMAKE_SOURCE_DIR}/lib/OpenCL-Wrapper/src
+  ${CMAKE_SOURCE_DIR}/lib/CLErrorLookup
   ${OpenCL_INCLUDE_DIRS}
 )
 
@@ -111,7 +133,55 @@ endif()
 
 # Make a shared library
 file(GLOB_RECURSE SOURCES "src/*.cpp")
-ADD_LIBRARY(BACKEND SHARED ${SOURCES})
+file(GLOB_RECURSE KERNELS "kernels/*.cpp")
+
+# Pfad zum mitgelieferten OpenCL Error definieren
+set(CLERROR_SRC "${EXTERNAL_LIB_LOCATION}/CLErrorLookup/CLErrorLookup/src")
+
+# 🚀 DIE CONFIGURATION-RETTUNG (Generated-Flags):
+# Zwingt CMake, die fehlenden Dateien beim ersten "cmake ." Lauf zu akzeptieren,
+# da sie erst während des darauffolgenden Git-Clones physisch entstehen!
+set_source_files_properties(
+    "${CLERROR_SRC}/cl_error_lookup.cpp"
+    "${CLERROR_SRC}/get_error_info.cpp"
+    PROPERTIES GENERATED TRUE
+)
+
+# 🚀 STATISCHE WEICHE FÜR WINDOWS:
+if(WIN32)
+  # Unter Windows bauen wir das Backend als statisches Archiv (.a)
+  ADD_LIBRARY(BACKEND STATIC
+      ${SOURCES}
+      ${KERNELS}
+      "${CLERROR_SRC}/cl_error_lookup.cpp"
+      "${CLERROR_SRC}/get_error_info.cpp"
+  )
+else()
+  # Auf Linux bleibt es für den Dell-Server beim bewährten SHARED (.so)
+  ADD_LIBRARY(BACKEND SHARED
+      ${SOURCES}
+      ${KERNELS}
+      "${CLERROR_SRC}/cl_error_lookup.cpp"
+      "${CLERROR_SRC}/get_error_info.cpp"
+  )
+endif()
+
+
+# Zwingt GNU Make, das Git-Repo fertig zu laden, BEVOR das Backend kompiliert!
+add_dependencies(BACKEND CLErrorLookup)
+
+if(WIN32)
+  # for DLL_VAR to work in init.hpp:
+  target_compile_definitions(BACKEND PRIVATE BUILDING_BACKEND_DLL)
+endif()
+# ZWINGENDE ABHÄNGIGKEITEN FÜR ALLE SYSTEME:
+# Das Backend darf erst bauen, wenn alle Git-Submodule vollständig auf der Festplatte liegen!
+add_dependencies(BACKEND OpenCL_Headers OpenCL_CLHPP OpenCL_Wrapper CLErrorLookup)
+
+# If local OpenCL in use, depend on it
+if(NOT OpenCL_FOUND)
+  add_dependencies(BACKEND OpenCL_ICD_Loader)
+endif()
 
 # The header includes go here
 # Leave the two /include and /src/internal ones in here; the rest can be altered.
@@ -123,6 +193,7 @@ target_include_directories(BACKEND
 		${OpenCL_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}/lib/OpenCL-Headers
     ${CMAKE_SOURCE_DIR}/lib/OpenCL-CLHPP/include
+    ${CMAKE_SOURCE_DIR}/lib/CLErrorLookup/CLErrorLookup/include
 )
 
 # ------------------------------------------------------------------------------
@@ -190,6 +261,9 @@ endif()
 # 🚀 AUTOMATISCHER HEADER-EXPORT NACH DEM BUILD:
 add_custom_command(TARGET BACKEND POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/backend"
+    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/src/internal/CL_context.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/"
+    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/include/backend/export.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/"
+    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/include/backend/init.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/"
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install/include" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include"
     COMMENT "📦 Kopiere Header in den inst/include Ordner für Rcpp..."
 )

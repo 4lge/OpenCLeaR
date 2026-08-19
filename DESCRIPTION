@@ -1,7 +1,7 @@
 Package: OpenCLeaR
 Type: Package
 Title: An OpenCL Enhanced Accelerated R-Package
-Version: 0.5.4
+Version: 0.5.5
 Author: Albrecht Gebhardt
 Authors@R: person(given = "Albrecht",
                 family = "Gebhardt",

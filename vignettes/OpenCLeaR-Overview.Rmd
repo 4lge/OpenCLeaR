@@ -49,10 +49,18 @@ Unix style compiler settings
 ```{r, code=readLines('../src/Makevars', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
 ```
 
+### configure
+```{r, code=readLines('../configure', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
+```
+
 Windows style compiler settings
 
 ### src/Makevars.win
 ```{r, code=readLines('../src/Makevars.win', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
+```
+
+### configure.win
+```{r, code=readLines('../configure.win', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
 ```
 
 ## CMake Konfiguration

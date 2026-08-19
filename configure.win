@@ -25,7 +25,7 @@ cmake --build . || {
 }
 
 # Copy the binary in src/
-DLL_NAME="BACKEND.dll"
+DLL_NAME="BACKEND.a"
 if [ -f "$DLL_NAME" ]; then
 	cp "$DLL_NAME" "../../../$INSTALL_DIR/"
 elif [ -f "Release/$DLL_NAME" ]; then
@@ -49,6 +49,14 @@ mkdir -p inst/kernels
 cp src/backend/kernels/*.cl inst/kernels/ 2>/dev/null
 
 echo "** SUCCESSFULLY COPIED KERNELS! **"
+
+echo "** COPYING INCLUDES! **"
+
+mkdir -p inst/include
+
+cp src/backend/kernels/*.cl inst/include/ 2>/dev/null
+
+echo "** SUCCESSFULLY COPIED INCLUDES! **"
 
 
 
