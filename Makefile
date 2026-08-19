@@ -30,7 +30,7 @@ dist-clean: clean
 	rm -rf src/backend/build/ 
 	rm -rf src/backend/lib/ 
 	rm -f vignettes/OpenCLeaR-Overview.md 
-	vignettes/OpenCLeaR-Overview.log
+	rm -f vignettes/OpenCLeaR-Overview.log
 
 
 NAMESPACE: NAMESPACE.in

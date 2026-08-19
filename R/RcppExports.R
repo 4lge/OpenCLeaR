@@ -2,10 +2,10 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 CLDistanceMatrix <- function(mat) {
-    .Call(`_CMakeOpenCLRcppTemplate_CLDistanceMatrix`, mat)
+    .Call(`_OpenCLeaR_CLDistanceMatrix`, mat)
 }
 
 SetKernelsPath <- function(kernelsPath) {
-    .Call(`_CMakeOpenCLRcppTemplate_SetKernelsPath`, kernelsPath)
+    .Call(`_OpenCLeaR_SetKernelsPath`, kernelsPath)
 }
 

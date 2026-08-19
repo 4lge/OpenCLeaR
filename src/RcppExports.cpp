@@ -12,7 +12,7 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 
 // CLDistanceMatrix
 NumericMatrix CLDistanceMatrix(const NumericMatrix& mat);
-RcppExport SEXP _CMakeOpenCLRcppTemplate_CLDistanceMatrix(SEXP matSEXP) {
+RcppExport SEXP _OpenCLeaR_CLDistanceMatrix(SEXP matSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -23,7 +23,7 @@ END_RCPP
 }
 // SetKernelsPath
 SEXP SetKernelsPath(String kernelsPath);
-RcppExport SEXP _CMakeOpenCLRcppTemplate_SetKernelsPath(SEXP kernelsPathSEXP) {
+RcppExport SEXP _OpenCLeaR_SetKernelsPath(SEXP kernelsPathSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -34,12 +34,12 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_CMakeOpenCLRcppTemplate_CLDistanceMatrix", (DL_FUNC) &_CMakeOpenCLRcppTemplate_CLDistanceMatrix, 1},
-    {"_CMakeOpenCLRcppTemplate_SetKernelsPath", (DL_FUNC) &_CMakeOpenCLRcppTemplate_SetKernelsPath, 1},
+    {"_OpenCLeaR_CLDistanceMatrix", (DL_FUNC) &_OpenCLeaR_CLDistanceMatrix, 1},
+    {"_OpenCLeaR_SetKernelsPath", (DL_FUNC) &_OpenCLeaR_SetKernelsPath, 1},
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_CMakeOpenCLRcppTemplate(DllInfo *dll) {
+RcppExport void R_init_OpenCLeaR(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }
