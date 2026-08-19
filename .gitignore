@@ -1,0 +1,28 @@
+# 📝 Emacs & Editor-Backups ignorieren
+*~
+\#*#
+.\#*
+
+# 📦 Kompilierte Binärdateien und R-Objekte ignorieren
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.a
+
+# 🔍 CMake-Build-Cache ignorieren
+/src/backend/build/
+/src/backend/CMakeFiles/
+/src/backend/CMakeCache.txt
+/src/backend/cmake_install.cmake
+
+# 📁 R-spezifischen Müll ignorieren
+/src/*.o
+/src/*.obj
+/src/symbols.rds
+/src/OpenCLeaR.dll
+/src/OpenCLeaR.so
+.RData
+.Rhistory
+

@@ -28,7 +28,13 @@ inlineCxxPlugin <- function(...) {
         package        = "OpenCLeaR"
     )
     settings <- plugin()
-    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
+    # 🚀 DIE RECHTE WINDOWS-WEICHE:
+    cpp_flags <- paste(" -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
+    if (.Platform$OS.type == "windows") {
+        cpp_flags <- paste(cpp_flags, "-mstackrealign")
+    }
+    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, cpp_flags)
+
     return(settings)
 }
 
@@ -41,7 +47,12 @@ inlineCxxPluginFloat <- function(...) {
         package        = "OpenCLeaR"
     )
     settings <- plugin()
-    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DFP64_MODE=0 -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
+    # 🚀 DIE RECHTE WINDOWS-WEICHE:
+    cpp_flags <- paste(" -DFP64_MODE=0 -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
+    if (.Platform$OS.type == "windows") {
+        cpp_flags <- paste(cpp_flags, "-mstackrealign")
+    }
+    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, cpp_flags)
     return(settings)
 }
 
@@ -54,7 +65,12 @@ inlineCxxPluginDouble <- function(...) {
         package        = "OpenCLeaR"
     )
     settings <- plugin()
-    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DFP64_MODE=1 -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
+    # 🚀 DIE RECHTE WINDOWS-WEICHE:
+    cpp_flags <- paste(" -DFP64_MODE=1 -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
+    if (.Platform$OS.type == "windows") {
+        cpp_flags <- paste(cpp_flags, "-mstackrealign")
+    }
+    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, cpp_flags)
     return(settings)
 }
 

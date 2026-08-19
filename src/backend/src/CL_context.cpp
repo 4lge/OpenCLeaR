@@ -9,93 +9,122 @@
 
 namespace backend {
 
-	CL_context::CL_context() {
-		std::vector<cl::Platform> platforms;
-        	try {
-		    cl::Platform::get(&platforms);
-		    if (platforms.empty()) {
-		        throw std::runtime_error("No OpenCL platforms found.");
-		    }
-		} catch (cl::Error &e) {
-			std::cerr << "*** IMPORTANT: No OpenCL platforms where found! Make sure you have a graphics driver installed for your hardware! ***" << std::endl;
-			std::cerr << "*** HINT: NVIDIA Drivers might not be loaded even though they were installed due to 'Secure Boot' being enabled ***" << std::endl;
-		    throw std::runtime_error("OpenCL error: " + std::string(e.what()) + " (" + std::to_string(e.err()) + ")");
-		}
+  CL_context::CL_context() {
+    this->has_hardware = false; // Standardmäßig erst mal deaktiviert
+    std::vector<cl::Platform> platforms;
 
-		bool found = false;
+    try {
+      // 🚀 DIE CRAN-RETTUNG: Wir fangen den Khronos-C++ Rückgabecode direkt ab
+      cl_int platform_err = cl::Platform::get(&platforms);
 
-		for (const auto& platform : platforms) {
-		    std::vector<cl::Device> devices;
-		    platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
-
-		    for (const auto& dev : devices) {
-		        cl_device_type type = dev.getInfo<CL_DEVICE_TYPE>();
-		        cl_uint compute_units = dev.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
-		        std::string name = dev.getInfo<CL_DEVICE_NAME>();
-		        std::string vendor = dev.getInfo<CL_DEVICE_VENDOR>();
-
-		        std::cout << "Found device: " << name << " (" << vendor << ")"
-		                  << " | Type: " << (type == CL_DEVICE_TYPE_GPU ? "GPU" :
-		                                     type == CL_DEVICE_TYPE_CPU ? "CPU" :
-		                                     type == CL_DEVICE_TYPE_ACCELERATOR ? "Accelerator" : "Other")
-		                  << " | Compute Units: " << compute_units << "\n";
-
-		        // Prioritize GPU over others
-		        if (!found || (type == CL_DEVICE_TYPE_GPU && best_device.getInfo<CL_DEVICE_TYPE>() != CL_DEVICE_TYPE_GPU) ||
-		            (type == best_device.getInfo<CL_DEVICE_TYPE>() && compute_units > best_device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>())) {
-		            best_device = dev;
-		            best_platform = platform;
-		            found = true;
-		        }
-		    }
-		}
-
-		if (!found) {
-		    throw std::runtime_error("No suitable OpenCL devices found.");
-		}
-
-		std::cout << "Selected device: " << best_device.getInfo<CL_DEVICE_NAME>()
-		          << " on platform: " << best_platform.getInfo<CL_PLATFORM_NAME>() << "\n";
-
-		// Use best_device and best_platform to create context and queue:
-		context = cl::Context(best_device);
-		queue = cl::CommandQueue(context, best_device);
-	}
-
-	CL_context::~CL_context() {}
-
-	CL_context& CL_context::instance() {
-	    static CL_context instance;
-	    return instance;
-	}
-
-	void CL_context::set_kernels_path(const std::string& path) {
-	    std::lock_guard<std::mutex> lock(mutex);
-	    kernels_path = path;
-	}
-
-	std::string CL_context::get_kernels_path() const {
-	    std::lock_guard<std::mutex> lock(mutex);
-	    return kernels_path;
-	}
-
-    const cl::Context& CL_context::get_context() const {
-    	return context;
+      // Wenn der Treiber-Loader meldet: Keine Plattformen da (-1001) oder Fehler
+      if (platform_err == -1001 || platform_err != CL_SUCCESS || platforms.empty()) {
+        std::cout << "*** IMPORTANT: No OpenCL platforms were found! Entering Fallback Mode. ***" << std::endl;
+        return; // 🍏 Bricht geräuschlos ab! KEIN throw, das Paket lädt fehlerfrei!
+      }
+    } catch (const cl::Error &e) {
+      // Falls das System statt eines Fehlercodes eine echte C++-Exception wirft (z.B. bei -1001)
+      if (e.err() == -1001) {
+        std::cout << "*** IMPORTANT: No OpenCL platforms were found (Exception -1001)! Entering   Fallback Mode. ***" << std::endl;
+      } else {
+        std::cout << "*** OpenCLeaR Initializer skipped due to OpenCL Error: " << e.what() << " (" << e.err() << ") ***" << std::endl;
+      }
+      return; // 🍏 Beendet den Konstruktor lautlos pro CRAN/Winbuilder!
     }
 
-	const cl::CommandQueue& CL_context::get_queue() const {
-		return queue;
-	}
+    bool found = false;
 
-	const cl::Device& CL_context::get_device() const {
-		return best_device;
-	}
+    for (const auto& platform : platforms) {
+      std::vector<cl::Device> devices;
+
+      // Auch den Device-Scan vor unvorhergesehenen Treiber-Abstürzen absichern
+      try {
+        if (platform.getDevices(CL_DEVICE_TYPE_ALL, &devices) != CL_SUCCESS || devices.empty()) {
+          continue;
+        }
+      } catch (const cl::Error &) {
+        continue; // Überspringe Plattformen ohne lauffähige Geräte
+      }
+
+      for (const auto& dev : devices) {
+        cl_device_type type = dev.getInfo<CL_DEVICE_TYPE>();
+        cl_uint compute_units = dev.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
+        std::string name = dev.getInfo<CL_DEVICE_NAME>();
+        std::string vendor = dev.getInfo<CL_DEVICE_VENDOR>();
+
+        std::cout << "Found device: " << name << " (" << vendor << ")"
+                  << " | Type: " << (type == CL_DEVICE_TYPE_GPU ? "GPU" :
+                                     type == CL_DEVICE_TYPE_CPU ? "CPU" :
+                                     type == CL_DEVICE_TYPE_ACCELERATOR ? "Accelerator" : "Other")
+                  << " | Compute Units: " << compute_units << "\n";
+
+        // Universeller Priorisierungs-Scan (GPU > CPU)
+        if (!found || (type == CL_DEVICE_TYPE_GPU && best_device.getInfo<CL_DEVICE_TYPE>() != CL_DEVICE_TYPE_GPU) ||
+            (type == best_device.getInfo<CL_DEVICE_TYPE>() && compute_units > best_device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>())) {
+          best_device = dev;
+          best_platform = platform;
+          found = true;
+        }
+      }
+    }
+
+    // Wenn physisch absolut kein passendes Gerät gefunden wurde
+    if (!found) {
+      std::cout << "*** IMPORTANT: No suitable OpenCL devices found. Entering Fallback Mode. ***" << std::endl;
+      return; // 🍏 Geräuschloser Abbruch für treiberlose Systeme!
+    }
+
+    std::cout << "Selected device: " << best_device.getInfo<CL_DEVICE_NAME>()
+              << " on platform: " << best_platform.getInfo<CL_PLATFORM_NAME>() << "\n";
+
+    try {
+      // Use best_device and best_platform to create context and queue:
+      context = cl::Context(best_device);
+      queue = cl::CommandQueue(context, best_device);
+      this->has_hardware = true; // 🚀 ERFOLG: Hardware ist voll einsatzbereit!
+    } catch (const cl::Error &e) {
+      std::cout << "*** OpenCLeaR Context Generation Error: " << e.what() << ". Mode: Fallback. ***" << std::endl;
+      this->has_hardware = false;
+    }
+  }
 
 
-cl::Program CL_context::get_program(const std::string& filename) const {
+
+
+  CL_context::~CL_context() {}
+
+  CL_context& CL_context::instance() {
+    static CL_context instance;
+    return instance;
+  }
+
+  void CL_context::set_kernels_path(const std::string& path) {
+    std::lock_guard<std::mutex> lock(mutex);
+    kernels_path = path;
+  }
+
+  std::string CL_context::get_kernels_path() const {
+    std::lock_guard<std::mutex> lock(mutex);
+    return kernels_path;
+  }
+
+  const cl::Context& CL_context::get_context() const {
+    return context;
+  }
+
+  const cl::CommandQueue& CL_context::get_queue() const {
+    return queue;
+  }
+
+  const cl::Device& CL_context::get_device() const {
+    return best_device;
+  }
+
+
+  cl::Program CL_context::get_program(const std::string& filename) const {
     std::ifstream file(kernels_path + "/" + filename);
     if (!file.is_open()) {
-        throw std::runtime_error("Failed to open kernel file: " + filename);
+      throw std::runtime_error("Failed to open kernel file: " + filename);
     }
     std::stringstream ss;
     ss << file.rdbuf();
@@ -103,18 +132,18 @@ cl::Program CL_context::get_program(const std::string& filename) const {
 
     // 🚀 START DES REAL_T HACKS: Extensions des gewählten Geräts live prüfen
     std::string extensions = best_device.getInfo<CL_DEVICE_EXTENSIONS>();
-    bool fp64_capable = (extensions.find("cl_khr_fp64") != std::string::npos) || 
-                        (extensions.find("cl_amd_fp64") != std::string::npos);
+    bool fp64_capable = (extensions.find("cl_khr_fp64") != std::string::npos) ||
+      (extensions.find("cl_amd_fp64") != std::string::npos);
 
     // Header-Präfix dynamisch im RAM zusammenbauen
     std::string kernel_prefix = "";
     if (fp64_capable) {
-        kernel_prefix += "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n";
-        kernel_prefix += "typedef double real_t;\n";
-        kernel_prefix += "typedef double2 real2_t;\n"; // Hilfstypen bei Bedarf
+      kernel_prefix += "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n";
+      kernel_prefix += "typedef double real_t;\n";
+      kernel_prefix += "typedef double2 real2_t;\n"; // Hilfstypen bei Bedarf
     } else {
-        kernel_prefix += "typedef float real_t;\n";
-        kernel_prefix += "typedef float2 real2_t;\n";
+      kernel_prefix += "typedef float real_t;\n";
+      kernel_prefix += "typedef float2 real2_t;\n";
     }
 
     // Präfix und Datei-Inhalt zu einem einzigen, vollständigen Kernel-String verschmelzen
@@ -131,11 +160,11 @@ cl::Program CL_context::get_program(const std::string& filename) const {
 
     cl_int err = program.build("-cl-fast-relaxed-math");
     if (err != CL_SUCCESS) {
-        std::string buildlog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(best_device);
-        throw std::runtime_error("Error building: " + buildlog + "\n");
+      std::string buildlog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(best_device);
+      throw std::runtime_error("Error building: " + buildlog + "\n");
     }
 
     return program;
-}
+  }
 
 }
