@@ -1,9 +1,9 @@
 #pragma once
 
 #define CL_HPP_ENABLE_EXCEPTIONS
-#define CL_TARGET_OPENCL_VERSION 210
-#define CL_HPP_TARGET_OPENCL_VERSION 210
-#define CL_HPP_MINIMUM_OPENCL_VERSION 120
+#define CL_TARGET_OPENCL_VERSION 300
+#define CL_HPP_TARGET_OPENCL_VERSION 300
+#define CL_HPP_MINIMUM_OPENCL_VERSION 100
 #include <CL/opencl.hpp>
 
 #include <string>
@@ -39,7 +39,9 @@ namespace backend {
     const cl::CommandQueue& get_queue() const;
     // get the used device
     const cl::Device& get_device() const;
-
+  
+    std::string get_kernel_source(const std::string& filename) const;
+    
     // Build a program from a kernel file
     cl::Program get_program(const std::string& filepath) const;
 

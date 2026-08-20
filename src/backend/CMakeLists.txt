@@ -29,14 +29,14 @@ ExternalProject_Add(OpenCL_CLHPP
 )
 execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install/include/")
 ExternalProject_Add(OpenCL_Wrapper
-    GIT_REPOSITORY https://github.com/ProjectPhysX/OpenCL-Wrapper
-    GIT_TAG e90fd46f07118c235ce1cc9274035948185da4df
+    GIT_REPOSITORY https://github.com/4lge/OpenCL-Wrapper.git
+    GIT_TAG 0265c42a5a8f70519234f4973782e8be4dbf2911
     SOURCE_DIR ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
 
     CONFIGURE_COMMAND ""  # Don't run cmake
     BUILD_COMMAND ""      # Don't build
-    INSTALL_COMMAND ${CMAKE_COMMAND} -E copy ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/opencl.hpp ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/utilities.hpp ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/kernel.hpp ${CMAKE_CURRENT_BINARY_DIR}/local_install/include/
-
+    INSTALL_COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/local_install/include/OpenCL-Wrapper
+    COMMAND ${CMAKE_COMMAND} -E copy ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/opencl.hpp ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/utilities.hpp ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/kernel.hpp ${CMAKE_CURRENT_BINARY_DIR}/local_install/include/OpenCL-Wrapper/
 )
 
 ExternalProject_Add(CLErrorLookup
@@ -57,6 +57,7 @@ include_directories(
   ${CMAKE_SOURCE_DIR}/lib/OpenCL-CLHPP/include
   ${CMAKE_SOURCE_DIR}/lib/OpenCL-Wrapper/src
   ${CMAKE_SOURCE_DIR}/lib/CLErrorLookup
+  ${CMAKE_CURRENT_BINARY_DIR}/local_install/include
   ${OpenCL_INCLUDE_DIRS}
 )
 

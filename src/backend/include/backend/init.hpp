@@ -2,7 +2,12 @@
 
 #include <string>
 
+#ifndef PLUGIN
 #include "backend/export.hpp"
+#else
+#include "export.hpp"
+#endif
+#include "opencl.hpp"
 
 namespace backend {
 

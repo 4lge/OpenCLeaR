@@ -1,8 +1,15 @@
 #pragma once
 
-#include "backend/export.hpp"
+#include "CL_context.hpp"
+#include "backend/export.hpp" // Holt die Definitionen
+#include "cl_error_lookup.hpp"
+#include "OpenCL-Wrapper/opencl.hpp"
 
-#include <string>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <algorithm>
 
 namespace backend {
 
@@ -12,6 +19,6 @@ namespace backend {
 	 * 	data is a 1d array of length rows * cols.
 	 * 	res is a 1d array of length rows * rows.
 	 */
-	extern "C" EXPORT void distance_matrix(double* data, int rows, int cols, double* res);
+	 EXPORT int distance_matrix(const std::vector<double>& data, const int rows, const int cols, std::vector<double>& res);
 
 }

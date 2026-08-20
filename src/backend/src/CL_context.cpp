@@ -94,8 +94,11 @@ namespace backend {
   CL_context::~CL_context() {}
 
   CL_context& CL_context::instance() {
-    static CL_context instance;
-    return instance;
+   // Wir erstellen die Instanz als persistenten Pointer auf dem Heap.
+   // C++ versucht dadurch beim Beenden von R NICHT mehr, den Destruktor
+   // aufzurufen, was den finalen Absturz beim Schließen restlos eliminiert!
+    static CL_context* instance_ptr = new CL_context();
+    return *instance_ptr;
   }
 
   void CL_context::set_kernels_path(const std::string& path) {
@@ -120,6 +123,15 @@ namespace backend {
     return best_device;
   }
 
+  std::string CL_context::get_kernel_source(const std::string& filename) const {
+    std::ifstream file(kernels_path + "/" + filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("OpenCLeaR Error: Kernel-Datei nicht gefunden: " + filename);
+    }
+    std::stringstream ss;
+    ss << file.rdbuf();
+    return ss.str();
+  }
 
   cl::Program CL_context::get_program(const std::string& filename) const {
     std::ifstream file(kernels_path + "/" + filename);

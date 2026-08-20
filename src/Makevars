@@ -1,2 +1,36 @@
-PKG_CPPFLAGS += -I./backend/include
-PKG_LIBS += -Wl,-rpath,\$$ORIGIN -L. -lBACKEND
+# -*- mode: makefile; -*-
+PKG_CXXFLAGS += 
+# Detect OS and set appropriate extension and rpath flags.
+# Tell the dynamic linker to check both the temporary folder ($ORIGIN) AND 
+# the local package compilation folder (.)
+UNAME := $(shell uname)
+ifeq ($(UNAME), Darwin)
+    # macOS settings
+    SHLIB_EXT_BACKEND = dylib
+    RPATH_FLAGS = -Wl,-rpath,@loader_path/ -Wl,-rpath,@loader_path/../ -Wl,-rpath,@loader_path/../src/
+else
+    # Linux settings
+    SHLIB_EXT_BACKEND = so
+    # Force the linker to inject RUNPATH and keep $ORIGIN intact
+    RPATH_FLAGS = -Wl,-rpath,'$$ORIGIN:.:./src',--enable-new-dtags
+endif
+
+PKG_CPPFLAGS += -I./backend/include  -I./backend/src/internal -I./backend/build/local_install/include -I./backend/build/local_install/include/OpenCL-Wrapper -Wno-misleading-indentation -Wno-deprecated-declarations
+
+PKG_LIBS += $(RPATH_FLAGS) -L. -lBACKEND
+
+# Force R to bundle [lib]BACKEND[.so|.dll] (and possibly [lib]OpenCl[.so|.dll]) into the temporary library installation directory
+all: $(SHLIB)
+	@if [ -f libBACKEND.$(SHLIB_EXT_BACKEND) ]; then \
+		mkdir -p $(R_PACKAGE_DIR)/src/; \
+		cp libBACKEND.$(SHLIB_EXT_BACKEND) $(R_PACKAGE_DIR)/src/; \
+		mkdir -p $(R_PACKAGE_DIR)/libs/; \
+		cp libBACKEND.$(SHLIB_EXT_BACKEND) $(R_PACKAGE_DIR)/libs/; \
+	fi
+	@FOUND_LIBOPENCL=$$(find backend/build/ -name "libOpenCL.$(SHLIB_EXT_BACKEND)" | head -n 1); \
+	if [ -n "$$FOUND_LIBOPENCL" ] && [ -f "$$FOUND_LIBOPENCL" ]; then \
+		mkdir -p $(R_PACKAGE_DIR)/src/; \
+		cp "$$FOUND_LIBOPENCL" $(R_PACKAGE_DIR)/src/; \
+		mkdir -p $(R_PACKAGE_DIR)/libs/; \
+		cp "$$FOUND_LIBOPENCL" $(R_PACKAGE_DIR)/libs/; \
+	fi	
