@@ -11,3 +11,4 @@ SEXP SetKernelsPath(String kernelsPath) {
     backend::set_kernels_path(path);
     return R_NilValue;
 }
+

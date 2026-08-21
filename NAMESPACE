@@ -2,3 +2,5 @@ import(Rcpp)
 
 useDynLib(OpenCLeaR, .registration = TRUE)
 export(CLDistanceMatrix)
+export(CLDistanceMatrixWrapper)
+export(CLDistanceMatrixDirect)

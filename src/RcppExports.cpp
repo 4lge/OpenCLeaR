@@ -21,14 +21,25 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// CLWrapperDistanceMatrix
-NumericMatrix CLWrapperDistanceMatrix(const NumericMatrix& mat);
-RcppExport SEXP _OpenCLeaR_CLWrapperDistanceMatrix(SEXP matSEXP) {
+// CLDistanceMatrixDirect
+NumericMatrix CLDistanceMatrixDirect(const NumericMatrix& mat);
+RcppExport SEXP _OpenCLeaR_CLDistanceMatrixDirect(SEXP matSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const NumericMatrix& >::type mat(matSEXP);
-    rcpp_result_gen = Rcpp::wrap(CLWrapperDistanceMatrix(mat));
+    rcpp_result_gen = Rcpp::wrap(CLDistanceMatrixDirect(mat));
+    return rcpp_result_gen;
+END_RCPP
+}
+// CLDistanceMatrixWrapper
+NumericMatrix CLDistanceMatrixWrapper(const NumericMatrix& mat);
+RcppExport SEXP _OpenCLeaR_CLDistanceMatrixWrapper(SEXP matSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const NumericMatrix& >::type mat(matSEXP);
+    rcpp_result_gen = Rcpp::wrap(CLDistanceMatrixWrapper(mat));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -46,7 +57,8 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_OpenCLeaR_CLDistanceMatrix", (DL_FUNC) &_OpenCLeaR_CLDistanceMatrix, 1},
-    {"_OpenCLeaR_CLWrapperDistanceMatrix", (DL_FUNC) &_OpenCLeaR_CLWrapperDistanceMatrix, 1},
+    {"_OpenCLeaR_CLDistanceMatrixDirect", (DL_FUNC) &_OpenCLeaR_CLDistanceMatrixDirect, 1},
+    {"_OpenCLeaR_CLDistanceMatrixWrapper", (DL_FUNC) &_OpenCLeaR_CLDistanceMatrixWrapper, 1},
     {"_OpenCLeaR_SetKernelsPath", (DL_FUNC) &_OpenCLeaR_SetKernelsPath, 1},
     {NULL, NULL, 0}
 };

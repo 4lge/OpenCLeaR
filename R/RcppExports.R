@@ -5,8 +5,12 @@ CLDistanceMatrix <- function(mat) {
     .Call(`_OpenCLeaR_CLDistanceMatrix`, mat)
 }
 
-CLWrapperDistanceMatrix <- function(mat) {
-    .Call(`_OpenCLeaR_CLWrapperDistanceMatrix`, mat)
+CLDistanceMatrixDirect <- function(mat) {
+    .Call(`_OpenCLeaR_CLDistanceMatrixDirect`, mat)
+}
+
+CLDistanceMatrixWrapper <- function(mat) {
+    .Call(`_OpenCLeaR_CLDistanceMatrixWrapper`, mat)
 }
 
 SetKernelsPath <- function(kernelsPath) {

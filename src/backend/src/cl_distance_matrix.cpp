@@ -7,7 +7,7 @@
 
 namespace backend {
 
-    extern "C" void distance_matrix(double* data, int rows, int cols, double* res) {
+    extern "C" void cl_distance_matrix(double* data, int rows, int cols, double* res) {
         try {
             const cl::Context& context = CL_context::instance().get_context();
             const cl::CommandQueue& queue = CL_context::instance().get_queue();

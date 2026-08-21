@@ -12,6 +12,6 @@ namespace backend {
 	 * 	data is a 1d array of length rows * cols.
 	 * 	res is a 1d array of length rows * rows.
 	 */
-	extern "C" EXPORT void distance_matrix(double* data, int rows, int cols, double* res);
+	extern "C" EXPORT void cl_distance_matrix(double* data, int rows, int cols, double* res);
 
 }

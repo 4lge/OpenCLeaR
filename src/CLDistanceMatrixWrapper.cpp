@@ -8,7 +8,7 @@
 using namespace Rcpp;
 
 // [[Rcpp::export]]
-NumericMatrix CLWrapperDistanceMatrix(const NumericMatrix& mat) {
+NumericMatrix CLDistanceMatrixWrapper(const NumericMatrix& mat) {
     int rows = mat.nrow();
     int cols = mat.ncol();
 
