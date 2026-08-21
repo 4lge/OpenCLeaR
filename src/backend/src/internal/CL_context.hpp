@@ -5,6 +5,8 @@
 #define CL_HPP_TARGET_OPENCL_VERSION 300
 #define CL_HPP_MINIMUM_OPENCL_VERSION 100
 #include <CL/opencl.hpp>
+// 🚀 DIE RETTUNG: Erst nach den Khronos-Klassen laden!
+#include "OpenCL-Wrapper/opencl.hpp" 
 
 #include <string>
 #include <mutex>
@@ -39,6 +41,8 @@ namespace backend {
     const cl::CommandQueue& get_queue() const;
     // get the used device
     const cl::Device& get_device() const;
+ // 🚀 NEUE METHODE: Reicht das dauerhaft wache Gerät deines Forks per Referenz weiter
+    Device& get_physx_device();
   
     std::string get_kernel_source(const std::string& filename) const;
     
@@ -68,6 +72,9 @@ namespace backend {
 
     // attached resource path
     std::string kernels_path;
+
+    // 🚀 CORESITE: Ruht unzerstörbar auf dem Heap und blockiert Windows nie wieder!
+    Device global_physx_device;
 
     // thread safety
     mutable std::mutex mutex;

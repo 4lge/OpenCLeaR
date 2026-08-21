@@ -7,7 +7,7 @@
 #else
 #include "export.hpp"
 #endif
-#include "opencl.hpp"
+#include "OpenCL-Wrapper/opencl.hpp"
 
 namespace backend {
 

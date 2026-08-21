@@ -86,6 +86,16 @@ namespace backend {
       std::cout << "*** OpenCLeaR Context Generation Error: " << e.what() << ". Mode: Fallback. ***" << std::endl;
       this->has_hardware = false;
     }
+    // ⚡ EINMALIGE HARDWARE-ZÜNDUNG BEIM LADEN DES PAKETS:
+    // Erzeugt das langlebige Device-Objekt deines Forks direkt auf dem Heap des Singletons.
+    this->global_physx_device = ::Device(this->get_context()(), this->get_device()(), this->get_queue()());
+    
+    // Holt die Extensions sicher über die offizielle get_device() Funktion
+    std::string extensions = this->get_device().getInfo<CL_DEVICE_EXTENSIONS>();
+    this->global_physx_device.info.is_fp64_capable = 
+        (extensions.find("cl_khr_fp64") != std::string::npos) || 
+        (extensions.find("cl_amd_fp64") != std::string::npos);
+
   }
 
 
@@ -99,6 +109,13 @@ namespace backend {
    // aufzurufen, was den finalen Absturz beim Schließen restlos eliminiert!
     static CL_context* instance_ptr = new CL_context();
     return *instance_ptr;
+  }
+
+
+
+  Device& CL_context::get_physx_device() {
+    // Liefert die langlebige Referenz an deine Rechenkerne aus
+    return this->global_physx_device;
   }
 
   void CL_context::set_kernels_path(const std::string& path) {
