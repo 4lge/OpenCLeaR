@@ -16,7 +16,7 @@ namespace backend {
             // (Sollte deine Funktion anders heissen, z.B. .get_best_device(), kurz anpassen)
             const cl::Device& device = CL_context::instance().get_device();
 
-            cl::Program program = CL_context::instance().get_program("distance.cl");
+            cl::Program program = CL_context::instance().get_program("distance_old.cl");
             cl::Kernel kernel(program, "distance_matrix");
 
             // FP64 Fähigkeit ermitteln
