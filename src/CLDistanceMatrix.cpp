@@ -3,25 +3,23 @@
 
 #include "backend/init.hpp"
 
-#include "backend/include/backend/distance_matrix.hpp"
+#include "backend/include/backend/cl_distance_matrix.hpp"
 
 using namespace Rcpp;
 
 // [[Rcpp::export]]
 NumericMatrix CLDistanceMatrix(const NumericMatrix& mat) {
-    int rows = mat.nrow();
-    int cols = mat.ncol();
+    IntegerVector dim = mat.attr("dim");
+    int rows = dim[0], cols = dim[1];
 
-    // 🚀 Rcpp erstellt die Zielmatrix absolut standardkonform im R-Speicherraum
+    std::vector<double> input(mat.begin(), mat.end());
+    std::vector<double> output(rows * rows, 0);
+
+    backend::cl_distance_matrix(input.data(), rows, cols, output.data());
+
     NumericMatrix outmat(rows, rows);
+    std::copy(output.begin(), output.end(), outmat.begin());
 
-    // 🍏 DIE PERFEKTE BRÜCKE: 
-    // mat.begin() liefert den direkten double* Zeiger auf die R-Eingangsdaten.
-    // outmat.begin() liefert den direkten double* Zeiger auf den R-Ausgangsspeicher.
-    // Es wird im CPU-RAM absolut nichts kopiert, verschoben oder allokiert!
-    backend::distance_matrix(mat.begin(), rows, cols, outmat.begin());
-
-    // Rcpp gibt die befüllte Matrix typsicher und elegant an R zurück
     return outmat;
 }
 
