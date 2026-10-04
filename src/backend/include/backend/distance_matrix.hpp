@@ -2,7 +2,7 @@
 
 #include "CL_context.hpp"
 #include "backend/export.hpp" // Holt die Definitionen
-#include "cl_error_lookup.hpp"
+
 #include "OpenCL-Wrapper/opencl.hpp"
 
 #include <iostream>

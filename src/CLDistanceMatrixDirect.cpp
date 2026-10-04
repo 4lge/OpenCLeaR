@@ -83,7 +83,7 @@ NumericMatrix CLDistanceMatrixDirect(const NumericMatrix& mat) {
         // =========================================================================
         // Linux und Mac nutzen weiterhin Lehmanns eleganten String-Weg im RAM
         device.set_kernel_source(kernel_code);
-        checkpoint("3. Kernel-String an physx_device übergeben");
+        checkpoint("3. Kernel-String an device übergeben");
 
         device.compile_kernel("", false);
         checkpoint("4. JIT-Compiler über Wrapper beendet (compile_kernel)");
@@ -103,7 +103,7 @@ NumericMatrix CLDistanceMatrixDirect(const NumericMatrix& mat) {
             InputF.write_to_device();
             checkpoint("6a. Daten auf die GPU geschrieben (write_to_device)");
 
-            Kernel distance_kernel(physx_device, total_threads, "distance_matrix", OutputF, InputF, rows, cols);
+            Kernel distance_kernel(device, total_threads, "distance_matrix", OutputF, InputF, rows, cols);
             checkpoint("7a. Kernel-Objekt instanziiert und Argumente verlinkt");
 
             distance_kernel.run();
