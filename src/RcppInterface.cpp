@@ -41,8 +41,7 @@ void ActivateDeviceWithMostMemory() {
 //' @param id id of device, all devices will be shown on load ofthe
 //'     library.
 //' @export
-// [[Rcpp::export]]
-// [[Rcpp::export(name = ".ActivateDeviceWithID_cpp")]]
+// [[Rcpp::export(name = "ActivateDeviceWithID_Native")]]
 void ActivateDeviceWithID_Native(int id) {
     // 🚀 ALTE COCKPIT-BLOCKADE RESTLOS GEBRANNT:
     // Der fehlerhafte ID-Check fliegt komplett raus!

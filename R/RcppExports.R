@@ -18,7 +18,11 @@ ActivateDeviceWithMostMemory <- function() {
     invisible(.Call(`_OpenCLeaR_ActivateDeviceWithMostMemory`))
 }
 
-.ActivateDeviceWithID_cpp <- function(id) {
+#' Activate OpenCL devive by ID
+#' @param id id of device, all devices will be shown on load ofthe
+#'     library.
+#' @export
+ActivateDeviceWithID_Native <- function(id) {
     invisible(.Call(`_OpenCLeaR_ActivateDeviceWithID_Native`, id))
 }
 
