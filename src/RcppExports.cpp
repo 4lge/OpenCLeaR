@@ -10,56 +10,167 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// CLDistanceMatrix
-NumericMatrix CLDistanceMatrix(const NumericMatrix& mat);
-RcppExport SEXP _OpenCLeaR_CLDistanceMatrix(SEXP matSEXP) {
+// ActivateDeviceWithMostFlops
+void ActivateDeviceWithMostFlops();
+RcppExport SEXP _OpenCLeaR_ActivateDeviceWithMostFlops() {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    ActivateDeviceWithMostFlops();
+    return R_NilValue;
+END_RCPP
+}
+// ActivateDeviceWithMostMemory
+void ActivateDeviceWithMostMemory();
+RcppExport SEXP _OpenCLeaR_ActivateDeviceWithMostMemory() {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    ActivateDeviceWithMostMemory();
+    return R_NilValue;
+END_RCPP
+}
+// ActivateDeviceWithID_Native
+void ActivateDeviceWithID_Native(int id);
+RcppExport SEXP _OpenCLeaR_ActivateDeviceWithID_Native(SEXP idSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type id(idSEXP);
+    ActivateDeviceWithID_Native(id);
+    return R_NilValue;
+END_RCPP
+}
+// ActivateDeviceWithID_Async
+bool ActivateDeviceWithID_Async(int id);
+RcppExport SEXP _OpenCLeaR_ActivateDeviceWithID_Async(SEXP idSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const NumericMatrix& >::type mat(matSEXP);
-    rcpp_result_gen = Rcpp::wrap(CLDistanceMatrix(mat));
+    Rcpp::traits::input_parameter< int >::type id(idSEXP);
+    rcpp_result_gen = Rcpp::wrap(ActivateDeviceWithID_Async(id));
     return rcpp_result_gen;
 END_RCPP
 }
-// CLDistanceMatrixDirect
-NumericMatrix CLDistanceMatrixDirect(const NumericMatrix& mat);
-RcppExport SEXP _OpenCLeaR_CLDistanceMatrixDirect(SEXP matSEXP) {
+// InitCL
+bool InitCL();
+RcppExport SEXP _OpenCLeaR_InitCL() {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const NumericMatrix& >::type mat(matSEXP);
-    rcpp_result_gen = Rcpp::wrap(CLDistanceMatrixDirect(mat));
-    return rcpp_result_gen;
-END_RCPP
-}
-// CLDistanceMatrixWrapper
-NumericMatrix CLDistanceMatrixWrapper(const NumericMatrix& mat);
-RcppExport SEXP _OpenCLeaR_CLDistanceMatrixWrapper(SEXP matSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const NumericMatrix& >::type mat(matSEXP);
-    rcpp_result_gen = Rcpp::wrap(CLDistanceMatrixWrapper(mat));
+    rcpp_result_gen = Rcpp::wrap(InitCL());
     return rcpp_result_gen;
 END_RCPP
 }
 // SetKernelsPath
-SEXP SetKernelsPath(String kernelsPath);
+void SetKernelsPath(String kernelsPath);
 RcppExport SEXP _OpenCLeaR_SetKernelsPath(SEXP kernelsPathSEXP) {
+BEGIN_RCPP
+    Rcpp::traits::input_parameter< String >::type kernelsPath(kernelsPathSEXP);
+    SetKernelsPath(kernelsPath);
+    return R_NilValue;
+END_RCPP
+}
+// IsOpenCLReady
+bool IsOpenCLReady();
+RcppExport SEXP _OpenCLeaR_IsOpenCLReady() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    rcpp_result_gen = Rcpp::wrap(IsOpenCLReady());
+    return rcpp_result_gen;
+END_RCPP
+}
+// ToggleOpenCLPrint
+void ToggleOpenCLPrint(bool state);
+RcppExport SEXP _OpenCLeaR_ToggleOpenCLPrint(SEXP stateSEXP) {
+BEGIN_RCPP
+    Rcpp::traits::input_parameter< bool >::type state(stateSEXP);
+    ToggleOpenCLPrint(state);
+    return R_NilValue;
+END_RCPP
+}
+// GetActiveDeviceInfo
+List GetActiveDeviceInfo();
+RcppExport SEXP _OpenCLeaR_GetActiveDeviceInfo() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    rcpp_result_gen = Rcpp::wrap(GetActiveDeviceInfo());
+    return rcpp_result_gen;
+END_RCPP
+}
+// is_device_bound
+bool is_device_bound();
+RcppExport SEXP _OpenCLeaR_is_device_bound() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    rcpp_result_gen = Rcpp::wrap(is_device_bound());
+    return rcpp_result_gen;
+END_RCPP
+}
+// GetDeviceList
+DataFrame GetDeviceList();
+RcppExport SEXP _OpenCLeaR_GetDeviceList() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    rcpp_result_gen = Rcpp::wrap(GetDeviceList());
+    return rcpp_result_gen;
+END_RCPP
+}
+// GetKernelsPath
+std::string GetKernelsPath();
+RcppExport SEXP _OpenCLeaR_GetKernelsPath() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    rcpp_result_gen = Rcpp::wrap(GetKernelsPath());
+    return rcpp_result_gen;
+END_RCPP
+}
+// GetKernelCode
+String GetKernelCode();
+RcppExport SEXP _OpenCLeaR_GetKernelCode() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    rcpp_result_gen = Rcpp::wrap(GetKernelCode());
+    return rcpp_result_gen;
+END_RCPP
+}
+// create_transient_device_cpp
+SEXP create_transient_device_cpp(int platform_id, int device_id, std::string kernels_path);
+RcppExport SEXP _OpenCLeaR_create_transient_device_cpp(SEXP platform_idSEXP, SEXP device_idSEXP, SEXP kernels_pathSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< String >::type kernelsPath(kernelsPathSEXP);
-    rcpp_result_gen = Rcpp::wrap(SetKernelsPath(kernelsPath));
+    Rcpp::traits::input_parameter< int >::type platform_id(platform_idSEXP);
+    Rcpp::traits::input_parameter< int >::type device_id(device_idSEXP);
+    Rcpp::traits::input_parameter< std::string >::type kernels_path(kernels_pathSEXP);
+    rcpp_result_gen = Rcpp::wrap(create_transient_device_cpp(platform_id, device_id, kernels_path));
     return rcpp_result_gen;
+END_RCPP
+}
+// set_transient_device_path_cpp
+void set_transient_device_path_cpp(SEXP device_xptr, std::string kernel_path);
+RcppExport SEXP _OpenCLeaR_set_transient_device_path_cpp(SEXP device_xptrSEXP, SEXP kernel_pathSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type device_xptr(device_xptrSEXP);
+    Rcpp::traits::input_parameter< std::string >::type kernel_path(kernel_pathSEXP);
+    set_transient_device_path_cpp(device_xptr, kernel_path);
+    return R_NilValue;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_OpenCLeaR_CLDistanceMatrix", (DL_FUNC) &_OpenCLeaR_CLDistanceMatrix, 1},
-    {"_OpenCLeaR_CLDistanceMatrixDirect", (DL_FUNC) &_OpenCLeaR_CLDistanceMatrixDirect, 1},
-    {"_OpenCLeaR_CLDistanceMatrixWrapper", (DL_FUNC) &_OpenCLeaR_CLDistanceMatrixWrapper, 1},
+    {"_OpenCLeaR_ActivateDeviceWithMostFlops", (DL_FUNC) &_OpenCLeaR_ActivateDeviceWithMostFlops, 0},
+    {"_OpenCLeaR_ActivateDeviceWithMostMemory", (DL_FUNC) &_OpenCLeaR_ActivateDeviceWithMostMemory, 0},
+    {"_OpenCLeaR_ActivateDeviceWithID_Native", (DL_FUNC) &_OpenCLeaR_ActivateDeviceWithID_Native, 1},
+    {"_OpenCLeaR_ActivateDeviceWithID_Async", (DL_FUNC) &_OpenCLeaR_ActivateDeviceWithID_Async, 1},
+    {"_OpenCLeaR_InitCL", (DL_FUNC) &_OpenCLeaR_InitCL, 0},
     {"_OpenCLeaR_SetKernelsPath", (DL_FUNC) &_OpenCLeaR_SetKernelsPath, 1},
+    {"_OpenCLeaR_IsOpenCLReady", (DL_FUNC) &_OpenCLeaR_IsOpenCLReady, 0},
+    {"_OpenCLeaR_ToggleOpenCLPrint", (DL_FUNC) &_OpenCLeaR_ToggleOpenCLPrint, 1},
+    {"_OpenCLeaR_GetActiveDeviceInfo", (DL_FUNC) &_OpenCLeaR_GetActiveDeviceInfo, 0},
+    {"_OpenCLeaR_is_device_bound", (DL_FUNC) &_OpenCLeaR_is_device_bound, 0},
+    {"_OpenCLeaR_GetDeviceList", (DL_FUNC) &_OpenCLeaR_GetDeviceList, 0},
+    {"_OpenCLeaR_GetKernelsPath", (DL_FUNC) &_OpenCLeaR_GetKernelsPath, 0},
+    {"_OpenCLeaR_GetKernelCode", (DL_FUNC) &_OpenCLeaR_GetKernelCode, 0},
+    {"_OpenCLeaR_create_transient_device_cpp", (DL_FUNC) &_OpenCLeaR_create_transient_device_cpp, 3},
+    {"_OpenCLeaR_set_transient_device_path_cpp", (DL_FUNC) &_OpenCLeaR_set_transient_device_path_cpp, 2},
     {NULL, NULL, 0}
 };
 

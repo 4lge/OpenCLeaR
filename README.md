@@ -1,30 +1,21 @@
-# This is a fork of
+# 📦 OpenCLeaR: OpenCL Easy Access from R
 
-[cmake-rcpp-template](https://github.com/jmaerte/cmake-rcpp-template)
+A **R package** that simplifies writing parallel algorithms in OpenCL accessible from R.
+It makes use of **CMake**, **Rcpp** and **OpenCL-Wrapper** (at least a fork of it) to ease 
+platform-independent compilation and linkage to **OpenCL**. The whole package is based on a
+**rccp-cmake-template** package described (here)[https://medium.com/@mail_17803/building-hardware-accelerated-r-packages-with-rcpp-and-cmake-a-practical-template-114d13b08a97]
+and available at (GitHUB)[https://github.com/jmaerte/cmake-rcpp-template].
 
-It tries to mix it with [ProjectPhysX/OpenCL-Wrapper](https://github.com/ProjectPhysX/OpenCL-Wrapper).
-
-... work in progress.
-
-Original README:
-
-
-# 📦 Template Project: CMake for Rcpp
-
-A **CRAN-ready R package template** that integrates the simplicity of **CMake** with the power of **Rcpp**, enabling platform-independent linkage to external C/C++ libraries such as **OpenCL**, **OpenGL**, and others.
-
-> This template streamlines the development of high-performance R packages that rely on native code, without manual environment configuration.
 
 ---
 
 ## ✨ Highlights
 
-- ✅ Platform-independent configuration and linkage with **CMake**
-- ✅ Built `tar.gz` does not have any binaries - everything is compiled at package installation.
-- ✅ No manual `Makefile` or environment variable setup required
-- ✅ Clean separation of public/private headers in C++
-- ✅ Simple Rcpp integration — no need to link Rcpp to the external libraries
-- ✅ Example: GPU-accelerated distance matrix using **OpenCL**
+- ✅ Platform-independent configuration and linkage with **CMake**, this is inherited from **rcpp-cmake-template** package as upstream dependdency. 
+- ✅ Easy access tk OpenCL vie C++ interface taken from (a fork of) **OpenCL-Wrapper**.
+- ✅ Functionality accessible via **inline** package using the provided plugin.
+- ✅ Simple Rcpp integration to access the OpenCL backend.
+- ✅ OpenCL kernels have access to a kernel library providing some alternatives to R/Rcpp functions. (currently restricted to a collection of r|d|p<dsitrib> functions like rnorm, dnorm, pnorm etc)
 
 ---
 
@@ -83,6 +74,12 @@ The `inst/` directory contains runtime resources (e.g., `.cl` kernels). During i
 # Accessed in R via:
 system.file("kernels", package = "CMakeRcppTemplate")
 ``````
+
+
+An **inline** call could look like this:
+`````
+source(paste(system.file("inst/examples", package = "OpenCLeaR"),"rnormCLinline.R",sep="/"))
+`````
 
 These paths are injected into the shared library at runtime using the `.onLoad` hook (see `R/CMakeRcppTemplate.R`), enabling dynamic loading of external resources like OpenCL kernels or OpenGL shaders.
 

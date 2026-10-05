@@ -1,31 +1,29 @@
 Package: OpenCLeaR
 Type: Package
-Title: An OpenCL Enhanced Accelerated R-Package
-Version: 0.5.9
+Title: Easy Access to OpenCL using C++, CMake and Rcpp
+Version: 0.5.10
 Author: Albrecht Gebhardt
 Authors@R: person(given = "Albrecht",
                 family = "Gebhardt",
                 role = c("aut", "cre"),
                 email = "albrecht.gebhardt@aau.at")
-Authors@R: person(given = "Julian",
-                family = "Märte",
-                role = c("aut", "cph"),
-                email = "mail@maertej.com")
-Authors@R: person(given = "Moritz",
-                family = "Lehmann",
-                role = c("aut", "cph"),
-                email = "moritz.lehmann@uni-bayreuth.de")
 Maintainer: Albrecht Gebhardt <albrecht.gebhardt@aau.at>
-Description: 
+Description: OpenCL Easy Accessible from R:
   This package aims to provide easy access to OpenCL coding 
-  using a C++ abstraction layer via classes inherited from 
-  OpenCL-Wrapper <https://github.com/ProjectPhysX/OpenCL-Wrapper>
-  by Dr. Moritz Lehmann to interact with low level OpenCL functions. 
-  Configuration is done automatically via CMake based on
-  J. Maertes template package from which this package is a
-  fork of, see <https://github.com/jmaerte/cmake-rcpp-template>). 
+  using a C++ abstraction layer (via a modified OpenCL-Wrapper based on
+  <https://github.com/ProjectPhysX/OpenCL-Wrapper>) to interact with 
+  low level OpenCl functions. 
+  Configuration is done automatically via CMake (thanks to
+  <https://github.com/jmaerte/cmake-rcpp-template>).
 LinkingTo: Rcpp
-Imports: Rcpp
+Imports: Rcpp, inline
 SystemRequirements: OpenCL, CMake
 Encoding: UTF-8
 License: MIT + file LICENSE
+Config/roxygen2/version: 8.0.0
+Suggests: testthat (>= 3.0.0), knitr (>= 1.50), markdown
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+RoxygenNote: 7.3.3
+NeedsCompilation: yes
+Packaged: 2026-09-29 18:10:55 UTC; alge

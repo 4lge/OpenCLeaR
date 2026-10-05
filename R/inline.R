@@ -23,18 +23,13 @@
 ##' @export
 inlineCxxPlugin <- function(...) {
     plugin <-  Rcpp::Rcpp.plugin.maker(
-        include.before = "#include \"opencl.hpp\"\n#include \"CLpp.hpp\"\n#include \"init.hpp\"\n",
+	include.before = "#include \"opencl.hpp\"\n#include \"CLpp.hpp\"\n#include \"init.hpp\"\nnamespace backend { static std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; } }\n",
+
         libs           = paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND ", sep=""),
         package        = "OpenCLeaR"
     )
     settings <- plugin()
-    # 🚀 DIE RECHTE WINDOWS-WEICHE:
-    cpp_flags <- paste(" -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
-    if (.Platform$OS.type == "windows") {
-        cpp_flags <- paste(cpp_flags, "-mstackrealign")
-    }
-    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, cpp_flags)
-
+    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
     return(settings)
 }
 
@@ -47,12 +42,7 @@ inlineCxxPluginFloat <- function(...) {
         package        = "OpenCLeaR"
     )
     settings <- plugin()
-    # 🚀 DIE RECHTE WINDOWS-WEICHE:
-    cpp_flags <- paste(" -DFP64_MODE=0 -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
-    if (.Platform$OS.type == "windows") {
-        cpp_flags <- paste(cpp_flags, "-mstackrealign")
-    }
-    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, cpp_flags)
+    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DFP64_MODE=0 -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
     return(settings)
 }
 
@@ -65,12 +55,7 @@ inlineCxxPluginDouble <- function(...) {
         package        = "OpenCLeaR"
     )
     settings <- plugin()
-    # 🚀 DIE RECHTE WINDOWS-WEICHE:
-    cpp_flags <- paste(" -DFP64_MODE=1 -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
-    if (.Platform$OS.type == "windows") {
-        cpp_flags <- paste(cpp_flags, "-mstackrealign")
-    }
-    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, cpp_flags)
+    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DFP64_MODE=1 -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
     return(settings)
 }
 

@@ -1,5 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 PROJECT(BACKEND CXX)
+# set(CMAKE_BUILD_TYPE Debug)
 
 # Get the Rcpp minGW/gcc compilers in order to achieve highest degree of uniformity while users only have to install Rtools.
 include(cmake/find_toolchain.cmake)
@@ -30,46 +31,58 @@ ExternalProject_Add(OpenCL_CLHPP
 execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install/include/")
 ExternalProject_Add(OpenCL_Wrapper
     GIT_REPOSITORY https://github.com/4lge/OpenCL-Wrapper.git
-    GIT_TAG b29a44ec7bc9aee9db87a6b519a700b84602f182
+#    GIT_TAG 774c1a53514f5e86e966be9a95faa01aef58a778
+    GIT_TAG c33aef56ca4a1441a181bd39459ce78fcbeed3ab
     SOURCE_DIR ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
 
     CONFIGURE_COMMAND ""  # Don't run cmake
     BUILD_COMMAND ""      # Don't build
-    INSTALL_COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/local_install/include/OpenCL-Wrapper
-    COMMAND ${CMAKE_COMMAND} -E copy ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/kernel.hpp ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/opencl.hpp ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/utilities.hpp ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/kernel.hpp ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/cl_error_lookup.hpp  ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/get_error_info.hpp ${CMAKE_CURRENT_BINARY_DIR}/local_install/include/OpenCL-Wrapper/
+    INSTALL_COMMAND ${CMAKE_COMMAND} -E copy ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/opencl.hpp ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/utilities.hpp ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src/kernel.hpp ${CMAKE_CURRENT_BINARY_DIR}/local_install/include/
+
 )
 
+ExternalProject_Add(CLErrorLookup
+    GIT_REPOSITORY https://github.com/otto-link/CLErrorLookup.git
+    GIT_TAG 27adbb9217e2a9e31b08fe32acc21df9d2b53e84
+    SOURCE_DIR ${EXTERNAL_LIB_LOCATION}/CLErrorLookup
+
+    CONFIGURE_COMMAND ""  # Don't run cmake
+    BUILD_COMMAND ""      # Don't build
+    
+    # 🚀 NUR NOCH DIE HEADER KOPIEREN (Das läuft zu 100% fehlerfrei durch):
+    INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory ${EXTERNAL_LIB_LOCATION}/CLErrorLookup/CLErrorLookup/include ${CMAKE_CURRENT_BINARY_DIR}/local_install/include/
+)
 
 # Include the external library headers in the lib folder
 include_directories(
   ${CMAKE_SOURCE_DIR}/lib/OpenCL-Headers
   ${CMAKE_SOURCE_DIR}/lib/OpenCL-CLHPP/include
-  ${CMAKE_CURRENT_BINARY_DIR}/local_install/include
-  ${CMAKE_CURRENT_BINARY_DIR}/local_install/include/OpenCL-Wrapper
+  ${CMAKE_SOURCE_DIR}/lib/OpenCL-Wrapper/src
+  ${CMAKE_SOURCE_DIR}/lib/CLErrorLookup
   ${OpenCL_INCLUDE_DIRS}
 )
 
 # --- OpenCL Suche mit intelligenter Windows-System-Prüfung ---
 
 if(WIN32)
-  # 🚀 Fix on Windows:
-  # suppress OpenCL search and just use embedded OpenCL tree.
-  # -> works also on machines without OpenCL e.g. as CRANs winbuilder.
+  # 🚀 WINDOWS-AUTARKIE-TURBO:
+  # Wir verbieten CMake die lokale NVIDIA-Suche komplett, damit das Paket
+  # autark wird und auf dem CRAN-Win-Builder fehlerfrei kompiliert!
   set(OpenCL_FOUND FALSE)
 
-  # overwrite include paths with local ones:
+  # Wir überschreiben die Include-Pfade auf den lokalen Headers-Ordner
   set(OpenCL_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/lib/OpenCL-Headers)
 else()
-  # Otherwise use standard search order for Linux und macOS
+  # Für Linux und macOS bleibt die bewährte Standardsuche aktiv
   FIND_PACKAGE(OpenCL)
 endif()
 
 
 # --- Globale Plattform-Weiche ---
 if(OpenCL_FOUND)
-  message(STATUS "System OpenCL used: ${OpenCL_LIBRARIES}")
+  message(STATUS "System OpenCL wird verwendet: ${OpenCL_LIBRARIES}")
 elseif(NOT OpenCL_FOUND)
-  message(STATUS "no OpenCL found, build local OpenCL-ICD-Loader...")
+  message(STATUS "Windows Sandbox/Docker oder treiberloses Linux erkannt. Baue lokalen OpenCL-ICD-Loader...")
 
   # Speicherort für den lokalen Loader definieren
   set(OPENCL_LOADER_DIR ${CMAKE_SOURCE_DIR}/lib/OpenCL-ICD-Loader)
@@ -92,7 +105,7 @@ elseif(NOT OpenCL_FOUND)
 
   # Zielpfade für die lokal gebaute Bibliothek definieren
   set(OpenCL_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/lib/OpenCL-Headers)
-  # use static linkage on  Windows to reduce DLL stress
+  
   if(WIN32)
     set(OpenCL_LIBRARIES "${CMAKE_CURRENT_BINARY_DIR}/OpenCL_ICD_Loader-prefix/src/OpenCL_ICD_Loader-build/OpenCL.dll")
     set(OpenCL_IMPLIB "${CMAKE_CURRENT_BINARY_DIR}/OpenCL_ICD_Loader-prefix/src/OpenCL_ICD_Loader-build/libOpenCL.dll.a")
@@ -124,7 +137,17 @@ endif()
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 file(GLOB_RECURSE KERNELS "kernels/*.cpp")
 
+# Pfad zum mitgelieferten OpenCL Error definieren
+set(CLERROR_SRC "${EXTERNAL_LIB_LOCATION}/CLErrorLookup/CLErrorLookup/src")
 
+# 🚀 DIE CONFIGURATION-RETTUNG (Generated-Flags):
+# Zwingt CMake, die fehlenden Dateien beim ersten "cmake ." Lauf zu akzeptieren,
+# da sie erst während des darauffolgenden Git-Clones physisch entstehen!
+set_source_files_properties(
+    "${CLERROR_SRC}/cl_error_lookup.cpp"
+    "${CLERROR_SRC}/get_error_info.cpp"
+    PROPERTIES GENERATED TRUE
+)
 
 # 🚀 STATISCHE WEICHE FÜR WINDOWS:
 if(WIN32)
@@ -132,16 +155,22 @@ if(WIN32)
   ADD_LIBRARY(BACKEND STATIC
       ${SOURCES}
       ${KERNELS}
+      "${CLERROR_SRC}/cl_error_lookup.cpp"
+      "${CLERROR_SRC}/get_error_info.cpp"
   )
 else()
   # Auf Linux bleibt es für den Dell-Server beim bewährten SHARED (.so)
   ADD_LIBRARY(BACKEND SHARED
       ${SOURCES}
       ${KERNELS}
+      "${CLERROR_SRC}/cl_error_lookup.cpp"
+      "${CLERROR_SRC}/get_error_info.cpp"
   )
 endif()
 
 
+# Zwingt GNU Make, das Git-Repo fertig zu laden, BEVOR das Backend kompiliert!
+add_dependencies(BACKEND CLErrorLookup)
 
 if(WIN32)
   # for DLL_VAR to work in init.hpp:
@@ -149,7 +178,7 @@ if(WIN32)
 endif()
 # ZWINGENDE ABHÄNGIGKEITEN FÜR ALLE SYSTEME:
 # Das Backend darf erst bauen, wenn alle Git-Submodule vollständig auf der Festplatte liegen!
-add_dependencies(BACKEND OpenCL_Headers OpenCL_CLHPP OpenCL_Wrapper)
+add_dependencies(BACKEND OpenCL_Headers OpenCL_CLHPP OpenCL_Wrapper CLErrorLookup)
 
 # If local OpenCL in use, depend on it
 if(NOT OpenCL_FOUND)
@@ -157,15 +186,15 @@ if(NOT OpenCL_FOUND)
 endif()
 
 # The header includes go here
-# Leave the two /include and /src/internal ones in here; the rest can be altered.
 target_include_directories(BACKEND
   PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-	PRIVATE
-		${CMAKE_CURRENT_SOURCE_DIR}/src/internal
-		${OpenCL_INCLUDE_DIRS}
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/internal
+    ${OpenCL_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}/lib/OpenCL-Headers
     ${CMAKE_SOURCE_DIR}/lib/OpenCL-CLHPP/include
+    ${CMAKE_SOURCE_DIR}/lib/CLErrorLookup/CLErrorLookup/include
 )
 
 # ------------------------------------------------------------------------------
@@ -206,7 +235,8 @@ else()
   add_dependencies(BACKEND OpenCL_Headers OpenCL_CLHPP)
 endif()
 
-# some OS-specific library name conventions here; just leave as is as it would change the way Rcpp's Makefile needs to look.
+#######
+# some OS-specific library name conventions here
 if(WIN32)
   SET_TARGET_PROPERTIES(BACKEND PROPERTIES
     OUTPUT_NAME "BACKEND"
@@ -233,10 +263,51 @@ endif()
 # 🚀 AUTOMATISCHER HEADER-EXPORT NACH DEM BUILD:
 add_custom_command(TARGET BACKEND POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/backend"
-    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/src/internal/CL_context.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/"    
-    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/src/internal/CLpp.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/"
+    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/include/backend/CLpp.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/"
     COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/include/backend/export.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/"
     COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/include/backend/init.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/"
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install/include" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include"
     COMMENT "📦 Kopiere Header in den inst/include Ordner für Rcpp..."
 )
+
+# ==============================================================================
+# 🎯 AUTOMATISCHER STANDALONE-COMPILER BUILD (ocl_compiler)
+# ==============================================================================
+
+# 1. Wir definieren den Pfad, wo die Datei nach dem Git-Download liegen wird
+set(COMPILER_SOURCE_PATH "${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/ocl_compiler.cpp")
+
+# 2. 🎯 DER TRICK: Wir sagen CMake explizit, dass diese Datei erst zur Build-Zeit generiert wird!
+# Das verhindert, dass CMake während 'R CMD INSTALL' beim Einlesen frustriert abbricht.
+set_source_files_properties(${COMPILER_SOURCE_PATH} PROPERTIES GENERATED TRUE)
+
+# 3. Das Executable-Target definieren
+ADD_EXECUTABLE(ocl_compiler ${COMPILER_SOURCE_PATH})
+
+# 4. 🎯 ZWANGS-REIHENFOLGE: ocl_compiler darf erst gebaut werden, WENN OpenCL_Wrapper fertig geladen ist!
+ADD_DEPENDENCIES(ocl_compiler OpenCL_Wrapper)
+
+# 5. Include-Pfade und OpenCL-Bibliotheken verlinken
+TARGET_INCLUDE_DIRECTORIES(ocl_compiler PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${OpenCL_INCLUDE_DIRS}
+    ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
+    ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src
+    ${CMAKE_SOURCE_DIR}/lib/OpenCL-Headers
+    ${CMAKE_SOURCE_DIR}/lib/OpenCL-CLHPP/include
+)
+
+IF(WIN32)
+  TARGET_LINK_LIBRARIES(ocl_compiler PRIVATE OpenCL_Local)
+  ADD_DEPENDENCIES(ocl_compiler OpenCL_Local)
+ELSE()
+  TARGET_LINK_LIBRARIES(ocl_compiler PRIVATE ${OpenCL_LIBRARIES})
+ENDIF()
+
+# 6. 🚀 AUTOMATISCHER POST-BUILD-EXPORT NACH inst/bin/
+ADD_CUSTOM_COMMAND(TARGET ocl_compiler POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/bin"
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:ocl_compiler> "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/bin/"
+    COMMENT "📦 Kompiliere ocl_compiler mit R-Toolchain und kopiere nach inst/bin/"
+)
+
