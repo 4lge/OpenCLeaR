@@ -32,7 +32,7 @@ namespace backend {
 	 */
   extern "C" EXPORT void activateDeviceWithMostFlops();
   extern "C" EXPORT void activateDeviceWithMostMemory();
-  extern "C" EXPORT void activateDeviceWithID(int id);
+  extern "C" EXPORT void activateDeviceWithIndex(int idx);
   extern "C" EXPORT void setKernelsPath(const std::string& path);
   extern "C" EXPORT void initCL();
     // 🚀 NEU: Die Synchronisations-Brücke für Rcpp freischalten

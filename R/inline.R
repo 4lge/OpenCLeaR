@@ -23,7 +23,7 @@
 ##' @export
 inlineCxxPlugin <- function(...) {
     plugin <-  Rcpp::Rcpp.plugin.maker(
-	include.before = "#include \"opencl.hpp\"\n#include \"CLpp.hpp\"\n#include \"init.hpp\"\nnamespace backend { static std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; } }\n",
+	include.before = "#include \"opencl.hpp\"\n#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
 
         libs           = paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND ", sep=""),
         package        = "OpenCLeaR"
@@ -37,7 +37,7 @@ inlineCxxPlugin <- function(...) {
 ##' @export
 inlineCxxPluginFloat <- function(...) {
     plugin <- Rcpp::Rcpp.plugin.maker(
-        include.before = "#include \"opencl.hpp\"\n#include \"CLpp.hpp\"\n#include \"init.hpp\"\n",
+        include.before = "#include \"opencl.hpp\"\n#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\";  inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
         libs           = paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND ", sep=""),
         package        = "OpenCLeaR"
     )
@@ -50,7 +50,7 @@ inlineCxxPluginFloat <- function(...) {
 ##' @export
 inlineCxxPluginDouble <- function(...) {
     plugin <- Rcpp::Rcpp.plugin.maker(
-        include.before = "#include \"opencl.hpp\"\n#include \"CLpp.hpp\"\n#include \"init.hpp\"\n",
+        include.before = "#include \"opencl.hpp\"\n#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
         libs           = paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND ", sep=""),
         package        = "OpenCLeaR"
     )
@@ -253,7 +253,7 @@ generateInlineCL <- function(signature, kernel_code, body, debug = FALSE, ...) {
             is_fp64 <- TRUE
         }
     }
-
+    raw_adress <- device_info$Device_Address
     # Dynamische Plugin-Auswahl anhand des Namens
     if (is_fp64) {
         gewaehltes_plugin <- "OpenCLeaRDouble"
@@ -286,7 +286,9 @@ generateInlineCL <- function(signature, kernel_code, body, debug = FALSE, ...) {
 
     modified_cpp_body <- paste0(
         "    using namespace backend;\n",
-        "    Device* device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());\n",
+        "    // 🚀 DER UNZERSTÖRBARE SPEICHER-TUNNEL:\n",
+        "    // Wir umgehen die Modul-Kapselung und greifen direkt auf die wache RAM-Adresse zu!\n",
+        "    Device* device = reinterpret_cast<Device*>((uintptr_t)", raw_adress, ");\n",
         "    #if FP64_MODE == 1\n",
         "        typedef double real_t;\n",
         "    #else\n",
@@ -351,7 +353,8 @@ makeAdaptiveCL <- function(signature, kernel_code, body) {
                 signature   = signature,
                 kernel_code = kernel_code,
                 body        = body,
-                debug       = FALSE
+                verbose     = TRUE,
+                debug       = TRUE
             )
 
             # Zustand für den nächsten Aufruf einfrieren

@@ -37,20 +37,17 @@ void ActivateDeviceWithMostMemory() {
   backend::sync_global_device();
 }
 
-//' Activate OpenCL devive by ID
-//' @param id id of device, all devices will be shown on load ofthe
+//' Activate OpenCL devive by Index
+//' @param idx index of device, all devices will be shown on load ofthe
 //'     library.
 //' @export
-// [[Rcpp::export(name = "ActivateDeviceWithID_Native")]]
-void ActivateDeviceWithID_Native(int id) {
-    // 🚀 ALTE COCKPIT-BLOCKADE RESTLOS GEBRANNT:
-    // Der fehlerhafte ID-Check fliegt komplett raus!
-    
+// [[Rcpp::export(name = "ActivateDeviceWithIndex_Native")]]
+void ActivateDeviceWithIndex_Native(int idx) {
     // Vorbereitung für den sauberen Treiberwechsel im RAM
     global_opencl_device = nullptr;
 
     // Das C++ Backend schaltet die Hardware frisch und hängerfrei um
-    backend::CLpp::instance().activateDeviceWithID(id);
+    backend::CLpp::instance().activateDeviceWithIndex(idx);
     
     // Synchronisiert den globalen C-Pointer für Rcpp frisch an die neue Adresse
     backend::sync_global_device();     
@@ -58,15 +55,15 @@ void ActivateDeviceWithID_Native(int id) {
 
 //' OpenCL asynchronous device activation routine to break Windows WDDM context lock
 //' @export
-// [[Rcpp::export(name = "ActivateDeviceWithID_Async", rng = FALSE)]]
-bool ActivateDeviceWithID_Async(int id) {
+// [[Rcpp::export(name = "ActivateDeviceWithIndex_Async", rng = FALSE)]]
+bool ActivateDeviceWithIndex_Async(int idx) {
   std::atomic<bool> is_done(false);
   std::atomic<bool> success(false);
 
   // 🚀 DER WORKER-THREAD: Holt sich das Objekt und feuert die Methode per Pfeil -> ab!
-  std::thread cl_activate_thread([&is_done, &success, id]() {
+  std::thread cl_activate_thread([&is_done, &success, idx]() {
     try {
-      backend::activateDeviceWithID(id);
+      backend::activateDeviceWithIndex(idx);
 
       success = true;
     } catch (...) {
@@ -187,7 +184,7 @@ List GetActiveDeviceInfo() {
 
     // Gibt eine leere Liste mit Dummy-Werten zurück, damit R sauber weiterläuft
     return List::create(
-                        _["ID"] = -1,
+                        _["Index"] = -1,
                         _["Name"] = "Nicht gebunden (Bitte ActivateDeviceWithID ausführen)",
                         _["Vendor"] = "Keiner",
                         _["FP64_Capable"] = false
@@ -213,9 +210,10 @@ List GetActiveDeviceInfo() {
 
   // Wir schnüren alle Werte zu einer wunderschönen, nativen R-Liste zusammen!
   return List::create(
-                      _["ID"]             = d.id,
+                      _["Index"]         = d.id, ///<<<< FIXME!!!!
                       _["Platform_ID"]   = global_opencl_device->platform_id(), 
-                      _["Device_ID"]     = global_opencl_device->device_id(),  
+                      _["Device_ID"]     = global_opencl_device->device_id(),
+                      _["Device_Address"] = (double)(uintptr_t)global_opencl_device,
                       _["Name"]           = d.name,
                       _["Vendor"]         = d.vendor,
                       _["OS"]             = os,
@@ -248,7 +246,7 @@ DataFrame GetDeviceList() {
 
   // Rcpp-Vektoren für die DataFrame-Spalten vorbereiten
   IntegerVector device_ids;
-  IntegerVector platform_ids; // 🚀 NEU
+  IntegerVector hardware_platform_ids; // 🚀 NEU
   IntegerVector hardware_device_ids; // 🚀 NEU
   CharacterVector device_names;
   CharacterVector device_vendors;
@@ -265,7 +263,7 @@ DataFrame GetDeviceList() {
 
     // Daten aus der fertig befüllten Struktur absaugen
     device_ids.push_back(d.id);
-    platform_ids.push_back(d.platform_idx); // 🎯 Holt den echten Plattform-Index
+    hardware_platform_ids.push_back(d.platform_idx); // 🎯 Holt den echten Plattform-Index
     hardware_device_ids.push_back(d.device_idx); // 🎯 Holt den echten Treiber-Device-Index
     device_names.push_back(d.name);
     device_vendors.push_back(d.vendor);
@@ -279,8 +277,8 @@ DataFrame GetDeviceList() {
 
   // 3. Zum nativen R-DataFrame verschmelzen (mitsamt den neuen Treiberspalten!)
   return DataFrame::create(
-                           _["ID"]            = device_ids,
-                           _["Platform_ID"]   = platform_ids, // 🚀 JETZT VORHANDEN!
+                           _["Index"]         = device_ids,
+                           _["Platform_ID"]   = hardware_platform_ids, // 🚀 JETZT VORHANDEN!
                            _["Device_ID"]     = hardware_device_ids, // 🚀 JETZT VORHANDEN!
                            _["Name"]          = device_names,
                            _["Vendor"]        = device_vendors,

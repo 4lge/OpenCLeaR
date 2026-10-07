@@ -94,7 +94,7 @@ inline std::string get_opencl_c_code() {
   }
 
 
-  void CLpp::activateDeviceWithID(int id){
+  void CLpp::activateDeviceWithIndex(int idx){
     // Kanäle vor dem Treiberlauf radikal freiputzen!
     std::cout << std::flush; std::cerr << std::flush;
     fflush(stdout); fflush(stderr);
@@ -111,12 +111,12 @@ inline std::string get_opencl_c_code() {
         fflush(stdout); fflush(stderr);
     }
 
-    std::cerr << "  ⏱️ [CLpp.cpp] 1. Initialisiere Hardware-Kontext frisch für Gerät ID " << id << "..." << std::endl << std::flush;
+    std::cerr << "  ⏱️ [CLpp.cpp] 1. Initialisiere Hardware-Kontext frisch für Gerät Index " << idx << "..." << std::endl << std::flush;
 
     
 
     // select_device_with_id wird unzerstörbar mit dem aufgelösten Device-Index gefüttert!
-    auto dev_info = select_device_with_id(id);
+    auto dev_info = select_device_with_id(idx);
 
 
     // 🚀 SCHRITT B: Die plattformspezifische Queue-Weiche (Brennt den Windows-Intel-Hänger weg!)
@@ -168,8 +168,9 @@ inline std::string get_opencl_c_code() {
         
         // FP64-Fähigkeit über die Extensions ermitteln
         std::string ext = dev.getInfo<CL_DEVICE_EXTENSIONS>();
+        std::cout << "extensions: " << ext << std::endl;
         this->activeDevice.info.is_fp64_capable = (ext.find("cl_khr_fp64") != std::string::npos || ext.find("cl_amd_fp64") != std::string::npos);
-
+        std::cout << "fp64: " << (this->activeDevice.info.is_fp64_capable? 1 : 0) << std::endl;
         // Dynamische Kerne- & TFLOPs-Berechnung (NVIDIA A2 vs. Xeon-CPU)
         const int vendor_id = (int)dev.getInfo<CL_DEVICE_VENDOR_ID>();
         const bool is_gpu = dev.getInfo<CL_DEVICE_TYPE>() == CL_DEVICE_TYPE_GPU;
@@ -197,6 +198,21 @@ inline std::string get_opencl_c_code() {
         }
     }
     //////
+        // =========================================================================
+    // 🚀 DER UNZICKIGE C-API LIVE SCAN (Brennt jeden try-Abbruch restlos weg!):
+    // =========================================================================
+    // size_t scan_size = 0;
+    // clGetDeviceInfo(this->activeDevice.get_device_id(), CL_DEVICE_EXTENSIONS, 0, NULL, &scan_size);
+    // std::vector<char> scan_buffer(scan_size);
+    // clGetDeviceInfo(this->activeDevice.get_device_id(), CL_DEVICE_EXTENSIONS, scan_size, scan_buffer.data(), NULL);
+    // std::string live_ext(scan_buffer.data(), scan_size);
+
+    // // Wir zwingen das Feld unzerstörbar auf den echten Hardware-Zustand!
+    // this->activeDevice.info.is_fp64_capable = (live_ext.find("cl_khr_fp64") != std::string::npos || 
+    //                                            live_ext.find("cl_amd_fp64") != std::string::npos);
+
+    // // Synchronisiert zeitgleich deinen neuen Index direkt im Core-Gerät!
+    // this->activeDevice.info.index = idx;
     
     // Kanäle nach dem Laden entleeren
     std::cerr << "  🎉 [CLpp.cpp] SUCCESS: Gerät " << this->activeDevice.info.name << " erfolgreich scharfgeschaltet!\n" << std::endl << std::flush;

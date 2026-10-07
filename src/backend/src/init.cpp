@@ -45,10 +45,10 @@ namespace backend {
     }    
   }
   
-  extern "C" void activateDeviceWithID(int id) {
+  extern "C" void activateDeviceWithIndex(int idx) {
     try {
       //      if (CLpp::instance().isInitialized()) {
-        CLpp::instance().activateDeviceWithID(id);
+        CLpp::instance().activateDeviceWithIndex(idx);
         //}
     } catch (...) {
       // Fehlgeschlagene Aktivierung im Docker-Container lautlos ignorieren

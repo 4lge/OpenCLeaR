@@ -9,8 +9,11 @@
 #     fx(2L, 5)
 # }
 
-    
-   rnormCLinline <- inline::cxxfunction(signature(n = "integer", mean = "numeric", sd = "numeric"),
+rnormCLinlineFiles <- inline::cxxfunction(signature(n = "integer", mean = "numeric", sd = "numeric"),"inst/examples/kernels/distance.cl","inst/interface/idw_rcpp.cpp",plugin = "OpenCLeaR",debug=TRUE,verbose=TRUE)
+
+
+
+rnormCLinline <- inline::cxxfunction(signature(n = "integer", mean = "numeric", sd = "numeric"),
     "using namespace backend;
         // 🚀 DIE ABSOLUTE FINALE ZEIGER-RETTUNG:
         //  Wir holen die Adresse der Referenz und wandeln sie per const_cast in den benötigten Schreib-Zeiger!

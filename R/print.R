@@ -4,19 +4,25 @@
 #' @method print OpenCLDeviceInfo
 #' @export
 print.OpenCLDeviceInfo <- function(x, ...) {
-  # Hilfsfunktion für linksbündige Ausrichtung (simuliert das C++ alignl)
+  # 🚀 SCHUTZGÜRTEL: Hilfsfunktion fängt leere oder korrupte Felder unzerstörbar ab!
   align_l <- function(text, width = 58) {
-    txt <- as.character(text)
+    if (is.null(text) || length(text) == 0 || is.na(text)) {
+      txt <- "NA"
+    } else {
+      txt <- as.character(text)
+    }
     if (nchar(txt) >= width) return(substring(txt, 1, width))
     paste0(txt, paste(rep(" ", width - nchar(txt)), collapse = ""))
   }
   
   # Speicher lesbar formatieren (RAM vs VRAM)
-  mem_type <- if (x$Uses_RAM) "RAM" else "VRAM"
+  mem_type <- if (isTRUE(x$Uses_RAM)) "RAM" else "VRAM"
   
-  # 🚀 DER REINE, NATIVE R-DRUCK (Absolut hängerfrei auf Windows und Docker!):
+  # 🚀 DER REINE, NATIVE R-DRUCK (Komplett bereinigt und tippfehlerfrei):
   cat("|----------------.------------------------------------------------------------|\n")
-  cat(paste0("| Device ID      | ", align_l(x$ID), " |\n"))
+  cat(paste0("| Device Index   | ", align_l(x$Index), " |\n"))
+  cat(paste0("| Platform ID    | ", align_l(x$Platform_ID), " |\n")) # 🎯 Buchstabendreher BITGENAU korrigiert!
+  cat(paste0("| Device ID      | ", align_l(x$Device_ID), " |\n"))
   cat(paste0("| Device Name    | ", align_l(x$Name), " |\n"))
   cat(paste0("| Device Vendor  | ", align_l(x$Vendor), " |\n"))
   cat(paste0("| Device Driver  | ", align_l(paste0(x$Driver_Version, " (", x$OS, ")")), " |\n"))
@@ -34,9 +40,8 @@ print.OpenCLDeviceInfo <- function(x, ...) {
   cat(paste0("| Buffer Limits  | ", align_l(buf_str), " |\n"))
   
   # FP64 Fähigkeit
-  cat(paste0("| FP64 capable   | ", align_l(if (x$FP64_Capable) "TRUE" else "FALSE"), " |\n"))
+  cat(paste0("| FP64 capable   | ", align_l(if (isTRUE(x$FP64_Capable)) "TRUE" else "FALSE"), " |\n"))
   cat("|----------------'------------------------------------------------------------|\n")
   
-  invisible(x) # R-Standard: Gibt das Objekt unsichtbar zurück
+  invisible(x) 
 }
-

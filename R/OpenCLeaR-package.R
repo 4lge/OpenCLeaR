@@ -36,7 +36,7 @@
         "\n==========================================================================\n",
         "  (Kernels path: ", kernels_dir, ").\n",
         "⚠️  [OpenCLeaR] OpenCL environment loaded but NOT yet bound to hardware!\n",
-        "👉 PLEASE RUN: ActivateDeviceWithID(0) to select and initialize your GPU/CPU.\n",
+        "👉 PLEASE RUN: ActivateDeviceWithIndex(0) to select and initialize your GPU/CPU.\n",
         "=========================================================================="
     )
 }
@@ -81,7 +81,7 @@ ensure_opencl_initialized <- function() {
 
     # 🚀 SCHRITT 2: Erst jetzt das beste Gerät aus der geladenen Liste aktivieren!
 
-    # deon in initCl with ID(0) ActivateDeviceWithMostFlops()
+    # done in initCl with Index(0) ActivateDeviceWithMostFlops()
     
     # JETZT PRÜFEN: Ist es ein echtes Gerät oder nur das Dummy-Objekt?
     if (IsOpenCLReady()) {
@@ -108,11 +108,11 @@ GetKernelsPath <- function() {
 }
 
 
-#' Activate OpenCL Device via ID
+#' Activate OpenCL Device via Index
 #' @return logical, indicating success
 #' @export
-ActivateDeviceWithID <- function(id) {
-    id_int <- as.integer(id)
+ActivateDeviceWithIndex <- function(idx) {
+    idx_int <- as.integer(idx)
     env <- OpenCLeaR:::.OpenCLeaR_Env
 
     # 1. Hardware-Tabelle einlesen
@@ -121,14 +121,14 @@ ActivateDeviceWithID <- function(id) {
         stop("💥 [OpenCLeaR] Hardware-Tabelle konnte nicht gelesen werden!")
     }
 
-    if (id_int < 0 || id_int >= nrow(devs)) {
-        warning("💥 [OpenCLeaR] Ungültige ID: ", id_int)
+    if (idx_int < 0 || idx_int >= nrow(devs)) {
+        warning("💥 [OpenCLeaR] Ungültiger Index: ", idx_int)
         return(invisible(FALSE))
     }
 
     # Treiber-Koordinaten für das Zielgerät auslesen
-    ziel_platform <- as.integer(devs[devs$ID == id_int, "Platform_ID"])
-    ziel_device   <- as.integer(devs[devs$ID == id_int, "Device_ID"])
+    ziel_platform <- as.integer(devs[devs$Index == idx_int, "Platform_ID"])
+    ziel_device   <- as.integer(devs[devs$Index == idx_int, "Device_ID"])
 
     # 2. 🎯 UNZERSTÖRBARER COCKPIT-VERGLEICH REIN AUF HARDWARE-EBENE:
     if (OpenCLeaR:::.is_device_bound_cpp()) {
@@ -148,9 +148,9 @@ ActivateDeviceWithID <- function(id) {
 
     # 3. ZÜNDUNG:
     if (.Platform$OS.type == "windows") {
-        ActivateDeviceWithID_Async(id_int)
+        ActivateDeviceWithIndex_Async(idx_int)
     } else {
-        ActivateDeviceWithID_Native(id_int)
+        ActivateDeviceWithIndex_Native(idx_int)
     }
 
     # 4. TRANSIENTEN POINTER BITSCHARF INITIALISIEREN:

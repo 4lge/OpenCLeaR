@@ -2,9 +2,9 @@
 
 S3method(print,OpenCLDeviceInfo)
 S3method(print,OpenCLDeviceList)
-export(ActivateDeviceWithID)
-export(ActivateDeviceWithID_Async)
-export(ActivateDeviceWithID_Native)
+export(ActivateDeviceWithIndex)
+export(ActivateDeviceWithIndex_Async)
+export(ActivateDeviceWithIndex_Native)
 export(ActivateDeviceWithMostFlops)
 export(ActivateDeviceWithMostMemory)
 export(GetActiveDeviceInfo)

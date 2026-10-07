@@ -38,8 +38,8 @@ print.OpenCLDeviceInfo <- function(x, ...) {
   # 🚀 SCHUTZWALL GEGEN LEERE INITIALISIERUNG (Lazy-Loading-Schutz):
   if (x$Name == "" || x$Compute_Units == 0) {
     cat("|----------------.------------------------------------------------------------|\n")
-    cat("| Hinweis        | Es ist aktuell noch kein OpenCL-Geraet im RAM aktiviert.    |\n")
-    cat("|                | Bitte rufen Sie zuerst 'ActivateDeviceWithID(0)' auf!      |\n")
+    cat("| Hinweis        | Es ist aktuell noch kein OpenCL-Geraet im RAM aktiviert.   |\n")
+    cat("|                | Bitte rufen Sie zuerst 'ActivateDeviceWithIndex(0)' auf!   |\n")
     cat("|----------------'------------------------------------------------------------|\n")
     return(invisible(x))
   }
@@ -56,16 +56,16 @@ print.OpenCLDeviceInfo <- function(x, ...) {
 
   # 🚀 DER REINE, NATIVE R-DRUCK: Genau eine Zeile pro Gerät!
   cat("|----------------.------------------------------------------------------------|\n")
-  cat("| Device ID      | Geraete-Name                                  | FP64       |\n")
+  cat("| Device Index   | Geraete-Name                                  | FP64       |\n")
   cat("|----------------+-----------------------------------------------+------------|\n")
   
   for (i in 1:nrow(x)) {
-    id_str   <- paste0(x$ID[i], " ")
-    id_pad   <- paste0(id_str, paste(rep(" ", 14 - nchar(id_str)), collapse = ""))
+    idx_str   <- paste0(x$Index[i], " ")
+    idx_pad   <- paste0(idx_str, paste(rep(" ", 14 - nchar(idx_str)), collapse = ""))
     name_pad <- align_l(x$Name[i], 45)
     fp64_str <- if (x$FP64_Capable[i]) "JA  " else "NEIN"
     
-    cat(paste0("| ID ", id_pad, "| ", name_pad, " | ", fp64_str, "       |\n"))
+    cat(paste0("| Idx ", idx_pad, "| ", name_pad, " | ", fp64_str, "       |\n"))
   }
   cat("|----------------'------------------------------------------------------------|\n")
   
@@ -89,28 +89,28 @@ print.OpenCLDeviceList <- function(x, ...) {
   }
 
   cat("|----------------.------------------------------------------------------------|\n")
-  cat("| Device ID      | Geraete-Name                                  | FP64       |\n")
+  cat("| Device Index   | Geraete-Name                                  | FP64       |\n")
   cat("|----------------+-----------------------------------------------+------------|\n")
 
   for (i in 1:nrow(x)) {
     # 🚀 DIE DYNAMISCHE STRIP-LOGIK:
     # Das ID-Feld hat eine feste Trennwand-Breite von 10 Zeichen ("| ID X    ")
-    raw_id <- as.character(x$ID[i])
+    raw_idx <- as.character(x$Index[i])
 
     # Wir berechnen das exakte Padding für die Leerzeichen hinter der Ziffer:
     # 10 Zeichen Gesamtbreite - 3 Zeichen für "ID " - Länge der Ziffer
-    padding_length <- 10 - 3 - nchar(raw_id)
+    padding_length <- 10 - 3 - nchar(raw_idx)
 
     # Sicherheitsnetz, falls die ID wider Erwarten riesig wird
     if (padding_length < 1) padding_length <- 1
 
     # Perfekt zentrierter ID-String ohne Tabellen-Verschiebung!
-    id_field <- paste0("ID ", raw_id, paste(rep(" ", padding_length), collapse = ""))
+    idx_field <- paste0("Idx ", raw_idx, paste(rep(" ", padding_length), collapse = ""))
 
     name_pad <- align_l(x$Name[i], 45)
     fp64_str <- if (x$FP64_Capable[i]) "JA  " else "NEIN"
 
-    cat(paste0("| ", id_field, "| ", name_pad, " | ", fp64_str, "       |\n"))
+    cat(paste0("| ", idx_field, "| ", name_pad, " | ", fp64_str, "       |\n"))
   }
   cat("|----------------'------------------------------------------------------------|\n")
 

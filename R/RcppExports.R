@@ -18,18 +18,18 @@ ActivateDeviceWithMostMemory <- function() {
     invisible(.Call(`_OpenCLeaR_ActivateDeviceWithMostMemory`))
 }
 
-#' Activate OpenCL devive by ID
-#' @param id id of device, all devices will be shown on load ofthe
+#' Activate OpenCL devive by Index
+#' @param idx index of device, all devices will be shown on load ofthe
 #'     library.
 #' @export
-ActivateDeviceWithID_Native <- function(id) {
-    invisible(.Call(`_OpenCLeaR_ActivateDeviceWithID_Native`, id))
+ActivateDeviceWithIndex_Native <- function(idx) {
+    invisible(.Call(`_OpenCLeaR_ActivateDeviceWithIndex_Native`, idx))
 }
 
 #' OpenCL asynchronous device activation routine to break Windows WDDM context lock
 #' @export
-ActivateDeviceWithID_Async <- function(id) {
-    .Call(`_OpenCLeaR_ActivateDeviceWithID_Async`, id)
+ActivateDeviceWithIndex_Async <- function(idx) {
+    .Call(`_OpenCLeaR_ActivateDeviceWithIndex_Async`, idx)
 }
 
 #' OpenCL initialization routine

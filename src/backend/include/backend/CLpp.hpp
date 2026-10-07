@@ -28,7 +28,7 @@ namespace backend {
     
     void activateDeviceWithMostMemory();
 
-    void activateDeviceWithID(int id);
+    void activateDeviceWithIndex(int idx);
 
     //void activateDevice(Device_Info dev);
     

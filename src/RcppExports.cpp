@@ -28,23 +28,23 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
-// ActivateDeviceWithID_Native
-void ActivateDeviceWithID_Native(int id);
-RcppExport SEXP _OpenCLeaR_ActivateDeviceWithID_Native(SEXP idSEXP) {
+// ActivateDeviceWithIndex_Native
+void ActivateDeviceWithIndex_Native(int idx);
+RcppExport SEXP _OpenCLeaR_ActivateDeviceWithIndex_Native(SEXP idxSEXP) {
 BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< int >::type id(idSEXP);
-    ActivateDeviceWithID_Native(id);
+    Rcpp::traits::input_parameter< int >::type idx(idxSEXP);
+    ActivateDeviceWithIndex_Native(idx);
     return R_NilValue;
 END_RCPP
 }
-// ActivateDeviceWithID_Async
-bool ActivateDeviceWithID_Async(int id);
-RcppExport SEXP _OpenCLeaR_ActivateDeviceWithID_Async(SEXP idSEXP) {
+// ActivateDeviceWithIndex_Async
+bool ActivateDeviceWithIndex_Async(int idx);
+RcppExport SEXP _OpenCLeaR_ActivateDeviceWithIndex_Async(SEXP idxSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
-    Rcpp::traits::input_parameter< int >::type id(idSEXP);
-    rcpp_result_gen = Rcpp::wrap(ActivateDeviceWithID_Async(id));
+    Rcpp::traits::input_parameter< int >::type idx(idxSEXP);
+    rcpp_result_gen = Rcpp::wrap(ActivateDeviceWithIndex_Async(idx));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -158,8 +158,8 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_OpenCLeaR_ActivateDeviceWithMostFlops", (DL_FUNC) &_OpenCLeaR_ActivateDeviceWithMostFlops, 0},
     {"_OpenCLeaR_ActivateDeviceWithMostMemory", (DL_FUNC) &_OpenCLeaR_ActivateDeviceWithMostMemory, 0},
-    {"_OpenCLeaR_ActivateDeviceWithID_Native", (DL_FUNC) &_OpenCLeaR_ActivateDeviceWithID_Native, 1},
-    {"_OpenCLeaR_ActivateDeviceWithID_Async", (DL_FUNC) &_OpenCLeaR_ActivateDeviceWithID_Async, 1},
+    {"_OpenCLeaR_ActivateDeviceWithIndex_Native", (DL_FUNC) &_OpenCLeaR_ActivateDeviceWithIndex_Native, 1},
+    {"_OpenCLeaR_ActivateDeviceWithIndex_Async", (DL_FUNC) &_OpenCLeaR_ActivateDeviceWithIndex_Async, 1},
     {"_OpenCLeaR_InitCL", (DL_FUNC) &_OpenCLeaR_InitCL, 0},
     {"_OpenCLeaR_SetKernelsPath", (DL_FUNC) &_OpenCLeaR_SetKernelsPath, 1},
     {"_OpenCLeaR_IsOpenCLReady", (DL_FUNC) &_OpenCLeaR_IsOpenCLReady, 0},
