@@ -160,11 +160,11 @@ data <- rnorm(1000, mean = 5, sd = 2)
 mu_obs    <- mean(data)
 sigma_obs <- sd(data)
 
-samples <- 10000000L # 10 Millionen Punkte!
+samples <- 100000000L # 100 Millionen Punkte!
 nchains <- 10000L    # 10.000 parallele Ketten!
 burnin  <- 200L
 samples_per_chain <- as.integer(samples / nchains)
-
+if(burnin>samples_per_chain) stop("burnin too large")
 start_time <- Sys.time()
 results <- parallel_MH_sampler(as.integer(samples), as.integer(nchains), data, mu_obs, sigma_obs)
 end_time <- Sys.time()

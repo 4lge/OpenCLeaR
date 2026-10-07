@@ -50,7 +50,8 @@ void ActivateDeviceWithIndex_Native(int idx) {
     backend::CLpp::instance().activateDeviceWithIndex(idx);
     
     // Synchronisiert den globalen C-Pointer für Rcpp frisch an die neue Adresse
-    backend::sync_global_device();     
+    // backend::sync_global_device();
+    global_opencl_device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());
 }
 
 //' OpenCL asynchronous device activation routine to break Windows WDDM context lock
@@ -90,7 +91,8 @@ bool ActivateDeviceWithIndex_Async(int idx) {
 
   // 🔄 4. DIE GLOBALE SYNCHRONISATION (Sicher im Hauptthread platziert!)
   if (success) {
-    backend::sync_global_device();
+    //backend::sync_global_device();
+    global_opencl_device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());
   }
 
   return success;

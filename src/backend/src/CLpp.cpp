@@ -101,15 +101,15 @@ inline std::string get_opencl_c_code() {
 
     // 🚀 DER NVIDIA-CONTMEXT-RETTER (Verhindert das Umschalt-Sterben auf Linux):
     // Falls bereits ein Gerät aktiv war, reissen wir die Handles hier geordnet ab!
-    if (this->is_initialized) {
-        std::cerr << "  ⚠️ [CLpp.cpp] Schließe aktiven Kontext für Gerät sauber vor Wechsel..." << std::endl << std::flush;
+    // if (this->is_initialized) {
+    //     std::cerr << "  ⚠️ [CLpp.cpp] Schließe aktiven Kontext für Gerät sauber vor Wechsel..." << std::endl << std::flush;
         
-        // Wir demaskieren das alte Gerät und entladen es im RAM manuell vor dem Move
-        this->activeDevice = Device(); 
+    //     // Wir demaskieren das alte Gerät und entladen es im RAM manuell vor dem Move
+    //     this->activeDevice = Device(); 
         
-        std::cout << std::flush; std::cerr << std::flush;
-        fflush(stdout); fflush(stderr);
-    }
+    //     std::cout << std::flush; std::cerr << std::flush;
+    //     fflush(stdout); fflush(stderr);
+    // }
 
     std::cerr << "  ⏱️ [CLpp.cpp] 1. Initialisiere Hardware-Kontext frisch für Gerät Index " << idx << "..." << std::endl << std::flush;
 

@@ -154,8 +154,8 @@ ActivateDeviceWithIndex <- function(idx) {
     }
 
     # 4. TRANSIENTEN POINTER BITSCHARF INITIALISIEREN:
-    cat("🔄 [OpenCLeaR] Erzeuge transienten C++ Pointer (Platform:", ziel_platform, ", Device:", ziel_device, ")\n")
-    env$active_device_ptr <- OpenCLeaR:::.create_transient_device_cpp(ziel_platform, ziel_device, env$kernels_path)
+    #cat("🔄 [OpenCLeaR] Erzeuge transienten C++ Pointer (Platform:", ziel_platform, ", Device:", ziel_device, ")\n")
+    #env$active_device_ptr <- OpenCLeaR:::.create_transient_device_cpp(ziel_platform, ziel_device, env$kernels_path)
 
     return(invisible(TRUE))
 }
