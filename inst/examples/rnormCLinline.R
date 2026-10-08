@@ -9,43 +9,16 @@
 #     fx(2L, 5)
 # }
 
-rnormCLinlineFiles <- inline::cxxfunction(signature(n = "integer", mean = "numeric", sd = "numeric"),"inst/examples/kernels/distance.cl","inst/interface/idw_rcpp.cpp",plugin = "OpenCLeaR",debug=TRUE,verbose=TRUE)
-
-
-
-rnormCLinline <- inline::cxxfunction(signature(n = "integer", mean = "numeric", sd = "numeric"),
+    
+   rnormCLinline <- inline::cxxfunction(signature(n = "integer", mean = "numeric", sd = "numeric"),
     "using namespace backend;
         // 🚀 DIE ABSOLUTE FINALE ZEIGER-RETTUNG:
         //  Wir holen die Adresse der Referenz und wandeln sie per const_cast in den benötigten Schreib-Zeiger!
      Device* device = const_cast<Device*>(&getActiveDeviceFromBackend());
 
      
-    std::string base = backend::CLpp::instance().getKernelsPath();
-
-    if (!base.empty() && base.back() != '/') {
-      base += \"/\";
-    }
-
-    device->set_kernel_path(base);
-    device->set_kernel_file(\"rnorm.cl\");
-    device->set_kernel_name(\"rnorm.cl\"); // fixme
-    device->initialize_binary_cache_path();
-    std::string math_lib_file = base + \"libkernel.cl\";
-    device->set_math_library_path(math_lib_file);
-
-    std::string compiler_folder = base;
-    size_t kernels_pos = compiler_folder.rfind(\"kernels\");
-
-    if (kernels_pos != std::string::npos) {
-      compiler_folder = compiler_folder.substr(0, kernels_pos) + \"bin\";
-    } else {
-      compiler_folder = \"./bin\";
-    }
-
-    device->set_compiler_path(compiler_folder);
-
-    // 🚀 EIN EINZIGER BEFEHL: Erledigt alles im Backend sychron und prozess-isoliert!
-    device->load_or_build_kernel();
+     device->load_kernel(CLpp::instance().getKernelsPath() ,\"rnorm.cl\");
+     device->compile_kernel();
 
      std::cout << \"compile code :\\n\" << device->get_compiled_code() << \"\\n ---- \\n\" << std::endl;
 

@@ -38,7 +38,7 @@ print.OpenCLDeviceInfo <- function(x, ...) {
   # 🚀 SCHUTZWALL GEGEN LEERE INITIALISIERUNG (Lazy-Loading-Schutz):
   if (x$Name == "" || x$Compute_Units == 0) {
     cat("|----------------.------------------------------------------------------------|\n")
-    cat("| Hinweis        | Es ist aktuell noch kein OpenCL-Geraet im RAM aktiviert.   |\n")
+    cat("| Hinweis        | Es ist aktuell noch kein OpenCL-Geraet im RAM aktiviert.    |\n")
     cat("|                | Bitte rufen Sie zuerst 'ActivateDeviceWithIndex(0)' auf!   |\n")
     cat("|----------------'------------------------------------------------------------|\n")
     return(invisible(x))

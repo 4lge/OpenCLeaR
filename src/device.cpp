@@ -6,9 +6,9 @@ using namespace Rcpp;
 
 // 🚀 DIE BRÜCKE: Erzeugt das Gerät im C++ RAM und gibt den Pointer an R
 // [[Rcpp::export(name = ".create_transient_device_cpp")]]
-SEXP create_transient_device_cpp(int platform_id, int device_id, std::string kernels_path) {
+SEXP create_transient_device_cpp(int platform_id, int device_id, std::string kernel_path) {
     // Ruft den Konstruktor deines Structs auf (der clCreateContext etc. ausführt)
-    TransientDevice* t_dev = new TransientDevice(platform_id, device_id, kernels_path);
+    TransientDevice* t_dev = new TransientDevice(platform_id, device_id, kernel_path);
     // Verpackt den nackten C++ Zeiger in ein Rcpp XPtr-Objekt.
     // 'true' sorgt dafür, dass Rcpp den Destruktor ~TransientDevice() automatisch
     // aufruft, falls der Pointer in R jemals gelöscht oder überschrieben wird.

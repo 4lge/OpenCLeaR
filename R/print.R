@@ -9,7 +9,7 @@ print.OpenCLDeviceInfo <- function(x, ...) {
     if (is.null(text) || length(text) == 0 || is.na(text)) {
       txt <- "NA"
     } else {
-      txt <- as.character(text)
+    txt <- as.character(text)
     }
     if (nchar(txt) >= width) return(substring(txt, 1, width))
     paste0(txt, paste(rep(" ", width - nchar(txt)), collapse = ""))

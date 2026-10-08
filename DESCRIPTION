@@ -1,7 +1,7 @@
 Package: OpenCLeaR
 Type: Package
 Title: Easy Access to OpenCL using C++, CMake and Rcpp
-Version: 0.5.10
+Version: 0.6.0
 Author: Albrecht Gebhardt
 Authors@R: person(given = "Albrecht",
                 family = "Gebhardt",
@@ -26,4 +26,4 @@ Config/testthat/edition: 3
 VignetteBuilder: knitr
 RoxygenNote: 7.3.3
 NeedsCompilation: yes
-Packaged: 2026-09-29 18:10:55 UTC; alge
+Packaged: 2026-08-13 19:47:20 UTC; agebhard

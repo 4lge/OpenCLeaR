@@ -54,8 +54,8 @@ cd ../../..
 
 echo "** COPYING KERNELS! **"
 
-mkdir -p inst/kernels
-cp src/backend/kernels/*.cl inst/kernels/ 2>/dev/null || echo "No .cl files found."
+mkdir -p inst/kernel
+cp src/backend/kernel/*.cl inst/kernel/ 2>/dev/null || echo "No .cl files found."
 
 echo "** SUCCESSFULLY COPIED KERNELS! **"
 

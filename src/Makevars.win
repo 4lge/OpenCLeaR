@@ -4,7 +4,7 @@
 # -Wno-unused-variable         -> Blendet die ungenutzte Variable 'r' in rchisqCL.cpp aus
 # -Wno-misleading-indentation  -> Löscht die Einrückungs-Warnungen aus der opencl.hpp
 # -Wno-missing-braces i        -> needed to get silently through OpenCL ICD
-PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include -I./backend/lib/OpenCL-Wrapper/src -Wno-strict-aliasing -Wno-sign-compare -Wno-unused-variable -Wno-misleading-indentation -Wno-missing-braces  -DBUILDING_STATIC_R_PACKAGE -Wno-deprecated-declarations
+PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include -I./backend/lib/OpenCL-Wrapper/src -Wno-strict-aliasing -Wno-sign-compare -Wno-unused-variable -Wno-misleading-indentation -Wno-missing-braces  -DBUILDING_STATIC_R_PACKAGE
 
 # 🚀 STATISCHES REINLINKEN: Wir verlinken die statische libBACKEND.a
 # und zwingen den Linker, die Symbole fest in die Haupt-DLL einzubetten.
@@ -16,9 +16,11 @@ SHLIB_LDFLAGS = $(SHLIB_CXXLDFLAGS) -g
 # Unter Windows müssen wir jetzt KEINE BACKEND.dll mehr in die libs-Ordner kopieren,
 # da sie physisch in der Haupt-DLL verschwunden ist! Nur noch die OpenCL.dll mitgeben:
 all: $(SHLIB)
+	@mkdir -p "$(R_PACKAGE_DIR)/libs"
 	@FOUND_OPENCL=$$(find backend/build/ -name "OpenCL.dll" | head -n 1); \
 	if [ -n "$$FOUND_OPENCL" ] && [ -f "$$FOUND_OPENCL" ]; then \
 		mkdir -p $(R_PACKAGE_DIR)/libs$(R_ARCH)/; \
 		cp "$$FOUND_OPENCL" $(R_PACKAGE_DIR)/libs$(R_ARCH)/; \
 	fi
+	@cp -f backend/BACKEND.a "$(R_PACKAGE_DIR)/libs/BACKEND.a" 2>/dev/null || cp -f BACKEND.a "$(R_PACKAGE_DIR)/libs/BACKEND.a" 2>/dev/null || true
 

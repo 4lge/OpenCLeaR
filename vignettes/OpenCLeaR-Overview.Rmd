@@ -69,6 +69,16 @@ get compiler configuration:
 ```
 
 
+## Rcpp Interface to OpenCL kernels
+nur rnorm als Bsp.
+
+### src/rnormCL.cpp
+```{r, code=readLines('../src/rnormCL.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+```
+
+### R/rnormCL.R
+```{r, code=readLines('../R/rnormCL.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+```
 
 ## C++ Backend
 
@@ -94,16 +104,24 @@ get compiler configuration:
 
 Backend interface to OpenCL kernel
 
+### src/backend/src/rnormcl.cpp
+```{r, code=readLines('../src/backend/src/rnormcl.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+```
+
+### src/backend/include/backend/rnorm.hpp
+```{r, code=readLines('../src/backend/include/backend/rnormcl.hpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+```
+
 Kernel library
 
-### src/backend/kernel/libkernel.cl
-```{r, code=readLines('../src/backend/kernels/libkernel.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+### src/backend/kernel/libkernel.cpp
+```{r, code=readLines('../src/backend/kernel/libkernel.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
 ```
 
 Finally a real OpenCL kernel
 
-### src/backend/kernels/rnorm.cl
-```{r, code=readLines('../src/backend/kernels/rnorm.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="c", comment=""}
+### src/backend/kernel/rnorm.cl
+```{r, code=readLines('../src/backend/kernel/rnorm.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="c", comment=""}
 ```
 
 
@@ -141,7 +159,7 @@ examples in Rd files>
 ```
 
 ### kernel/idw_kernel.cl
-```{r, code=readLines('../inst/kernels/idw_kernel.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+```{r, code=readLines('../inst/kernel/idw_kernel.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
 
 ```
 

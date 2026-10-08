@@ -59,11 +59,11 @@ BEGIN_RCPP
 END_RCPP
 }
 // SetKernelsPath
-void SetKernelsPath(String kernelsPath);
-RcppExport SEXP _OpenCLeaR_SetKernelsPath(SEXP kernelsPathSEXP) {
+void SetKernelsPath(String kernelPath);
+RcppExport SEXP _OpenCLeaR_SetKernelsPath(SEXP kernelPathSEXP) {
 BEGIN_RCPP
-    Rcpp::traits::input_parameter< String >::type kernelsPath(kernelsPathSEXP);
-    SetKernelsPath(kernelsPath);
+    Rcpp::traits::input_parameter< String >::type kernelPath(kernelPathSEXP);
+    SetKernelsPath(kernelPath);
     return R_NilValue;
 END_RCPP
 }
@@ -131,15 +131,15 @@ BEGIN_RCPP
 END_RCPP
 }
 // create_transient_device_cpp
-SEXP create_transient_device_cpp(int platform_id, int device_id, std::string kernels_path);
-RcppExport SEXP _OpenCLeaR_create_transient_device_cpp(SEXP platform_idSEXP, SEXP device_idSEXP, SEXP kernels_pathSEXP) {
+SEXP create_transient_device_cpp(int platform_id, int device_id, std::string kernel_path);
+RcppExport SEXP _OpenCLeaR_create_transient_device_cpp(SEXP platform_idSEXP, SEXP device_idSEXP, SEXP kernel_pathSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< int >::type platform_id(platform_idSEXP);
     Rcpp::traits::input_parameter< int >::type device_id(device_idSEXP);
-    Rcpp::traits::input_parameter< std::string >::type kernels_path(kernels_pathSEXP);
-    rcpp_result_gen = Rcpp::wrap(create_transient_device_cpp(platform_id, device_id, kernels_path));
+    Rcpp::traits::input_parameter< std::string >::type kernel_path(kernel_pathSEXP);
+    rcpp_result_gen = Rcpp::wrap(create_transient_device_cpp(platform_id, device_id, kernel_path));
     return rcpp_result_gen;
 END_RCPP
 }

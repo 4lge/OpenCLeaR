@@ -43,10 +43,10 @@ InitCL <- function() {
 #' OpenCL initialization routine
 #'
 #' called via onLoad mechanism.
-#' @param kernelsPath string, contains path to load OpenCL kernels from.
+#' @param kernelPath string, contains path to load OpenCL kernel from.
 #' @export
-SetKernelsPath <- function(kernelsPath) {
-    invisible(.Call(`_OpenCLeaR_SetKernelsPath`, kernelsPath))
+SetKernelsPath <- function(kernelPath) {
+    invisible(.Call(`_OpenCLeaR_SetKernelsPath`, kernelPath))
 }
 
 #' @export
@@ -84,8 +84,8 @@ GetKernelCode <- function() {
     .Call(`_OpenCLeaR_GetKernelCode`)
 }
 
-.create_transient_device_cpp <- function(platform_id, device_id, kernels_path) {
-    .Call(`_OpenCLeaR_create_transient_device_cpp`, platform_id, device_id, kernels_path)
+.create_transient_device_cpp <- function(platform_id, device_id, kernel_path) {
+    .Call(`_OpenCLeaR_create_transient_device_cpp`, platform_id, device_id, kernel_path)
 }
 
 .set_transient_device_path_cpp <- function(device_xptr, kernel_path) {

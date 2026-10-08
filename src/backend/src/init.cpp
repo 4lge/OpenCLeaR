@@ -12,11 +12,11 @@ bool opencl_bridge_established = false;
 
 namespace backend {
   // Globale Variable bekannt machen
-  extern std::string global_temporary_kernels_path;
+  extern std::string global_temporary_kernel_path;
 
   // 🚀 DIE ECHTE C-BRÜCKE FÜR WINDOWS, LINUX & MAC:
   extern "C" EXPORT void setKernelsPath(const std::string& path) {
-    global_temporary_kernels_path = path;
+    global_temporary_kernel_path = path;
     CLpp::instance().setKernelsPath(path);
   }
 

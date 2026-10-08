@@ -1,6 +1,5 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 PROJECT(BACKEND CXX)
-# set(CMAKE_BUILD_TYPE Debug)
 
 # Get the Rcpp minGW/gcc compilers in order to achieve highest degree of uniformity while users only have to install Rtools.
 include(cmake/find_toolchain.cmake)
@@ -31,8 +30,8 @@ ExternalProject_Add(OpenCL_CLHPP
 execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install/include/")
 ExternalProject_Add(OpenCL_Wrapper
     GIT_REPOSITORY https://github.com/4lge/OpenCL-Wrapper.git
-#    GIT_TAG 774c1a53514f5e86e966be9a95faa01aef58a778
-    GIT_TAG c33aef56ca4a1441a181bd39459ce78fcbeed3ab
+    #GIT_TAG 6f6f00de23e28cc610fd15abd8252fdced031cdc
+    GIT_TAG 523d84304211717637292ebb0d5aaa2ee2b91ec8
     SOURCE_DIR ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
 
     CONFIGURE_COMMAND ""  # Don't run cmake
@@ -135,7 +134,7 @@ endif()
 
 # Make a shared library
 file(GLOB_RECURSE SOURCES "src/*.cpp")
-file(GLOB_RECURSE KERNELS "kernels/*.cpp")
+file(GLOB_RECURSE KERNELS "kernel/*.cpp")
 
 # Pfad zum mitgelieferten OpenCL Error definieren
 set(CLERROR_SRC "${EXTERNAL_LIB_LOCATION}/CLErrorLookup/CLErrorLookup/src")
@@ -167,7 +166,6 @@ else()
       "${CLERROR_SRC}/get_error_info.cpp"
   )
 endif()
-
 
 # Zwingt GNU Make, das Git-Repo fertig zu laden, BEVOR das Backend kompiliert!
 add_dependencies(BACKEND CLErrorLookup)
@@ -269,7 +267,6 @@ add_custom_command(TARGET BACKEND POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install/include" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include"
     COMMENT "📦 Kopiere Header in den inst/include Ordner für Rcpp..."
 )
-
 # ==============================================================================
 # 🎯 AUTOMATISCHER STANDALONE-COMPILER BUILD (ocl_compiler)
 # ==============================================================================

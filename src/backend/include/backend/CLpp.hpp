@@ -65,7 +65,7 @@ namespace backend {
     CLpp(const CLpp&) = delete;
     CLpp& operator=(const CLpp&) = delete;
 
-    std::string kernels_path;
+    std::string kernel_path;
 
   };
 }

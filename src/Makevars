@@ -15,7 +15,7 @@ else
     RPATH_FLAGS = -Wl,-rpath,'$$ORIGIN:.:./src',--enable-new-dtags
 endif
 
-PKG_CPPFLAGS += -I./backend/include -I./backend/build/local_install/include -Wno-misleading-indentation -Wno-deprecated-declarations
+PKG_CPPFLAGS += -I./backend/include -I./backend/build/local_install/include -Wno-misleading-indentation 
 
 PKG_LIBS += $(RPATH_FLAGS) -L. -lBACKEND
 

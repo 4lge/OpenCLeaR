@@ -17,7 +17,7 @@ library(gridExtra)
 # ==============================================================================
 cat("⏳ Kompiliere GPGPU-Laufzeit-Objekt via generateInlineCL...\n")
 
-parallel_MH_sampler <- generateInlineCL(
+parallel_MH_sampler <- makeAdaptiveCL(
     signature = signature(
         n_samples   = "integer",
         n_chains    = "integer",

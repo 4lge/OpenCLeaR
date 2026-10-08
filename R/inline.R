@@ -22,10 +22,17 @@
 ##' }
 ##' @export
 inlineCxxPlugin <- function(...) {
+    if (.Platform$OS.type == "windows") {
+        ## Zwingt MinGW statisch gegen das .a Archiv zu linken und verhindert DLL-Inflation!
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -l:BACKEND.a ", " -L", system.file("libs/x64", package = "OpenCLeaR")," -lOpenCL", sep="")
+    } else {
+        ## Linux verbleibt bei der bewährten dynamischen Verknüpfung
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND", sep="")
+    }
     plugin <-  Rcpp::Rcpp.plugin.maker(
-	include.before = "#include \"opencl.hpp\"\n#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
+	include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
 
-        libs           = paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND ", sep=""),
+        libs           = linker_flags,
         package        = "OpenCLeaR"
     )
     settings <- plugin()
@@ -36,9 +43,16 @@ inlineCxxPlugin <- function(...) {
 ##' @rdname inline
 ##' @export
 inlineCxxPluginFloat <- function(...) {
+    if (.Platform$OS.type == "windows") {
+        ## Zwingt MinGW statisch gegen das .a Archiv zu linken und verhindert DLL-Inflation!
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -l:BACKEND.a ", " -L", system.file("libs/x64", package = "OpenCLeaR")," -lOpenCL", sep="")
+    } else {
+        ## Linux verbleibt bei der bewährten dynamischen Verknüpfung
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND", sep="")
+    }
     plugin <- Rcpp::Rcpp.plugin.maker(
-        include.before = "#include \"opencl.hpp\"\n#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\";  inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
-        libs           = paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND ", sep=""),
+        include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\";  inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
+        libs           = linker_flags,
         package        = "OpenCLeaR"
     )
     settings <- plugin()
@@ -49,9 +63,16 @@ inlineCxxPluginFloat <- function(...) {
 ##' @rdname inline
 ##' @export
 inlineCxxPluginDouble <- function(...) {
+    if (.Platform$OS.type == "windows") {
+        ## Zwingt MinGW statisch gegen das .a Archiv zu linken und verhindert DLL-Inflation!
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -l:BACKEND.a ", " -L", system.file("libs/x64", package = "OpenCLeaR")," -lOpenCL", sep="")
+    } else {
+        ## Linux verbleibt bei der bewährten dynamischen Verknüpfung
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND", sep="")
+    }
     plugin <- Rcpp::Rcpp.plugin.maker(
-        include.before = "#include \"opencl.hpp\"\n#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
-        libs           = paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND ", sep=""),
+        include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
+        libs           = linker_flags,
         package        = "OpenCLeaR"
     )
     settings <- plugin()
@@ -222,7 +243,7 @@ inlineCxxPluginDouble <- function(...) {
 ##'
 ##' }
 ##' @export
-generateInlineCL <- function(signature, kernel_code, body, debug = FALSE, ...) {
+generateInlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, ...) {
 
     # Wir wecken das Backend auf, damit die echten Hardware-Infos im RAM stehen.
     tryCatch({
@@ -233,17 +254,48 @@ generateInlineCL <- function(signature, kernel_code, body, debug = FALSE, ...) {
         tryCatch({ OpenCLeaR::runifCL(1) }, error = function(err) {})
     })
 
-    if (file.exists(kernel_code)) {
-        cl_source <- paste(readLines(kernel_code, warn = FALSE), collapse = "\n")
+    # =========================================================================
+    # 🚀 STRITE PFAD-WEICHE FÜR DEN KERNEL (*.cl)
+    # =========================================================================
+    if (startsWith(kernel_file, "./") || startsWith(kernel_file, ".\\")) {
+        # Fall A: Anwender fordert EXPLIZIT die lokale Datei im Arbeitsverzeichnis
+        if (file.exists(kernel_file)) {
+            kernel_path_final <- kernel_file
+        } else {
+            stop(paste0("💥 [OpenCLeaR] Explizit angeforderte lokale Kernel-Datei nicht gefunden: ", kernel_file))
+        }
     } else {
-        cl_source <- paste(as.character(kernel_code), collapse = "\n")
+        # Fall B: Standard-Suche ausschließlich im installierten Paket-Ordner 'kernel'
+        package_kernel <- system.file("kernel", kernel_file, package = "OpenCLeaR")
+        if (package_kernel != "" && file.exists(package_kernel)) {
+            kernel_path_final <- package_kernel
+        } else {
+            stop(paste0("💥 [OpenCLeaR] Kernel-Datei im Paket-Repository nicht gefunden: ", kernel_file))
+        }
     }
+    cl_source <- paste(readLines(kernel_path_final, warn = FALSE), collapse = "\n")
 
-    if (file.exists(body)) {
-        cpp_body <- paste(readLines(body, warn = FALSE), collapse = "\n")
+
+    # =========================================================================
+    # 🚀 STRITE PFAD-WEICHE FÜR DAS INTERFACE (*.cpp)
+    # =========================================================================
+    if (startsWith(interface_file, "./") || startsWith(interface_file, ".\\")) {
+        # Fall A: Anwender fordert EXPLIZIT die lokale Datei im Arbeitsverzeichnis
+        if (file.exists(interface_file)) {
+            interface_path_final <- interface_file
+        } else {
+            stop(paste0("💥 [OpenCLeaR] Explizit angeforderte lokale Interface-Datei nicht gefunden: ", interface_file))
+        }
     } else {
-        cpp_body <- paste(as.character(body), collapse = "\n")
+        # Fall B: Standard-Suche ausschließlich im installierten Paket-Ordner 'interface'
+        package_interface <- system.file("interface", interface_file, package = "OpenCLeaR")
+        if (package_interface != "" && file.exists(package_interface)) {
+            interface_path_final <- package_interface
+        } else {
+            stop(paste0("💥 [OpenCLeaR] Interface-Datei im Paket-Repository nicht gefunden: ", interface_file))
+        }
     }
+    cpp_source <- paste(readLines(interface_path_final, warn = FALSE), collapse = "\n")
 
     # Hardware abfragen
     device_info <- OpenCLeaR::GetActiveDeviceInfo()
@@ -253,55 +305,66 @@ generateInlineCL <- function(signature, kernel_code, body, debug = FALSE, ...) {
             is_fp64 <- TRUE
         }
     }
-    raw_adress <- device_info$Device_Address
+
     # Dynamische Plugin-Auswahl anhand des Namens
     if (is_fp64) {
-        gewaehltes_plugin <- "OpenCLeaRDouble"
+        chosen_plugin <- "OpenCLeaRDouble"
     } else {
-        gewaehltes_plugin <- "OpenCLeaRFloat"
+        chosen_plugin <- "OpenCLeaRFloat"
     }
 
-    vollstaendiger_cl_code <- paste0(
+    full_cl_code <- paste0(
         "    std::string precision_header = \"\";\n",
         "    if (device->info.is_fp64_capable) {\n",
         "        precision_header = \"#pragma OPENCL EXTENSION cl_khr_fp64 : enable\\n#define real_t double\\n\";\n",
         "    } else {\n",
         "        precision_header = \"#define real_t float\\n\";\n",
         "    }\n",
-        "    std::string full_source = precision_header + R\"(", cl_source, ")\";\n",
-        
+        "    Rcpp::Function system_file(\"system.file\");\n",
+        "    std::string compiler_dir = Rcpp::as<std::string>(system_file(\"bin\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
+        "    std::string kernel_dir  = Rcpp::as<std::string>(system_file(\"kernel\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
+        "    std::cout << \"🎯 Installierter Compiler-Pfad aus Rcpp: \" << compiler_dir << std::endl;\n",
+        "    std::cout << \"🎯 Installierter Kernels-Pfad aus Rcpp: \" << kernel_dir << std::endl;\n",
+        "    std::string base = device->get_kernel_path();\n",
+        "    if (!base.empty() && base.back() != '/') {\n",
+        "      base += \"/\";\n",
+        "    }\n",
+        "    //device->set_kernel_path(base);\n",
+        "    device->set_kernel_file(\"",kernel_file,"\");\n",
+        "    device->set_kernel_name(\"",kernel_file,"\");\n",
+        "    device->initialize_binary_cache_path();\n",
+        "    std::string math_lib_file = kernel_dir + \"/libkernel.cl\";\n",
+        "    device->set_math_library_path(math_lib_file);\n",
         if (isTRUE(debug)) {
             paste0(
                 "    std::ofstream debug_file(\"debug_kernel.cl\");\n",
-                "    debug_file << full_source;\n",
+                "//    debug_file << device->get_compiled_code();\n",
                 "    debug_file.close();\n"
             )
         } else {
-            ""
+            "\n"
         },
-        
-        "    device->set_kernel_source(full_source);\n",
-        "    device->compile_kernel();\n"
+        "    std::string compiler_folder = compiler_dir;\n",
+        "    device->set_compiler_path(compiler_folder);\n",
+        "    device->load_or_build_kernel();\n"
     )
 
     modified_cpp_body <- paste0(
         "    using namespace backend;\n",
-        "    // 🚀 DER UNZERSTÖRBARE SPEICHER-TUNNEL:\n",
-        "    // Wir umgehen die Modul-Kapselung und greifen direkt auf die wache RAM-Adresse zu!\n",
-        "    Device* device = reinterpret_cast<Device*>((uintptr_t)", raw_adress, ");\n",
+        "    Device* device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());\n",
         "    #if FP64_MODE == 1\n",
         "        typedef double real_t;\n",
         "    #else\n",
         "        typedef float real_t;\n",
         "    #endif\n",
-        vollstaendiger_cl_code,
-        cpp_body
+        full_cl_code,
+        cpp_source
     )
 
     executable_r_func <- inline::cxxfunction(
         sig    = signature,
         body   = modified_cpp_body,
-        plugin = gewaehltes_plugin,
+        plugin = chosen_plugin,
         ...
     )
 
@@ -314,7 +377,7 @@ generateInlineCL <- function(signature, kernel_code, body, debug = FALSE, ...) {
 ##' It adapts to the active device and recompiles the both the kernel and
 ##' the interface code to match the floating point architecture.
 ##' @examples
-##' kernel_file <- system.file("kernels", "idw_kernel.cl",
+##' kernel_file <- system.file("kernel", "idw_kernel.cl",
 ##'                            package = "OpenCLeaR")
 ##' interface_file <- system.file("interface", "idw_rcpp.cpp",
 ##'                            package = "OpenCLeaR")
@@ -326,7 +389,7 @@ generateInlineCL <- function(signature, kernel_code, body, debug = FALSE, ...) {
 ##'   body        = interface_file
 ##' )
 ##' @export
-makeAdaptiveCL <- function(signature, kernel_code, body) {
+makeAdaptiveCL <- function(signature, kernel_file, interface_file) {
 
     # 🔐 DIE ÜBERLEBENDE CLOSURE-UMGEBUNG (Lexical Scoping):
     compiled_func   <- NULL
@@ -351,8 +414,8 @@ makeAdaptiveCL <- function(signature, kernel_code, body) {
             # Zündet Ihre bewährte generateInlineCL() Pipeline im RAM
             compiled_func <<- OpenCLeaR::generateInlineCL(
                 signature   = signature,
-                kernel_code = kernel_code,
-                body        = body,
+                kernel_file = kernel_file,
+                interface_file = interface_file,
                 verbose     = TRUE,
                 debug       = TRUE
             )

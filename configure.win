@@ -44,17 +44,17 @@ cd "../../.."
 
 echo "** COPYING KERNELS! **"
 
-mkdir -p inst/kernels
+mkdir -p inst/kernel
 
-cp src/backend/kernels/*.cl inst/kernels/ 2>/dev/null
+cp src/backend/kernel/*.cl inst/kernel/ 2>/dev/null
 
 echo "** SUCCESSFULLY COPIED KERNELS! **"
 
 echo "** COPYING INCLUDES! **"
 
 mkdir -p inst/include
-
-cp src/backend/kernels/*.cl inst/include/ 2>/dev/null
+## FIXME: ???
+cp src/backend/kernel/*.cl inst/include/ 2>/dev/null
 
 echo "** SUCCESSFULLY COPIED INCLUDES! **"
 

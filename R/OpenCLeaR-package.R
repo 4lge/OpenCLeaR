@@ -4,37 +4,37 @@
 ##' @useDynLib OpenCLeaR, .registration = TRUE
 "_PACKAGE"
 
+## FIXME: is this really used?? or ueful??
 .OpenCLeaR_Env <- new.env(parent = emptyenv())
+
 
 ## onLoad function:
 .onLoad <- function(libname, pkgname) {
+    ## 🛡️ NVIDIA-TURBO FÜR WINDOWS:
+    ## Wir schalten den fehlerhaften Nvidia-Festplatten-Cache komplett ab!
     if (.Platform$OS.type == "windows") {
         Sys.setenv(CUDA_CACHE_DISABLE = "1")
-        Sys.setenv(OMP_NUM_THREADS = "1") 
-    }   
-    
-    .OpenCLeaR_Env$active_device_ptr <- NULL
-    .OpenCLeaR_Env$active_platform_id <- 0
-    .OpenCLeaR_Env$active_device_id   <- 0    
-
+        Sys.setenv(OMP_NUM_THREADS = "1") # Verhindert, dass OpenMP-Hintergrundthreads im R-Lader blockieren
+    }	
     ## 🚀 Den echten, absoluten Installationspfad der Kernel im Paket ermitteln!
-    kernels_dir <- system.file("kernels", package = pkgname, lib.loc = libname)
-    if (kernels_dir == "") {
+    kernel_dir <- system.file("kernel", package = pkgname, lib.loc = libname)
+    if (kernel_dir == "") {
         ## Fallback für die lokale Entwicklungsumgebung
-        kernels_dir <- normalizePath("./kernels", mustWork = FALSE)
+        kernel_dir <- normalizePath("./kernel", mustWork = FALSE)
     }
-    .OpenCLeaR_Env$kernels_path <- kernels_dir
-    
+    .OpenCLeaR_Env$kernel_path <- kernel_dir
+
+    ## Meldet alle drei Plugins beim Laden des Pakets an
     inline::registerPlugin("OpenCLeaR", inlineCxxPlugin)
     inline::registerPlugin("OpenCLeaRFloat", inlineCxxPluginFloat)
     inline::registerPlugin("OpenCLeaRDouble", inlineCxxPluginDouble)
     
+    ## Wir setzen im R-Zustand standardmäßig ein Flag auf FALSE.
+    ## Es wird erst TRUE, wenn die Initialisierung später klappt.
     options(OpenCLeaR.initialized = FALSE)
-    
-    ## 2. 🚀 DIE PERFEKTE STARTUP-MELDUNG: Erscheint sofort beim Laden der Library!
     packageStartupMessage(
         "\n==========================================================================\n",
-        "  (Kernels path: ", kernels_dir, ").\n",
+        "  (Kernels path: ", kernel_dir, ").\n",
         "⚠️  [OpenCLeaR] OpenCL environment loaded but NOT yet bound to hardware!\n",
         "👉 PLEASE RUN: ActivateDeviceWithIndex(0) to select and initialize your GPU/CPU.\n",
         "=========================================================================="
@@ -56,8 +56,8 @@ ensure_opencl_initialized <- function() {
       # Scannt den offiziellen Khronos-Registry-Pfad nach installierten Treibern
       vendors <- utils::readRegistry("SOFTWARE\\Khronos\\OpenCL\\Vendors", "HLM")
       if(GetKernelsPath() == "" || nchar(GetKernelsPath()) == 0){
-        kernelsPath <- system.file("kernels", package = "OpenCLeaR") # no pkgname here!
-        SetKernelsPath(kernelsPath) # Der von Rcpp generierte saubere Aufruf
+        kernelPath <- system.file("kernel", package = "OpenCLeaR") # no pkgname here!
+        SetKernelsPath(kernelPath) # Der von Rcpp generierte saubere Aufruf
       }
       length(vendors) > 0
     }, error = function(e) FALSE)
@@ -69,8 +69,8 @@ ensure_opencl_initialized <- function() {
     }
   } else {
       if(GetKernelsPath() == "" || nchar(GetKernelsPath()) == 0){
-        kernelsPath <- system.file("kernels", package = "OpenCLeaR")
-        SetKernelsPath(kernelsPath) # Der von Rcpp generierte saubere Aufruf
+        kernelPath <- system.file("kernel", package = "OpenCLeaR")
+        SetKernelsPath(kernelPath) # Der von Rcpp generierte saubere Aufruf
       }
   }
 
