@@ -27,6 +27,10 @@ Dieses Dokument fasst die wichtigsten Dateien des Pakets zusammen.
 ```{r, code=readLines('../R/debug.R', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
 ```
 
+### R/Device.R (device etc)
+```{r, code=readLines('../R/Device.R', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
+```
+
 ### R/print.R (print Methoden)
 ```{r, code=readLines('../R/print.R', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
 ```
@@ -69,16 +73,6 @@ get compiler configuration:
 ```
 
 
-## Rcpp Interface to OpenCL kernels
-nur rnorm als Bsp.
-
-### src/rnormCL.cpp
-```{r, code=readLines('../src/rnormCL.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
-```
-
-### R/rnormCL.R
-```{r, code=readLines('../R/rnormCL.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
-```
 
 ## C++ Backend
 
@@ -94,6 +88,10 @@ nur rnorm als Bsp.
 ```{r, code=readLines('../src/backend/src/init.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
 ```
 
+### src/backend/include/backend/CLpp.hpp
+```{r, code=readLines('../src/backend/include/backend/CLpp.hpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+```
+
 ### src/backend/include/backend/init.hpp
 ```{r, code=readLines('../src/backend/include/backend/init.hpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
 ```
@@ -102,32 +100,32 @@ nur rnorm als Bsp.
 ```{r, code=readLines('../src/backend/include/backend/export.hpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
 ```
 
-Backend interface to OpenCL kernel
-
-### src/backend/src/rnormcl.cpp
-```{r, code=readLines('../src/backend/src/rnormcl.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
-```
-
-### src/backend/include/backend/rnorm.hpp
-```{r, code=readLines('../src/backend/include/backend/rnormcl.hpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
-```
 
 Kernel library
 
-### src/backend/kernel/libkernel.cpp
-```{r, code=readLines('../src/backend/kernel/libkernel.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+### src/backend/kernel/libkernel.cl
+```{r, code=readLines('../src/backend/kernel/libkernel.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
 ```
 
-Finally a real OpenCL kernel
+Finally a some OpenCL kernels
 
 ### src/backend/kernel/rnorm.cl
 ```{r, code=readLines('../src/backend/kernel/rnorm.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="c", comment=""}
 ```
 
+### inst/kernel/idw_kernel.cl
+```{r, code=readLines('../inst/kernel/idw_kernel.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="c", comment=""}
+```
+
+### inst/kernel/mh_sampler.cl
+```{r, code=readLines('../inst/kernel/mh_sampler.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="c", comment=""}
+```
+
+
 
 ## inline Interface
 
-plugin definition
+plugin definitions and inline generator and future oclFunction (currentle (adaptive cl )
 
 ### R/inline.R
 ```{r, code=readLines('../R/inline.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
@@ -139,34 +137,23 @@ example
 ```{r, code=readLines('../inst/examples/rnormCLinline.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
 ```
 
-### inst/examples/parallel_mh.R
-```{r, code=readLines('../inst/examples/parallel_mh.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+### inst/examples/parallel_mh_ocl.R
+```{r, code=readLines('../inst/examples/parallel_mh_ocl.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
 ```
+## interface code
 
-### inst/examples/parallel_mh_generic.R
-```{r, code=readLines('../inst/examples/parallel_mh_generic.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
-```
-examples in Rd files>
-
-### man/generateInlineCL.Rd
-```{r, code=readLines('../man/generateInlineCL.Rd', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
-
-```
-
-### man/makeAdaptiveCL.Rd
-```{r, code=readLines('../man/makeAdaptiveCL.Rd', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
-
-```
-
-### kernel/idw_kernel.cl
-```{r, code=readLines('../inst/kernel/idw_kernel.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
-
+### interface/idw_rcpp.cpp
+```{r, code=readLines('../inst/interface/idw_rcpp.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
 ```
 
 ### interface/idw_rcpp.cpp
 ```{r, code=readLines('../inst/interface/idw_rcpp.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
-
 ```
+
+### interface/mh_sampler.cpp
+```{r, code=readLines('../inst/interface/mh_sampler.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+```
+
 ## Tests
 
 configuration
@@ -175,18 +162,9 @@ configuration
 ```{r, code=readLines('../tests/testthat.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
 ```
 
-finally a test
+finally a test, currently unused
 
 ### tests/testthat/test-rnormCL.R
 ```{r, code=readLines('../tests/testthat/test-rnormCL.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
 ```
 
-
-An **inline** call could look like this:
-
-source(paste(system.file("inst/examples", package = "OpenCLeaR"),"rnormCLinline.R",sep="/"))
-
-using 
-### inst/examples/rnormCLinline.R
-```{r, code=readLines('../inst/examples/rnormCLinline.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
-```
