@@ -355,7 +355,7 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         # 👑 SCHRITT 2: Erst jetzt den Compiler rufen – 'this->get_kernel_path()' liefert garantiert den korrekten Pfad!
         "    device->load_or_build_kernel();\n" 
     )
-
+    
     # =========================================================================
     # 🔥 DER POINTER-TUNNEL (Verhindert das doppelte Windows-Warten)
     # =========================================================================
@@ -364,11 +364,15 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
     modified_cpp_body <- paste0(
         "    using namespace backend;\n",
         "    Device* device = nullptr;\n",
-        "    if (global_opencl_device != nullptr) {\n",
-        "        device = global_opencl_device;\n",
-        "    } else {\n",
+        "    #if defined(_WIN32) || defined(WIN32)\n",
         "        device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());\n",
-        "    }\n",
+        "    #else\n",
+        "        if (global_opencl_device != nullptr) {\n",
+        "            device = global_opencl_device;\n",
+        "        } else {\n",
+        "            device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());\n",
+        "        }\n",
+        "    #endif\n",
         "    #if FP64_MODE == 1\n",
         "        typedef double real_t;\n",
         "    #else\n",
