@@ -243,29 +243,25 @@ inlineCxxPluginDouble <- function(...) {
 ##'
 ##' }
 ##' @export
-generateInlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math_lib = TRUE, ...) {
+generateInlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math_lib = TRUE, force_float = FALSE, ...) {
 
     # Wir wecken das Backend auf, damit die echten Hardware-Infos im RAM stehen.
     tryCatch({
-        # Falls die interne C++ Weckfunktion exportiert ist, rufen wir sie direkt auf
         OpenCLeaR::ensure_opencl_initialized()
     }, error = function(e) {
-        # Fallback: Ein Alibi-Lauf initialisiert das echte Gerät garantiert blockfrei
         tryCatch({ OpenCLeaR::runifCL(1) }, error = function(err) {})
     })
 
     # =========================================================================
-    # 🚀 STRITE PFAD-WEICHE FÜR DEN KERNEL (*.cl)
+    # 🚀 STRIKTE PFAD-WEICHE FÜR DEN KERNEL (*.cl)
     # =========================================================================
     if (startsWith(kernel_file, "./") || startsWith(kernel_file, ".\\")) {
-        # Fall A: Anwender fordert EXPLIZIT die lokale Datei im Arbeitsverzeichnis
         if (file.exists(kernel_file)) {
             kernel_path_final <- kernel_file
         } else {
             stop(paste0("💥 [OpenCLeaR] Explizit angeforderte lokale Kernel-Datei nicht gefunden: ", kernel_file))
         }
     } else {
-        # Fall B: Standard-Suche ausschließlich im installierten Paket-Ordner 'kernel'
         package_kernel <- system.file("kernel", kernel_file, package = "OpenCLeaR")
         if (package_kernel != "" && file.exists(package_kernel)) {
             kernel_path_final <- package_kernel
@@ -275,19 +271,16 @@ generateInlineCL <- function(signature, kernel_file, interface_file, debug = FAL
     }
     cl_source <- paste(readLines(kernel_path_final, warn = FALSE), collapse = "\n")
 
-
     # =========================================================================
-    # 🚀 STRITE PFAD-WEICHE FÜR DAS INTERFACE (*.cpp)
+    # 🚀 STRIKTE PFAD-WEICHE FÜR DAS INTERFACE (*.cpp)
     # =========================================================================
     if (startsWith(interface_file, "./") || startsWith(interface_file, ".\\")) {
-        # Fall A: Anwender fordert EXPLIZIT die lokale Datei im Arbeitsverzeichnis
         if (file.exists(interface_file)) {
             interface_path_final <- interface_file
         } else {
             stop(paste0("💥 [OpenCLeaR] Explizit angeforderte lokale Interface-Datei nicht gefunden: ", interface_file))
         }
     } else {
-        # Fall B: Standard-Suche ausschließlich im installierten Paket-Ordner 'interface'
         package_interface <- system.file("interface", interface_file, package = "OpenCLeaR")
         if (package_interface != "" && file.exists(package_interface)) {
             interface_path_final <- package_interface
@@ -297,44 +290,51 @@ generateInlineCL <- function(signature, kernel_file, interface_file, debug = FAL
     }
     cpp_source <- paste(readLines(interface_path_final, warn = FALSE), collapse = "\n")
 
-    # Hardware abfragen
+    # =========================================================================
+    # 🎯 DIE NEUE HARDWARE- UND TURBO-WEICHE
+    # =========================================================================
     device_info <- OpenCLeaR::GetActiveDeviceInfo()
     is_fp64 <- FALSE
-    if (!is.null(device_info$FP64_Capable)) {
-        if (device_info$FP64_Capable == 1 || isTRUE(device_info$FP64_Capable)) {
-            is_fp64 <- TRUE
+
+    # Nur wenn Float NICHT erzwungen wird, fragen wir die Hardware nach Double ab
+    if (!isTRUE(force_float)) {
+        if (!is.null(device_info$FP64_Capable)) {
+            # Desaktiviert die alte isTRUE()-Falle für Integer-Bitmasken!
+            if (device_info$FP64_Capable == 1 || isTRUE(as.logical(device_info$FP64_Capable))) {
+                is_fp64 <- TRUE
+            }
         }
     }
 
-    # Dynamische Plugin-Auswahl anhand des Namens
+    # Dynamische Plugin-Auswahl anhand des finalen FP64-Zustands
     if (is_fp64) {
         chosen_plugin <- "OpenCLeaRDouble"
     } else {
         chosen_plugin <- "OpenCLeaRFloat"
     }
 
+    # =========================================================================
+    # 📦 MATHEMATISCHE BIBLIOTHEKS-INJEKTION (DYNAMISCH)
+    # =========================================================================
+    math_lib_injection <- if (isTRUE(math_lib)) {
+        paste0(
+            "    std::string math_lib_file = kernel_dir + \"/libkernel.cl\";\n",
+            "    device->set_math_library_path(math_lib_file);\n"
+        )
+    } else {
+        "    device->set_math_library_path(\"\");\n"
+    }
+
     full_cl_code <- paste0(
-        "    std::string precision_header = \"\";\n",
-        "    if (device->info.is_fp64_capable) {\n",
-        "        precision_header = \"#pragma OPENCL EXTENSION cl_khr_fp64 : enable\\n#define real_t double\\n\";\n",
-        "    } else {\n",
-        "        precision_header = \"#define real_t float\\n\";\n",
-        "    }\n",
         "    Rcpp::Function system_file(\"system.file\");\n",
         "    std::string compiler_dir = Rcpp::as<std::string>(system_file(\"bin\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
         "    std::string kernel_dir  = Rcpp::as<std::string>(system_file(\"kernel\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
         "    std::cout << \"🎯 Installierter Compiler-Pfad aus Rcpp: \" << compiler_dir << std::endl;\n",
         "    std::cout << \"🎯 Installierter Kernels-Pfad aus Rcpp: \" << kernel_dir << std::endl;\n",
-        "    std::string base = device->get_kernel_path();\n",
-        "    if (!base.empty() && base.back() != '/') {\n",
-        "      base += \"/\";\n",
-        "    }\n",
-        "    //device->set_kernel_path(base);\n",
-        "    device->set_kernel_file(\"",kernel_file,"\");\n",
-        "    device->set_kernel_name(\"",kernel_file,"\");\n",
+        "    device->set_kernel_file(\"", kernel_file, "\");\n",
+        "    device->set_kernel_name(\"", kernel_file, "\");\n",
         "    device->initialize_binary_cache_path();\n",
-        "    std::string math_lib_file = kernel_dir + \"/libkernel.cl\";\n",
-        "    device->set_math_library_path(math_lib_file);\n",
+        math_lib_injection,
         if (isTRUE(debug)) {
             paste0(
                 "    std::ofstream debug_file(\"debug_kernel.cl\");\n",
@@ -349,9 +349,17 @@ generateInlineCL <- function(signature, kernel_file, interface_file, debug = FAL
         "    device->load_or_build_kernel();\n"
     )
 
+    # =========================================================================
+    # 🔥 DER POINTER-TUNNEL (Verhindert das doppelte Windows-Warten)
+    # =========================================================================
     modified_cpp_body <- paste0(
         "    using namespace backend;\n",
-        "    Device* device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());\n",
+        "    Device* device = nullptr;\n",
+        "    if (global_opencl_device != nullptr) {\n",
+        "        device = global_opencl_device;\n",
+        "    } else {\n",
+        "        device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());\n",
+        "    }\n",
         "    #if FP64_MODE == 1\n",
         "        typedef double real_t;\n",
         "    #else\n",
