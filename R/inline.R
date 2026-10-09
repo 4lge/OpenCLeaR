@@ -243,7 +243,7 @@ inlineCxxPluginDouble <- function(...) {
 ##'
 ##' }
 ##' @export
-generateInlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math_lib = TRUE, force_float = FALSE, ...) {
+inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math_lib = TRUE, force_float = FALSE, ...) {
 
     # Wir wecken das Backend auf, damit die echten Hardware-Infos im RAM stehen.
     tryCatch({
@@ -325,12 +325,17 @@ generateInlineCL <- function(signature, kernel_file, interface_file, debug = FAL
         "    device->set_math_library_path(\"\");\n"
     }
 
+    # 🔥 DIE ABSOLUTE REIHENFOLGEN-ABSICHERUNG:
     full_cl_code <- paste0(
         "    Rcpp::Function system_file(\"system.file\");\n",
         "    std::string compiler_dir = Rcpp::as<std::string>(system_file(\"bin\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
         "    std::string kernel_dir  = Rcpp::as<std::string>(system_file(\"kernel\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
         "    std::cout << \"🎯 Installierter Compiler-Pfad aus Rcpp: \" << compiler_dir << std::endl;\n",
         "    std::cout << \"🎯 Installierter Kernels-Pfad aus Rcpp: \" << kernel_dir << std::endl;\n",
+        
+        # 👑 SCHRITT 1: Pfad im Device-Objekt festschreiben, BEVOR die JIT-Pipeline anläuft!
+        "    device->set_kernel_path(kernel_dir);\n", 
+        
         "    device->set_kernel_file(\"", kernel_file, "\");\n",
         "    device->set_kernel_name(\"", kernel_file, "\");\n",
         "    device->initialize_binary_cache_path();\n",
@@ -346,12 +351,16 @@ generateInlineCL <- function(signature, kernel_file, interface_file, debug = FAL
         },
         "    std::string compiler_folder = compiler_dir;\n",
         "    device->set_compiler_path(compiler_folder);\n",
-        "    device->load_or_build_kernel();\n"
+        
+        # 👑 SCHRITT 2: Erst jetzt den Compiler rufen – 'this->get_kernel_path()' liefert garantiert den korrekten Pfad!
+        "    device->load_or_build_kernel();\n" 
     )
 
     # =========================================================================
     # 🔥 DER POINTER-TUNNEL (Verhindert das doppelte Windows-Warten)
     # =========================================================================
+    # Dieser Block darf NIEMALS fehlen, weil hier das 'device'-Objekt 
+    # deklariert wird, das 'full_cl_code' oben zwingend zum Arbeiten braucht!
     modified_cpp_body <- paste0(
         "    using namespace backend;\n",
         "    Device* device = nullptr;\n",
@@ -397,43 +406,54 @@ generateInlineCL <- function(signature, kernel_file, interface_file, debug = FAL
 ##'   body        = interface_file
 ##' )
 ##' @export
-makeAdaptiveCL <- function(signature, kernel_file, interface_file) {
+
+oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE, force_float = FALSE, verbose = FALSE, debug = FALSE) {
 
     # 🔐 DIE ÜBERLEBENDE CLOSURE-UMGEBUNG (Lexical Scoping):
     compiled_func   <- NULL
     last_device_id  <- NULL
     last_fp64_state <- NULL
+    last_force_float <- NULL
 
     # Der nackte Logik-Wrapper, den der Nutzer am Ende als Funktion aufruft:
     function(...) {
         # 🚀 1. Hardware-Zustand live abfragen
         current_device  <- OpenCLeaR::GetActiveDeviceInfo()
-        current_id      <- current_device$ID
-        current_fp64    <- (current_device$FP64_Capable == 1)
+        current_id      <- current_device$Device_ID
+        
+        # FP64-Status ermitteln (wird ignoriert, wenn force_float aktiv ist)
+        current_fp64    <- (current_device$FP64_Capable == 1 || isTRUE(as.logical(current_device$FP64_Capable)))
+        if (isTRUE(force_float)) {
+            current_fp64 <- FALSE
+        }
 
         # 🚀 2. CACHE-WEICHE: Müssen wir neu kompilieren?
         need_recompile <- is.null(compiled_func) ||
                           (current_id != last_device_id) ||
-                          (current_fp64 != last_fp64_state)
+                          (current_fp64 != last_fp64_state) ||
+                          (force_float != last_force_float)
 
         if (need_recompile) {
-            cat("🔄 [OpenCLeaR Runtime] Hardware-Wechsel erkannt (oder Erststart)! Kompiliere JIT-Objekt neu...\n")
+            cat("🔄 [OpenCLeaR Runtime] Hardware-Wechsel oder Modus-Änderung erkannt! Kompiliere JIT-Objekt neu...\n")
 
-            # Zündet Ihre bewährte generateInlineCL() Pipeline im RAM
-            compiled_func <<- OpenCLeaR::generateInlineCL(
-                signature   = signature,
-                kernel_file = kernel_file,
+            # 🎯 HIER TUNNELN WIR DIE PARMETERS JETZT SAUBER WEITER!
+            compiled_func <<- OpenCLeaR::inlineCL(
+                signature      = signature,
+                kernel_file    = kernel_file,
                 interface_file = interface_file,
-                verbose     = TRUE,
-                debug       = TRUE
+                math_lib       = math_lib,      # 🚀 Durchgereicht!
+                force_float    = force_float,   # 🚀 Durchgereicht!
+                verbose        = verbose,
+                debug          = debug
             )
 
             # Zustand für den nächsten Aufruf einfrieren
-            last_device_id  <<- current_id
-            last_fp64_state <<- current_fp64
+            last_device_id   <<- current_id
+            last_fp64_state  <<- current_fp64
+            last_force_float <<- force_float
         }
 
-        # 🚀 3. DIREKTE AUSFÜHRUNG: Rauscht in 0 Millisekunden durch den Cache!
+        # 🚀 3. DIREKTE AUSFÜHRUNG
         return(compiled_func(...))
     }
 }

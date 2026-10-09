@@ -46,7 +46,7 @@
      0.28012462728656828)
 
 
- idw_gpu <- makeAdaptiveCL(
+ idw_gpu <- oclFunction(
    signature = signature(r_x0="numeric", r_y0="numeric",
                          r_x="numeric", r_y="numeric",
                          r_z="numeric", p="numeric"),

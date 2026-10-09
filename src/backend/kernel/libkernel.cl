@@ -41,66 +41,65 @@
        static inline real_t normal_cdf(real_t x, real_t mu, real_t sigma) {
          if (sigma <= 0) return 0.0f;
          real_t z = (x - mu) / sigma;
-         real_t t = (real_t)1.0 / ((real_t)1.0 + 0.5f * fabs(z));
-         real_t erf_approx = (real_t)1.0 - t * exp(-z * z - (real_t)1.26523 * t * (t - (real_t)1.0 + (real_t)0.045 * t));
-         return (real_t)0.5 * (1.0f + sign(z) * erf_approx);
+         real_t t = 1.0 / (1.0 + 0.5f * fabs(z));
+         real_t erf_approx = 1.0 - t * exp(-z * z - 1.26523 * t * (t - 1.0 + 0.045 * t));
+         return 0.5 * (1.0f + sign(z) * erf_approx);
        }
 
 
        // Exponential PDF
        static inline real_t exponential_pdf(real_t x, real_t lambda) {
-         if (lambda <= 0 || x < 0) return (real_t)0.0;
+         if (lambda <= 0 || x < 0) return 0.0;
          return lambda * exp(-lambda * x);
        }
 
        // Exponential CDF
        static inline real_t exponential_cdf(real_t x, real_t lambda) {
-         if (lambda <=0 || x < 0) return (real_t)0.0;
+         if (lambda <=0 || x < 0) return 0.0;
          return 1.0f - exp(-lambda * x);
        }
 
        // Chi-Squared PDF
        static inline real_t chi_squared_pdf(real_t x, real_t k) {
-         if (k <= 0 || x < 0) return (real_t)0.0;
-         real_t log_pdf = (k/2.0 - (real_t)1.0) * log(x) - x/2.0 - lgamma(k/2.0) - (k/2.0) * log((real_t)2.0);
+         if (k <= 0 || x < 0) return 0.0;
+         real_t log_pdf = (k/2.0 - 1.0) * log(x) - x/2.0 - lgamma(k/2.0) - (k/2.0) * log(2.0);
          return exp(log_pdf);
        }
 
        // Chi-Squared CDF
        static inline real_t chi_squared_cdf(real_t x, real_t k) {
-         if (k <= 0 || x < 0) return (real_t)0.0;
-	 return (real_t)1.0 - exp(-x / (real_t)2.0) * pow(x / (real_t)2.0, k / (real_t)2.0) / (tgamma(k / (real_t)2.0) * pow((real_t)2.0, k / (real_t)2.0));
-
+         if (k <= 0 || x < 0) return 0.0;
+         return 1.0f - exp(-x/2.0) * pow(x/2.0, k/2.0) / (tgamma(k/2.0) * pow(2.0, k/2.0));
        }
 
        // t-Distribution PDF
        static inline real_t student_t_pdf(real_t x, real_t nu) {
          if (nu <= 0) return 0.0f;
-         real_t log_pdf = lgamma((nu + (real_t)1.0) / (real_t)2.0) - lgamma(nu / (real_t)2.0) - (real_t)0.5 * log(nu * M_PI);
-         log_pdf -= ((nu + (real_t)1.0) / (real_t)2.0) * log((real_t)1.0 + x * x / nu);
+         real_t log_pdf = lgamma((nu + 1.0) / 2.0) - lgamma(nu / 2.0) - 0.5 * log(nu * M_PI);
+         log_pdf -= ((nu + 1.0) / 2.0) * log(1.0 + x * x / nu);
          return exp(log_pdf);
        }
 
        // t-Distribution CDF (approximation via beta function)
        static inline real_t student_t_cdf(real_t x, real_t nu) {
-         if (nu <= 0) return (real_t)0.0;
+         if (nu <= 0) return 0.0;
          real_t t = x / sqrt(nu + x * x);
-         real_t beta = (real_t)0.5 * ((real_t)1.0 + t) * pow((real_t)1.0 - t * t, nu / (real_t)2.0);
-         return (x < 0) ? beta : (real_t)1.0 - beta;
+         real_t beta = 0.5 * (1.0 + t) * pow(1.0 - t * t, nu / 2.0);
+         return (x < 0) ? beta : 1.0 - beta;
        }
 
 
        // Gamma PDF (Numerisch stabil im Log-Raum)
        static inline real_t gamma_pdf(real_t x, real_t shape_k, real_t scale_theta) {
-         if (shape_k <= 0 || scale_theta <= 0 || x < 0) return (real_t)0.0;
+         if (shape_k <= 0 || scale_theta <= 0 || x < 0) return 0.0;
          real_t log_pdf = (shape_k - 1.0f) * log(x) - x / scale_theta - lgamma(shape_k) - shape_k * log(scale_theta);
          return exp(log_pdf);
        }
 
        // Gamma CDF (Numerisch stabil via lgamma)
        static inline real_t gamma_cdf(real_t x, real_t shape_k, real_t scale_theta) {
-         if (shape_k <= 0 || scale_theta <= 0 || x < 0) return (real_t)0.0;
-         real_t sum = (real_t)0.0;
+         if (shape_k <= 0 || scale_theta <= 0 || x < 0) return 0.0;
+         real_t sum = 0.0;
          for (int n = 0; n < 100; ++n) { 
            // 🎯 Nutzen lgamma statt dem nicht existierenden tgamma!
            real_t log_term = (shape_k + n) * log(x / scale_theta) - lgamma(shape_k + n + 1.0f);
@@ -122,31 +121,31 @@
         }
        // Beta PDF
        static inline real_t beta_pdf(real_t x, real_t alpha, real_t beta_param) {
-         if (alpha <= 0 || beta_param <= 0 || x < 0 || x > 1) return (real_t)0.0;
-         real_t log_pdf = (alpha - (real_t)1.0) * log(x) + (beta_param - (real_t)1.0) * log((real_t)1.0 - x) - lgamma(alpha + beta_param) + lgamma(alpha) + lgamma(beta_param);
+         if (alpha <= 0 || beta_param <= 0 || x < 0 || x > 1) return 0.0;
+         real_t log_pdf = (alpha - 1.0) * log(x) + (beta_param - 1.0) * log(1.0 - x) - lgamma(alpha + beta_param) + lgamma(alpha) + lgamma(beta_param);
          return exp(log_pdf);
        }
 
        // Beta CDF (approximation via beta function)
        static inline real_t beta_cdf(real_t x, real_t alpha, real_t beta_param) {
-         if (alpha <= 0 || beta_param <= 0 || x < 0 || x > 1) return (real_t)0.0;
-         real_t sum = (real_t)0.0;
+         if (alpha <= 0 || beta_param <= 0 || x < 0 || x > 1) return 0.0;
+         real_t sum = 0.0;
          for (int k = 0; k < 100; ++k) { // Approximate using series expansion
-           sum += pow(x, alpha + k) / (alpha + k) * pow((real_t)1.0 - x, beta_param + k) / (beta_param + k);
+           sum += pow(x, alpha + k) / (alpha + k) * pow(1.0 - x, beta_param + k) / (beta_param + k);
          }
          return sum;
        }
 
        // Weibull PDF
        static inline real_t weibull_pdf(real_t x, real_t shape_k, real_t scale_lambda) {
-         if (shape_k <= 0 || scale_lambda <= 0 || x < 0) return (real_t)0.0;
-         return (shape_k / scale_lambda) * pow(x / scale_lambda, shape_k - (real_t)1.0) * exp(-pow(x / scale_lambda, shape_k));
+         if (shape_k <= 0 || scale_lambda <= 0 || x < 0) return 0.0;
+         return (shape_k / scale_lambda) * pow(x / scale_lambda, shape_k - 1.0) * exp(-pow(x / scale_lambda, shape_k));
        }
 
        // Weibull CDF
        static inline real_t weibull_cdf(real_t x, real_t shape_k, real_t scale_lambda) {
-         if (shape_k <= 0 || scale_lambda <= 0 || x < 0) return (real_t)0.0;
-         return (real_t)1.0 - exp(-pow(x / scale_lambda, shape_k));
+         if (shape_k <= 0 || scale_lambda <= 0 || x < 0) return 0.0;
+         return 1.0 - exp(-pow(x / scale_lambda, shape_k));
        }
 
 
@@ -168,8 +167,8 @@
 
        // Binomial CDF
        static inline real_t binomial_cdf(int k, int n, real_t p) {
-         if (k < 0 || k > n || p < 0 || p > 1) return (real_t)0.0;
-         real_t sum = (real_t)0.0;
+         if (k < 0 || k > n || p < 0 || p > 1) return 0.0;
+         real_t sum = 0.0;
          for (int i = 0; i <= k; ++i) {
            sum += binomial_pdf(i, n, p);
          }
@@ -179,15 +178,15 @@
 
        // Poisson PDF
        static inline real_t poisson_pdf(int k, real_t lambda) {
-         if (k < 0 || lambda <= 0) return (real_t)0.0;
-         real_t log_pmf = -lambda + k * log(lambda) - lgamma(k + (real_t)1.0);
+         if (k < 0 || lambda <= 0) return 0.0;
+         real_t log_pmf = -lambda + k * log(lambda) - lgamma(k + 1.0);
          return exp(log_pmf);
        }
 
        // Poisson CDF
        static inline real_t poisson_cdf(int k, real_t lambda) {
-         if (k < 0 || lambda <= 0) return (real_t)0.0;
-         real_t sum = (real_t)0.0;
+         if (k < 0 || lambda <= 0) return 0.0;
+         real_t sum = 0.0;
          for (int i = 0; i <= k; ++i) {
            sum += poisson_pdf(i, lambda);
          }
@@ -195,28 +194,28 @@
        }
        // Geometric PDF
        static inline real_t geometric_pdf(int k, real_t p) {
-         if (k < 0 || p <= 0 || p > 1) return (real_t)0.0;
-         return p * pow((real_t)1.0 - p, k);
+         if (k < 0 || p <= 0 || p > 1) return 0.0;
+         return p * pow(1.0 - p, k);
        }
 
        // Geometric CDF
        static inline real_t geometric_cdf(int k, real_t p) {
-         if (k < 0 || p <= 0 || p > 1) return (real_t)0.0;
-         return (real_t)1.0 - pow((real_t)1.0 - p, k + 1);
+         if (k < 0 || p <= 0 || p > 1) return 0.0;
+         return 1.0 - pow(1.0 - p, k + 1);
        }
 
 
        // Negative Binomial PDF
        static inline real_t neg_binomial_pdf(int k, int r, real_t p) {
-         if (k < 0 || r <= 0 || p <= 0 || p > 1) return (real_t)0.0;
-         real_t log_pmf = log_choose(k + r - 1, k) + r * log(p) + k * log((real_t)1.0 - p);
+         if (k < 0 || r <= 0 || p <= 0 || p > 1) return 0.0;
+         real_t log_pmf = log_choose(k + r - 1, k) + r * log(p) + k * log(1.0 - p);
          return exp(log_pmf);
        }
 
        // Negative Binomial CDF
        static inline real_t neg_binomial_cdf(int k, int r, real_t p) {
-         if (k < 0 || r <= 0 || p <= 0 || p > 1) return (real_t)0.0;
-         real_t sum = (real_t)0.0;
+         if (k < 0 || r <= 0 || p <= 0 || p > 1) return 0.0;
+         real_t sum = 0.0;
          for (int i = 0; i <= k; ++i) {
            sum += neg_binomial_pdf(i, r, p);
          }
@@ -284,7 +283,7 @@
        // weibull
        static inline real_t rweibull(__private real_t lambda, __private real_t k,
                        __private int* idx, __private uint* mt) {
-         return lambda * pow(-log(mt_rand_01(&mt[0], &idx[0], mt)), (real_t)1.0 / k);
+         return lambda * pow(-log(mt_rand_01(&mt[0], &idx[0], mt)), 1.0 / k);
        }
 
 
@@ -301,7 +300,7 @@
        // geometric
        static inline uint rgeom(__private real_t prob,
                   __private int* idx, __private uint* mt){
-         return floor(log(mt_rand_01(&mt[0], &idx[0], mt)) / log((real_t)1.0 - prob));
+         return floor(log(mt_rand_01(&mt[0], &idx[0], mt)) / log(1.0 - prob));
        }
 
        // negative binomial
@@ -309,7 +308,7 @@
                     __private int* idx, __private uint* mt){
          uint sum = 0;
          for (int i = 0; i < size; ++i) {
-           sum += floor(log(mt_rand_01(&mt[0], &idx[0], mt)) / log((real_t)1.0 - prob)); // Requires multiple uniforms
+           sum += floor(log(mt_rand_01(&mt[0], &idx[0], mt)) / log(1.0 - prob)); // Requires multiple uniforms
          }
          return sum;
        }
@@ -318,7 +317,7 @@
        static inline uint rpois(__private real_t lambda,
                   __private int* idx, __private uint* mt){
          uint k = 0;
-         real_t sum_exponentials = (real_t)0.0;
+         real_t sum_exponentials = 0.0;
          while (sum_exponentials <= 1) { // Sum exponentials until exceed 1
            sum_exponentials += -log(mt_rand_01(&mt[0], &idx[0], mt)) * lambda;
            k++;
@@ -338,7 +337,7 @@
          int min_k = max(0, n - (N - K));
 
          // Compute PMF bounds and ratio-of-uniforms condition
-         real_t max_pmf = (real_t)0.0;
+         real_t max_pmf = 0.0;
          for (int k = min_k; k <= max_k; ++k) {
            // Compute log combinations to avoid overflow
            real_t pmf = compute_hyper_pmf(k, N, K, n);

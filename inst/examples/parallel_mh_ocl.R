@@ -15,9 +15,9 @@ library(gridExtra)
 # ==============================================================================
 # 🚀 3. DER GENERISCHE KOPPLUNGS-BEFEHL (v0.5.0 Zündung)
 # ==============================================================================
-cat("⏳ Kompiliere GPGPU-Laufzeit-Objekt via generateInlineCL...\n")
+cat("⏳ Kompiliere GPGPU-Laufzeit-Objekt via oclFunction...\n")
 
-parallel_MH_sampler <- makeAdaptiveCL(
+parallel_MH_sampler <- oclFunction(
     signature = signature(
         n_samples   = "integer",
         n_chains    = "integer",
