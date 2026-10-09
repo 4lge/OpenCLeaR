@@ -25,9 +25,13 @@
     GpuData.write_to_device();
     GpuSeeds.write_to_device();
 
+    real_t mu_init_typed       = as<real_t>(mu_init);
+    real_t sigma_init_typed    = as<real_t>(sigma_init);
+    real_t prop_sd_mu_typed    = (real_t)0.05;
+    real_t prop_sd_sigma_typed = (real_t)0.05;
     Kernel mh_kernel(*device, chains, "mh_sampler_kernel", 
                      GpuMu, GpuSigma, GpuData, data_len, samples_per_chain,
-                     as<real_t>(mu_init), as<real_t>(sigma_init), 0.05, 0.05, GpuSeeds);
+                     mu_init_typed, sigma_init_typed, prop_sd_mu_typed,  prop_sd_sigma_typed , GpuSeeds);
 
     // 🔥 FEUER FREI AUF DER GPU 🔥
     mh_kernel.run();

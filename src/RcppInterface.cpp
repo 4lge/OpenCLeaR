@@ -202,22 +202,22 @@ List GetActiveDeviceInfo() {
                       _["Platform_ID"]   = global_opencl_device->platform_id(), 
                       _["Device_ID"]     = global_opencl_device->device_id(),
                       _["Device_Address"] = (double)(uintptr_t)global_opencl_device,
-        _["Name"]           = d.name,
-        _["Vendor"]         = d.vendor,
-        _["OS"]             = os,
-        _["Driver_Version"] = d.driver_version,
-        _["OpenCL_Version"] = "OpenCL C " + d.opencl_c_version,
-        _["Compute_Units"]  = d.compute_units,
-        _["Clock_MHz"]      = d.clock_frequency,
-        _["Cores"]          = d.cores,
-        _["TFLOPs"]         = d.tflops,
-        _["Memory_MB"]      = d.memory,
-        _["Uses_RAM"]       = d.uses_ram,
-        _["Global_Cache_KB"]= d.global_cache,
-        _["Local_Cache_KB"] = d.local_cache,
-        _["Max_Buffer_MB"]  = d.max_global_buffer,
-        _["Max_Constant_KB"]= d.max_constant_buffer,
-        _["FP64_Capable"]   = d.is_fp64_capable
+                      _["Name"]           = d.name,
+                      _["Vendor"]         = d.vendor,
+                      _["OS"]             = os,
+                      _["Driver_Version"] = d.driver_version,
+                      _["OpenCL_Version"] = "OpenCL C " + d.opencl_c_version,
+                      _["Compute_Units"]  = d.compute_units,
+                      _["Clock_MHz"]      = d.clock_frequency,
+                      _["Cores"]          = d.cores,
+                      _["TFLOPs"]         = d.tflops,
+                      _["Memory_MB"]      = d.memory,
+                      _["Uses_RAM"]       = d.uses_ram,
+                      _["Global_Cache_KB"]= d.global_cache,
+                      _["Local_Cache_KB"] = d.local_cache,
+                      _["Max_Buffer_MB"]  = d.max_global_buffer,
+                      _["Max_Constant_KB"]= d.max_constant_buffer,
+                      _["FP64_Capable"]   = (d.is_fp64_capable >= 1)
     );
 }
 
@@ -260,7 +260,7 @@ DataFrame GetDeviceList() {
         cores_count.push_back(d.cores);
         tflops_perf.push_back(d.tflops);
         vram_mb.push_back(d.memory);
-        fp64_capable.push_back(d.is_fp64_capable);
+        fp64_capable.push_back(d.is_fp64_capable >= 1);
     }
 
   // 3. Zum nativen R-DataFrame verschmelzen (mitsamt den neuen Treiberspalten!)
