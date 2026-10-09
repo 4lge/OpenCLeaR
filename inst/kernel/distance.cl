@@ -5,7 +5,6 @@ __kernel void distance_matrix(
                               const int N,
                               const int DIM){
 
-  // 🚀 HOCHPROFI-1D-MAPPING: Wir holen uns die rein eindimensionale Thread-ID
   size_t flat_id = get_global_id(0);
 
   // Mathematische Matrix-Rekonstruktion (Fortran-Style Leading Dimension)

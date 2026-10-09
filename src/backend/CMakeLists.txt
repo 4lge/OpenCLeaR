@@ -31,7 +31,7 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINA
 ExternalProject_Add(OpenCL_Wrapper
     GIT_REPOSITORY https://github.com/4lge/OpenCL-Wrapper.git
     #GIT_TAG 6f6f00de23e28cc610fd15abd8252fdced031cdc
-    GIT_TAG 523d84304211717637292ebb0d5aaa2ee2b91ec8
+    GIT_TAG 44b4ab28ff17dc4f714c2620689a0900802720a0
     SOURCE_DIR ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
 
     CONFIGURE_COMMAND ""  # Don't run cmake

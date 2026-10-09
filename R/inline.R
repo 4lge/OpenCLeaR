@@ -243,7 +243,7 @@ inlineCxxPluginDouble <- function(...) {
 ##'
 ##' }
 ##' @export
-generateInlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, ...) {
+generateInlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math_lib = TRUE, ...) {
 
     # Wir wecken das Backend auf, damit die echten Hardware-Infos im RAM stehen.
     tryCatch({
