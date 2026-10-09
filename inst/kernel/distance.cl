@@ -14,13 +14,13 @@ __kernel void distance_matrix(
   if (i < N && j < N) {
     // Hauptdiagonale initialisieren
     if (i == j) {
-      output[j * N + i] = (real_t)0.0;
+      output[j * N + i] = 0.0f;
       return;
     }
     
     // Symmetrie ausnutzen: Nur im unteren Dreieck die Schleife rechnen!
     if (j < i) {
-      real_t tmpRes = (real_t)0.0;
+      real_t tmpRes = 0.0f;
       for (int k = 0; k < DIM; ++k) {
         real_t diff = input[i + k * N] - input[j + k * N];
         tmpRes += diff * diff;

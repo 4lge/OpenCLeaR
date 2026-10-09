@@ -26,7 +26,8 @@ parallel_MH_sampler <- oclFunction(
         sigma_init  = "numeric"
     ),
     kernel_file     = "mh_sampler.cl",
-    interface_file  = "mh_sampler.cpp"
+    interface_file  = "mh_sampler.cpp",
+    force_float = T
 )
 
 # ==============================================================================

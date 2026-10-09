@@ -34,8 +34,11 @@
     Output.read_from_device();
 
     NumericMatrix res_matrix(nr, nr);
+    // Wir holen uns den rohen Zeiger, um zu sehen, ob das Typsystem synchron ist
+    real_t* raw_ptr = Output.data(); 
+
     for (int i = 0; i < nout; ++i) {
-        res_matrix[i] = (double)Output[i];
+      res_matrix[i] = (double)Output[i]; 
     }
 
     return wrap(res_matrix);
