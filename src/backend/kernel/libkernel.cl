@@ -1,3 +1,5 @@
+// -*- c -*-
+
 // 🛡️ DYNAMISCHE STRATEGISCHE ARCHITEKTUR-SCHRÄNKEN
 #if defined(cl_khr_fp64) || defined(cl_amd_fp64)
     #define GPGPU_EPSILON 1e-16
@@ -7,6 +9,16 @@
     #define GPGPU_SAFE_MAX 1e-37f
 #endif
 // use: (X.Xf * GPGPU_EPSILON)
+
+// oerloads for int arguments to functions working on real_t  arguments 
+static inline real_t lgamma(int x) { return lgamma((real_t)x); }
+static inline real_t log(int x)    { return log((real_t)x); }
+static inline real_t sqrt(int x)   { return sqrt((real_t)x); }
+static inline real_t exp(int x)    { return exp((real_t)x); }
+static inline real_t sin(int x)    { return sin((real_t)x); }
+static inline real_t cos(int x)    { return cos((real_t)x); }
+static inline real_t tan(int x)    { return tan((real_t)x); }
+// TO BE CONTINUED ...
 
 #define INIT_MT(mt) (\
   uint mt[624];\

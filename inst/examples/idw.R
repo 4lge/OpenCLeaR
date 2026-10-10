@@ -51,7 +51,9 @@
                          r_x="numeric", r_y="numeric",
                          r_z="numeric", p="numeric"),
    kernel_file = "idw_kernel.cl",
-   interface_file  = "idw_rcpp.cpp"
+   interface_file  = "idw_rcpp.cpp",
+   force_float=F,
+   verbose = T
  )
 
 
