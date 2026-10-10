@@ -180,11 +180,17 @@ void ToggleOpenCLPrint(bool state) {
 
 // [[Rcpp::export(name = ".GetActiveDeviceInfo_cpp", rng = FALSE)]]
 List GetActiveDeviceInfo() {
+    // 🛡️ DER ABSOLUTE C++ CRASH-SCHUTZWALL:
+    // Wir fangen den nullptr ab, BEVOR der Speicher-Controller meckert!
+  if (global_opencl_device == nullptr || !global_opencl_device->exists()) {
+      Rcpp::stop("💥 OpenCLeaR Backend-Fehler: Es ist kein OpenCL-Gerät aktiv! Bitte aktiviere zuerst ein Gerät mit 'ActivateDeviceWithID()'.");
+    }
     // Wir greifen direkt auf die info-Struktur Ihres globalen Speicherankers zu!
     // Da dieses Objekt im RAM mitsynchronisiert wird, stehen hier immer die
     // Daten der exakt ausgewählten Karte (NVIDIA, Intel oder CPU) drin.
     const auto& d = global_opencl_device->info;
 
+    
     // Betriebssystem-String analog zu Ihrem Wrapper ermitteln
 #if defined(_WIN32)
     const std::string os = "Windows";

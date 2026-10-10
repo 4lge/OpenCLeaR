@@ -1,7 +1,7 @@
 Package: OpenCLeaR
 Type: Package
 Title: Easy Access to OpenCL using C++, CMake and Rcpp
-Version: 0.6.1
+Version: 0.6.2
 Author: Albrecht Gebhardt
 Authors@R: person(given = "Albrecht",
                 family = "Gebhardt",
