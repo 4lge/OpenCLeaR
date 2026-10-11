@@ -12,7 +12,7 @@ __kernel void mh_sampler_kernel(__global real_t* out_mu,
     int gid = get_global_id(0);
     int offset = gid * samples_per_chain;
     
-    // 🔐 1. Zustand des Mersenne-Twisters als Array deklarieren
+    // 🔐 1. initialize Mersenne Twister state as array
     uint mt[624];
     int idx = 624;
     mt[0] = seed_array[gid] + gid;
@@ -26,10 +26,10 @@ __kernel void mh_sampler_kernel(__global real_t* out_mu,
     out_mu[offset] = mu_current;
     out_sigma[offset] = sigma_current;
     
-    // 🔄 Der serielle MCMC-Loop innerhalb des parallelen GPU-Threads
+    // 🔄 serial MCMC-loop whithin parallelen OpenCL thread
     for (int t = 1; t < samples_per_chain; ++t) {
         
-        // Blind und ultraschnell aus Ihrem installierten Core abrufen!
+        // use libkernel function for rnorm in analgy to base R functions
         real_t mu_proposal    = rnorm(mu_current, prop_sd_mu, &idx, mt);
         real_t sigma_proposal = rnorm(sigma_current, prop_sd_sigma, &idx, mt);
         
@@ -39,7 +39,7 @@ __kernel void mh_sampler_kernel(__global real_t* out_mu,
             continue;
         }
         
-        // --- 1. Log-Posterior des Vorschlags berechnen (Python-Priors: 0.01 und 1.0/0.01) ---
+        // --- 1. log-posterior of proposal
         real_t log_prior_prop = log(normal_pdf(mu_proposal, (real_t)0.0, (real_t)10.0)) + 
                                 log(invgamma_pdf(sigma_proposal, (real_t)0.01, (real_t)1.0/(real_t)0.01));
         real_t log_lik_prop = (real_t)0.0;
@@ -48,7 +48,7 @@ __kernel void mh_sampler_kernel(__global real_t* out_mu,
         }
         real_t log_post_prop = log_prior_prop + log_lik_prop;
         
-        // --- 2. Log-Posterior des aktuellen Zustands berechnen ---
+        // --- 2. log-posterior for current state
         real_t log_prior_curr = log(normal_pdf(mu_current, (real_t)0.0, (real_t)10.0)) + 
                                 log(invgamma_pdf(sigma_current, (real_t)0.01, (real_t)1.0/(real_t)0.01));
         real_t log_lik_curr = (real_t)0.0;
@@ -57,7 +57,7 @@ __kernel void mh_sampler_kernel(__global real_t* out_mu,
         }
         real_t log_post_curr = log_prior_curr + log_lik_curr;
         
-        // --- 3. Akzeptanz-Schritt ---
+        // --- 3. acceptance?
         real_t p_accept = min((real_t)1.0, exp(log_post_prop - log_post_curr));
         
         if (mt_rand_01(&mt[0], &idx, mt) < p_accept) {

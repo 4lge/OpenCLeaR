@@ -2,8 +2,9 @@
 
 A **R package** that simplifies writing parallel algorithms in OpenCL accessible from R.
 It makes use of **CMake**, **Rcpp** and **OpenCL-Wrapper** (at least a fork of it) to ease 
-platform-independent compilation and linkage to **OpenCL**. The whole package is based on a
-**rccp-cmake-template** package described (here)[https://medium.com/@mail_17803/building-hardware-accelerated-r-packages-with-rcpp-and-cmake-a-practical-template-114d13b08a97]
+platform-independent compilation and linkage to **OpenCL**. The whole package is a fork of the
+**rccp-cmake-template** package described 
+(here)[https://medium.com/@mail_17803/building-hardware-accelerated-r-packages-with-rcpp-and-cmake-a-practical-template-114d13b08a97]
 and available at (GitHUB)[https://github.com/jmaerte/cmake-rcpp-template].
 
 
@@ -22,12 +23,12 @@ and available at (GitHUB)[https://github.com/jmaerte/cmake-rcpp-template].
 ## 📁 Project Structure
 
 ```
-cmake-rcpp-template
+OpenCLeaR
 │	# Package metadata files
 |	# configure and configure.win handle the installation
 |
 ├──	src
-│	│   # *.cpp define the Rcpp wrapper functions
+│	│   # *.cpp define the Rcpp interface and device management functions
 │	│
 │	└──	backend
 │		│   # A standard CMake project
@@ -35,6 +36,7 @@ cmake-rcpp-template
 |		├──	include
 │		|	|	# public headers; should not include external
 |		|	└──	# library headers; otherwise Rcpp needs to link too.
+|		|
 |		|
 |		├──	src
 |		|	|	# *.cpp define the actual implementation of functionality
@@ -55,6 +57,11 @@ cmake-rcpp-template
 └──	inst
 	| 	# The library features the possibility to load external
 	└──	# resources from this folder.
+			├──	kernel
+    	| 	# OpenCL kernels for oclFunctions
+      └── interface
+    	  	# Rcpp interface bodies for oclFunctions
+
 ```
 
 📝 **Note:** Public headers (`backend/include`) define C/C++ interfaces compatible with `Rcpp`; they should not include external library headers as `Rcpp` does not link against them. Private headers (`backend/src/internal`) manage actual implementation details, allowing clean abstraction.
@@ -68,11 +75,11 @@ The `src/backend` directory is a standalone **CMake** project. It builds a share
 
 ## 📂 The `inst` Folder
 
-The `inst/` directory contains runtime resources (e.g., `.cl` kernels). During installation, files from `src/backend/kernels` are copied into `inst/kernels` using the `configure` and `configure.win` scripts.
+The `inst/` directory contains runtime resources (e.g., `.cl` kernels and `.cpp` interfaces). During installation, files from `src/backend/kernels` are copied into `inst/kernels` using the `configure` and `configure.win` scripts.
 
 ``````r
 # Accessed in R via:
-system.file("kernels", package = "CMakeRcppTemplate")
+system.file("kernels", package = "OpenCLeaR")
 ``````
 
 
@@ -81,37 +88,17 @@ An **inline** call could look like this:
 source(paste(system.file("inst/examples", package = "OpenCLeaR"),"rnormCLinline.R",sep="/"))
 `````
 
-These paths are injected into the shared library at runtime using the `.onLoad` hook (see `R/CMakeRcppTemplate.R`), enabling dynamic loading of external resources like OpenCL kernels or OpenGL shaders.
 
-## 🔗 Rcpp Integration
 
-This template uses **manual `SEXP` wrappers** for each Rcpp function (instead of `[[Rcpp::export]]`) to avoid platform-specific issues:
-
-> On some systems, `enterRNGScope` errors to be undefined in `RcppExports.o` even though it was not used in `RcppExports.cpp` when using auto-generated bindings via `compileAttributes()`.
-
-However, for simplicity, you *may* choose to use `[[Rcpp::export]]` if you're willing to trade off some portability.
-
-📌 **Important**:
-
-- Add `import(Rcpp)` to the top of your `NAMESPACE` file to avoid errors like:
-
-  ```text
-  Rcpp_precious_remove not provided by package Rcpp.
-  ```
-
-- Manually written R wrappers for `SEXP` functions should defensively check input types, since auto-type checks are not generated without `[[Rcpp::export]]`.
-
-## 📤 Exports
-
-Your package may export:
-
-- `SEXP`-wrapper functions via `Rcpp`
-- High-level R functions that internally call C/C++ via `Rcpp`
-- High-level R functions that are independent of the C/C++ backend
+NAMESPACE genration is automated vie Makefile:
+```{}
+touch NAMESPACE.in
+make NAMESPACE
+```
 
 ## 🧪 Example Use Case
 
-This template includes an example GPU-based distance matrix computation via **OpenCL**. No changes are required to Rcpp code when adding new backend libraries — just update the CMake configuration.
+TBW
 
 ## 📚 Resources
 
@@ -121,12 +108,7 @@ This template includes an example GPU-based distance matrix computation via **Op
 
 ## 🛠️ Getting Started
 
-1. Clone this repository (use `--recursive` option in order to get the OpenCL headers aswell!)
-2. Modify the `src/backend/` CMake code and `src/*.cpp` `Rcpp`- and `SEXP`-bindings
-3. Add new R functions in the `R/` directory calling your `SEXP`-binding functions
-4. Document functions via `Rmarkdown` in `man`
-5. Adjust the section `copying kernels` in `configure` and `configure.win` according to your external resources.
-6. Build and install using `devtools::install()` or `R CMD INSTALL`
+TBW
 
 ## 🧑‍💻 Contributions
 
@@ -136,5 +118,4 @@ Contributions, suggestions, and issues are welcome! Feel free to open a pull req
 
 MIT License. See `LICENSE` for details.
 
-> ⚠️ Author's Note: This project was created while I was affiliated with **IAP-GmbH Intelligent Analytics Projects**.
 

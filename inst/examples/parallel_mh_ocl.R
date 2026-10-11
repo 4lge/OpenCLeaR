@@ -72,19 +72,32 @@ df_chain <- data.frame(
   sigma     = final_chain_sigma
 )
 
+
+
+
+# Trace-Plots
+plot_trace_mu <- ggplot(subset(df_chain, Chain %in% 1:5), aes(x = Iteration, y = mu, color = Chain)) +
+  geom_line(alpha = 0.6) + theme_minimal() + labs(title = "Trace Plots", y = expression(mu)) + theme(legend.position = "none")
+plot_trace_sigma <- ggplot(subset(df_chain, Chain %in% 1:5), aes(x = Iteration, y = sigma, color = Chain)) +
+  geom_line(alpha = 0.6) + theme_minimal() + labs(y = expression(sigma)) + theme(legend.position = "none")
+
+# Histogramme
 plot_hist_mu <- ggplot(df_chain, aes(x = mu)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 50, fill = "royalblue", alpha = 0.6, color = "white") +
-  geom_density(color = "darkblue", linewidth = 1) + 
-  geom_vline(xintercept = 5, color = "red", linetype = "dashed", linewidth = 1) +
-  theme_minimal() + labs(title = "Posterior PDF via generateInlineCL", x = expression(mu))
-
+  geom_histogram(aes(y = ..density..), bins = 50, fill = "royalblue", alpha = 0.6) + geom_density(color = "darkblue") +
+  geom_vline(xintercept = 5, color = "red", linetype = "dashed") + theme_minimal() + labs(title = "Posterior PDF", x = expression(mu))
 plot_hist_sigma <- ggplot(df_chain, aes(x = sigma)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 50, fill = "#008080", alpha = 0.6, color = "white") +
-  geom_density(color = "#004d4d", linewidth = 1) + 
-  geom_vline(xintercept = 2, color = "red", linetype = "dashed", linewidth = 1) +
-  theme_minimal() + labs(x = expression(sigma))
+  geom_histogram(aes(y = ..density..), bins = 50, fill = "#008080", alpha = 0.6) + geom_density(color = "#004d4d") +
+  geom_vline(xintercept = 2, color = "red", linetype = "dashed") + theme_minimal() + labs(x = expression(sigma))
 
-dev.new(noRStudioGD = TRUE)
+
+cat("\n📊 Zeichne Diagramme im Grafikfenster...\n")
+
+# 1. Die Traceplots (Ketten-Konvergenz) auf den Schirm jagen
+dev.new(noRStudioGD = TRUE) # Öffnet ein frisches, autarkes Grafikfenster
+grid.arrange(plot_trace_mu, plot_trace_sigma, ncol = 1)
+
+# 2. Die Histogramme (Posterior-Glockenkurven) auf den Schirm jagen
+dev.new(noRStudioGD = TRUE) # Öffnet ein zweites Fenster für die PDFs
 grid.arrange(plot_hist_mu, plot_hist_sigma, ncol = 1)
 
 
