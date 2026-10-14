@@ -43,7 +43,7 @@ real_t prop_sd_sigma_typed = (real_t)0.05;
 
 // create the kernel
 Kernel mh_kernel(*device, chains, "mh_sampler_kernel", 
-                 GpuMu, GpuSigma, GpuData, data_len, samples_per_chain,
+                 GpuMu, GpuSigma, GpuData, data_len, samples_per_chain, chains,
                  mu_init_typed, sigma_init_typed, prop_sd_mu_typed,  prop_sd_sigma_typed , GpuSeeds);
 
 // 🔥 kernel run
@@ -58,6 +58,7 @@ for(int i=0; i<total_output_size; ++i) {
     out_mu[i]    = GpuMu[i];
     out_sigma[i] = GpuSigma[i];
 }
+
 
 // force random seed update in R session
 Function f("runif"); f(1);

@@ -26,4 +26,4 @@ Config/testthat/edition: 3
 VignetteBuilder: knitr
 RoxygenNote: 7.3.3
 NeedsCompilation: yes
-Packaged: 2026-08-13 19:47:20 UTC; agebhard
+Packaged: 2026-10-13 10:50:43 UTC; agebhard

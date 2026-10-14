@@ -11,13 +11,13 @@
 // use: (X.Xf * GPGPU_EPSILON)
 
 // oerloads for int arguments to functions working on real_t  arguments 
-static inline real_t lgamma(int x) { return lgamma((real_t)x); }
-static inline real_t log(int x)    { return log((real_t)x); }
-static inline real_t sqrt(int x)   { return sqrt((real_t)x); }
-static inline real_t exp(int x)    { return exp((real_t)x); }
-static inline real_t sin(int x)    { return sin((real_t)x); }
-static inline real_t cos(int x)    { return cos((real_t)x); }
-static inline real_t tan(int x)    { return tan((real_t)x); }
+__attribute__((overloadable)) static inline real_t lgamma(int x) { return lgamma((real_t)x); }
+__attribute__((overloadable)) static inline real_t log(int x)    { return log((real_t)x); }
+__attribute__((overloadable)) static inline real_t sqrt(int x)   { return sqrt((real_t)x); }
+__attribute__((overloadable)) static inline real_t exp(int x)    { return exp((real_t)x); }
+__attribute__((overloadable)) static inline real_t sin(int x)    { return sin((real_t)x); }
+__attribute__((overloadable)) static inline real_t cos(int x)    { return cos((real_t)x); }
+__attribute__((overloadable)) static inline real_t tan(int x)    { return tan((real_t)x); }
 // TO BE CONTINUED ...
 
 #define INIT_MT(mt) (\
