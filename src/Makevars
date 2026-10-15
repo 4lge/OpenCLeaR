@@ -19,6 +19,16 @@ PKG_CPPFLAGS += -I./backend/include -I./backend/build/local_install/include -Wno
 
 PKG_LIBS += $(RPATH_FLAGS) -L. -lBACKEND
 
+
+
+# ==============================================================================
+# 🚀 DYNAMISCHE GENERIERUNG DER KERNEL-LIBS BEIM PAKETBAU
+# ==============================================================================
+
+# Das prebuild-Target wird gestartet, BEVOR Rcpp oder das CMake-Backend anspringen!
+.PHONY: all prebuild
+
+
 # Force R to bundle [lib]BACKEND[.so|.dll] (and possibly [lib]OpenCl[.so|.dll]) into the temporary library installation directory
 all: $(SHLIB)
 	@if [ -f libBACKEND.$(SHLIB_EXT_BACKEND) ]; then \
@@ -34,3 +44,8 @@ all: $(SHLIB)
 		mkdir -p $(R_PACKAGE_DIR)/libs/; \
 		cp "$$FOUND_LIBOPENCL" $(R_PACKAGE_DIR)/libs/; \
 	fi	
+
+prebuild:
+	@echo "⏳ [OpenCLeaR Build] Generiere nmath.cl via R-Skript...\n"
+	@Rscript --vanilla ../tools/convert_nmath.R
+
