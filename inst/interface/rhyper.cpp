@@ -7,7 +7,7 @@ int r_n  = as<int>(n);
 int r_k  = as<int>(k);
 
 // Allocate output variables
-NumericVector r_hyper(r_nn);
+IntegerVector r_hyper(r_nn);
 
 // read a random number to initialize OpenCL seed
 Environment e = Environment::global_env();
@@ -15,7 +15,7 @@ std::vector<int> r_seed = e[".Random.seed"];
 int base_seed = r_seed[r_seed[1] + 1];
 
 // Create OpenCL variables (Nur Output-Buffer auf der GPU)
-Memory<real_t> Output(*device, r_nn);
+Memory<int> Output(*device, r_nn);
 
 // create the kernel (base_seed wird als const int übergeben)
 Kernel rhyper(*device, r_nn, "hyper_rng", Output, base_seed, r_m, r_n, r_k);

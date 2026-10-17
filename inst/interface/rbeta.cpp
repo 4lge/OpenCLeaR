@@ -11,7 +11,7 @@ NumericVector r_beta(r_n);
 // 2. Seed aus der R-Session holen
 Environment e = Environment::global_env();
 std::vector<int> r_seed = e[".Random.seed"];
-int base_seed = r_seed[r_seed + 1];
+int base_seed = r_seed[r_seed[1] + 1];
 
 // 3. Nur noch den Output-Buffer auf der GPU reservieren
 Memory<real_t> Output(*device, r_n);

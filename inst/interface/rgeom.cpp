@@ -5,7 +5,7 @@ int r_n       = as<int>(n);
 real_t r_prob = as<real_t>(prob);
 
 // Allocate output variables
-NumericVector r_geom(r_n);
+IntegerVector r_geom(r_n);
 
 // read a random number to initialize OpenCL seed
 Environment e = Environment::global_env();
@@ -13,7 +13,7 @@ std::vector<int> r_seed = e[".Random.seed"];
 int base_seed = r_seed[r_seed[1] + 1];
 
 // Create OpenCL variables (Nur Output-Buffer auf der GPU)
-Memory<real_t> Output(*device, r_n);
+Memory<int> Output(*device, r_n);
 
 // create the kernel (base_seed wird als const int übergeben)
 Kernel rgeom(*device, r_n, "geom_rng", Output, base_seed, r_prob);

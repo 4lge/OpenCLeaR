@@ -22,7 +22,7 @@ SystemRequirements: OpenCL, CMake
 Encoding: UTF-8
 License: MIT + file LICENSE
 Config/roxygen2/version: 8.0.0
-Suggests: testthat (>= 3.0.0), knitr (>= 1.50), markdown, opencltools
+Suggests: knitr (>= 1.50), markdown, opencltools, tinytest
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 RoxygenNote: 7.3.3

@@ -158,13 +158,13 @@ example
 
 configuration
 
-### tests/testthat.R
-```{r, code=readLines('../tests/testthat.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+### tests/setup.R
+```{r, code=readLines('../inst/tinytest/setup.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
 ```
 
 finally a test, currently unused
 
-### tests/testthat/test-rnormOCL.R
-```{r, code=readLines('../tests/testthat/test-rnormOCL.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+### inst/tinytest/test-rnormOCL.R
+```{r, code=readLines('../inst/tinytest/test-rnormOCL.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
 ```
 

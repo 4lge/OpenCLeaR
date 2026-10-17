@@ -2,8 +2,8 @@
 
 // read input, compare to signature in oclFunction call:
 int r_n        = as<int>(n);
-real_t r_mean = as<real_t>(mean);
-real_t r_sd  = as<real_t>(sd);
+real_t r_mean  = as<real_t>(mean);
+real_t r_sd    = as<real_t>(sd);
 
 // Allocate output variables
 NumericVector r_norm(r_n);

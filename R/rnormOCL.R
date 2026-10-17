@@ -16,8 +16,8 @@ rnormOCL <- (function() {
   function(n, mean = 0, sd = 1, ...) {
     if (is.null(.rnorm_ocl_internal)) {
       .rnorm_ocl_internal <<- OpenCLeaR::oclFunction(
-        signature = methods::signature(n = "integer", mu = "numeric", sigma = "numeric"),
-        kernel_file = "rnorm.cl",    
+        signature = methods::signature(n = "integer", mean = "numeric", sd = "numeric"),
+          kernel_file = "rnorm.cl",    
           interface_file = "rnorm.cpp",
         ...
       )

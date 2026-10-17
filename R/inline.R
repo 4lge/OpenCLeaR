@@ -360,17 +360,8 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
     # deklariert wird, das 'full_cl_code' oben zwingend zum Arbeiten braucht!
     modified_cpp_body <- paste0(
         "    using namespace backend;\n",
-        "    Device* device = nullptr;\n",
-        "    #if defined(_WIN32) || defined(WIN32)\n",
-        "        device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());\n",
-        "    #else\n",
-        "        if (global_opencl_device != nullptr) {\n",
-        "            device = global_opencl_device;\n",
-        "        } else {\n",
-        "            device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());\n",
-        "        }\n",
-        "    #endif\n",
-        "    #if FP64_MODE == 1\n",
+        "    Device* device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());\n",
+"    #if FP64_MODE == 1\n",
         "        typedef double real_t;\n",
         "    #else\n",
         "        typedef float real_t;\n",
@@ -383,6 +374,7 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         sig    = signature,
         body   = modified_cpp_body,
         plugin = chosen_plugin,
+        package = "OpenCLeaR",
         ...
     )
 

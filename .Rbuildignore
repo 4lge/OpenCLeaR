@@ -3,6 +3,7 @@
 ^src/backend/lib/.*/\.git$
 ^src/backend/lib/.*\.git$
 
+^inst/tinytest/.cl_cache/.*$
 ^src/backend/build/
 # 1. Schützt davor, dass versteckte .git-Ordner aus src/backend mitgenommen werden
 ^src/backend/.*\.git$

@@ -18,14 +18,15 @@ rnbinomOCL <- (function() {
     ## Diese Variable bleibt über Lexical Scoping innerhalb der Closure geschützt
     .rnbinom_ocl_internal <- NULL
     
-    function(n, size, prob, mu, ...) {
+    function(n, size, prob=NULL, mu=NULL, ...) {
    
     ## Lazy Evaluation: Nur beim allerersten Aufruf kompilieren
     if (is.null(.rnbinom_ocl_internal)) {
         .rnbinom_ocl_internal <<- OpenCLeaR::oclFunction(
                                                  signature      = methods::signature(n = "integer",
                                                                                      size = "integer",
-                                                                                     prob = "numeric", mu = "numeric"),
+                                                                                     prob = "numeric", 
+                                                                                     mu = "numeric"),
                                                  kernel_file    = "rnbinom.cl",
                                                  interface_file = "rnbinom.cpp",
                                                  ...

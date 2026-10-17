@@ -2,8 +2,8 @@
 
 // read input, compare to signature in oclFunction call:
 int r_n        = as<int>(n);
-real_t r_shape = as<real_t>(lambda);
-real_t r_rate  = as<real_t>(k);
+real_t r_shape = as<real_t>(shape);
+real_t r_scale  = as<real_t>(scale);
 
 // Allocate output variables
 NumericVector r_weibull(r_n);
@@ -17,7 +17,7 @@ int base_seed = r_seed[r_seed[1] + 1];
 Memory<real_t> Output(*device, r_n);
 
 // create the kernel (base_seed wird als const int übergeben)
-Kernel rweibull(*device, r_n, "weibul_rng", Output, base_seed, r_shape, r_rate);
+Kernel rweibull(*device, r_n, "weibull_rng", Output, base_seed, r_shape, r_scale);
 
 // 🔥 kernel run
 rweibull.run();

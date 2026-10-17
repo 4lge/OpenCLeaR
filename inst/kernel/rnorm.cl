@@ -14,7 +14,5 @@ kernel void norm_rng(global real_t* output, const int seed,
   
   real_t r_norm = rnorm(mu, sigma, &idx, mt);
 
-  *seed = idx;
-  
   output[get_global_id(0)] = r_norm;
 }

@@ -1,0 +1,5 @@
+library(OpenCLeaR)
+ensure_opencl_initialized()
+inline::registerPlugin("inlineCxxPlugin", OpenCLeaR::inlineCxxPlugin())
+inline::registerPlugin("inlineCxxPluginFloat", OpenCLeaR::inlineCxxPluginFloat())
+inline::registerPlugin("inlineCxxPluginDouble", OpenCLeaR::inlineCxxPluginDouble())

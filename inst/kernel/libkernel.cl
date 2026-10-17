@@ -99,21 +99,21 @@ static inline real_t exponential_cdf(real_t x, real_t lambda) {
 // Chi-Squared PDF
 static inline real_t chi_squared_pdf(real_t x, real_t k) {
   if (k <= 0 || x < 0) return 0;
-  real_t log_pdf = (k/2.0 - 1) * log(x) - x/2.0 - lgamma(k/2.0) - (k/2.0) * log(2);
+  real_t log_pdf = (k/2.0f - 1) * log(x) - x/2.0f - lgamma(k/2.0f) - (k/2.0f) * log(2.0f);
   return exp(log_pdf);
 }
 
 // Chi-Squared CDF
 static inline real_t chi_squared_cdf(real_t x, real_t k) {
   if (k <= 0 || x < 0) return 0;
-  return 1 - exp(-x/2.0) * pow(x/2.0, k/2.0) / (tgamma(k/2.0) * pow(2, k/2.0));
+  return 1 - exp(-x/2.0f) * pow(x/2.0f, k/2.0f) / (tgamma(k/2.0f) * pow(2, k/2.0f));
 }
 
 // t-Distribution PDF
 static inline real_t student_t_pdf(real_t x, real_t nu) {
   if (nu <= 0) return 0;
   real_t log_pdf = lgamma((nu + 1) / 2) - lgamma(nu / 2) - 0.5f * log(nu * M_PI);
-  log_pdf -= ((nu + 1) / 2) * log(1 + x * x / nu);
+  log_pdf -= ((nu + 1.0f) / 2.0f) * log(1.0f + x * x / nu);
   return exp(log_pdf);
 }
 
@@ -121,7 +121,7 @@ static inline real_t student_t_pdf(real_t x, real_t nu) {
 static inline real_t student_t_cdf(real_t x, real_t nu) {
   if (nu <= 0) return 0;
   real_t t = x / sqrt(nu + x * x);
-  real_t beta = 0.5f * (1 + t) * pow(1 - t * t, nu / 2);
+  real_t beta = 0.5f * (1.0f + t) * pow(1.0f - t * t, nu / 2.0f);
   return (x < 0) ? beta : 1 - beta;
 }
 
@@ -159,7 +159,7 @@ static inline real_t invgamma_cdf(real_t x, real_t alpha, real_t beta) {
 // Beta PDF
 static inline real_t beta_pdf(real_t x, real_t alpha, real_t beta_param) {
   if (alpha <= 0 || beta_param <= 0 || x < 0 || x > 1) return 0;
-  real_t log_pdf = (alpha - 1) * log(x) + (beta_param - 1) * log(1 - x) - lgamma(alpha + beta_param) + lgamma(alpha) + lgamma(beta_param);
+  real_t log_pdf = (alpha - 1.0f) * log(x) + (beta_param - 1) * log(1.0f - x) - lgamma(alpha + beta_param) + lgamma(alpha) + lgamma(beta_param);
   return exp(log_pdf);
 }
 
@@ -188,7 +188,7 @@ static inline real_t weibull_cdf(real_t x, real_t shape_k, real_t scale_lambda) 
 
 // hypergeometric
 static inline real_t log_choose(int a, int b) {
-  return lgamma((real_t)(a + 1)) - lgamma((real_t)(b + 1)) - lgamma((real_t)(a - b + 1));
+  return lgamma((real_t)(a + 1.0f)) - lgamma((real_t)(b + 1.0f)) - lgamma((real_t)(a - b + 1.0f));
 }
 // Compute hypergeometric PMF
 static inline real_t compute_hyper_pmf(int k, int N, int K, int n) {
@@ -216,7 +216,7 @@ static inline real_t binomial_cdf(int k, int n, real_t p) {
 // Poisson PDF
 static inline real_t poisson_pdf(int k, real_t lambda) {
   if (k < 0 || lambda <= 0) return 0;
-  real_t log_pmf = -lambda + k * log(lambda) - lgamma(k + 1);
+  real_t log_pmf = -lambda + k * log(lambda) - lgamma(k + 1.0f);
   return exp(log_pmf);
 }
 
@@ -232,20 +232,20 @@ static inline real_t poisson_cdf(int k, real_t lambda) {
 // Geometric PDF
 static inline real_t geometric_pdf(int k, real_t p) {
   if (k < 0 || p <= 0 || p > 1) return 0;
-  return p * pow(1 - p, k);
+  return p * pow(1.0f - p, k);
 }
 
 // Geometric CDF
 static inline real_t geometric_cdf(int k, real_t p) {
   if (k < 0 || p <= 0 || p > 1) return 0;
-  return 1 - pow(1 - p, k + 1);
+  return 1 - pow(1.0f - p, k + 1);
 }
 
 
 // Negative Binomial PDF
 static inline real_t neg_binomial_pdf(int k, int r, real_t p) {
   if (k < 0 || r <= 0 || p <= 0 || p > 1) return 0;
-  real_t log_pmf = log_choose(k + r - 1, k) + r * log(p) + k * log(1 - p);
+  real_t log_pmf = log_choose(k + r - 1.0f, k) + r * log(p) + k * log(1 - p);
   return exp(log_pmf);
 }
 
@@ -373,7 +373,7 @@ static inline uint rbinom(__private int size, __private real_t prob,
 // geometric
 static inline uint rgeom(__private real_t prob,
                          __private int* idx, __private uint* mt){
-  return floor(log(mt_rand_01(&mt[0], &idx[0], mt)) / log(1 - prob));
+  return floor(log(mt_rand_01(&mt[0], &idx[0], mt)) / log(1.0f - prob));
 }
 
 // negative binomial
@@ -381,7 +381,7 @@ static inline uint rnbinom(__private int size, __private real_t prob,
                            __private int* idx, __private uint* mt){
   uint sum = 0;
   for (int i = 0; i < size; ++i) {
-    sum += floor(log(mt_rand_01(&mt[0], &idx[0], mt)) / log(1 - prob)); // Requires multiple uniforms
+    sum += floor(log(mt_rand_01(&mt[0], &idx[0], mt)) / log(1.0f - prob)); // Requires multiple uniforms
   }
   return sum;
 }
@@ -399,7 +399,7 @@ static inline uint rpois(__private real_t lambda,
 }
 
 // hypergeometric
-static inline uint rhyperg(__private int white, __private int black, __private int size,
+static inline uint rhyper(__private int white, __private int black, __private int size,
                            __private int* idx, __private uint* mt){
   int N = white + black, K = white, n = size;
   // Ratio-of-Uniforms parameters
