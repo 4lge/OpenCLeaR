@@ -1,0 +1,19 @@
+(^|/)\.gitkeep$
+^src/backend/lib/
+^src/backend/lib/.*/\.git$
+^src/backend/lib/.*\.git$
+
+^src/backend/build/
+# 1. Schützt davor, dass versteckte .git-Ordner aus src/backend mitgenommen werden
+^src/backend/.*\.git$
+
+# 2. Ignoriert den kompletten CMake-Build-Ordner im Backend
+^src/backend/build/
+^inst/bin/ocl.*$
+
+# 3. Ignoriert lokale Test-Cache-Verzeichnisse (falls vorhanden)
+^\.cl_cache/
+
+# 4. Ignoriert R-spezifische Check-Überbleibsel
+^OpenCLeaR\.Rcheck/
+^.*\.Rcheck$

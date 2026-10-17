@@ -1,7 +1,10 @@
 ##' @import Rcpp
 ##' @importFrom inline cxxfunction
 ##' @importFrom Rcpp evalCpp sourceCpp
+##' @importFrom methods signature
 ##' @useDynLib OpenCLeaR, .registration = TRUE
+
+
 "_PACKAGE"
 
 ## FIXME: is this really used?? or ueful??
@@ -9,36 +12,46 @@
 
 
 ## onLoad function:
-.onLoad <- function(libname, pkgname) {
-    ## 🛡️ NVIDIA-TURBO FÜR WINDOWS:
-    ## Wir schalten den fehlerhaften Nvidia-Festplatten-Cache komplett ab!
-    if (.Platform$OS.type == "windows") {
-        Sys.setenv(CUDA_CACHE_DISABLE = "1")
-        Sys.setenv(OMP_NUM_THREADS = "1") # Verhindert, dass OpenMP-Hintergrundthreads im R-Lader blockieren
-    }	
-    ## 🚀 Den echten, absoluten Installationspfad der Kernel im Paket ermitteln!
-    kernel_dir <- system.file("kernel", package = pkgname, lib.loc = libname)
-    if (kernel_dir == "") {
-        ## Fallback für die lokale Entwicklungsumgebung
-        kernel_dir <- normalizePath("./kernel", mustWork = FALSE)
-    }
-    .OpenCLeaR_Env$kernel_path <- kernel_dir
+ .onLoad <- function(libname, pkgname) {
+     ## 🛡️ NVIDIA-TURBO FÜR WINDOWS:
+     ## Wir schalten den fehlerhaften Nvidia-Festplatten-Cache komplett ab!
+     if (.Platform$OS.type == "windows") {
+         Sys.setenv(CUDA_CACHE_DISABLE = "1")
+         Sys.setenv(OMP_NUM_THREADS = "1") # Verhindert, dass OpenMP-Hintergrundthreads im R-Lader blockieren
+     }
+     ## 🚀 Den echten, absoluten Installationspfad der Kernel im Paket ermitteln!
+     kernel_dir <- system.file("kernel", package = pkgname, lib.loc = libname)
+     if (kernel_dir == "") {
+         ## Fallback für die lokale Entwicklungsumgebung
+         kernel_dir <- normalizePath("./kernel", mustWork = FALSE)
+     }
+     .OpenCLeaR_Env$kernel_path <- kernel_dir
 
-    ## Meldet alle drei Plugins beim Laden des Pakets an
-    inline::registerPlugin("OpenCLeaR", inlineCxxPlugin)
-    inline::registerPlugin("OpenCLeaRFloat", inlineCxxPluginFloat)
-    inline::registerPlugin("OpenCLeaRDouble", inlineCxxPluginDouble)
-    
-    ## Wir setzen im R-Zustand standardmäßig ein Flag auf FALSE.
-    ## Es wird erst TRUE, wenn die Initialisierung später klappt.
-    options(OpenCLeaR.initialized = FALSE)
-    packageStartupMessage(
-        "\n==========================================================================\n",
-        "  (Kernels path: ", kernel_dir, ").\n",
-        "⚠️  [OpenCLeaR] OpenCL environment loaded but NOT yet bound to hardware!\n",
-        "👉 PLEASE RUN: ActivateDeviceWithIndex(0) to select and initialize your GPU/CPU.\n",
-        "=========================================================================="
-    )
+     ## Meldet alle drei Plugins beim Laden des Pakets an
+     inline::registerPlugin("OpenCLeaR", inlineCxxPlugin)
+     inline::registerPlugin("OpenCLeaRFloat", inlineCxxPluginFloat)
+     inline::registerPlugin("OpenCLeaRDouble", inlineCxxPluginDouble)
+
+     ## Wir setzen im R-Zustand standardmäßig ein Flag auf FALSE.
+     ## Es wird erst TRUE, wenn die Initialisierung später klappt.
+     options(OpenCLeaR.initialized = FALSE)
+     options(OpenCLeaR.has_fp64 = FALSE)
+ }
+
+
+## 🏎️ 2. ONATTACH: Der perfekte Ort für den fehlersicheren Hardware-Autostart!
+.onAttach <- function(libname, pkgname) {
+    ## Zeige den Hinweis NUR, wenn KEIN Gerät automatisch gebunden werden konnte!
+    if (!isTRUE(getOption("OpenCLeaR.initialized"))) {
+        kernel_dir <- .OpenCLeaR_Env$kernel_path
+        packageStartupMessage(
+            "\n==========================================================================\n",
+            "  (Kernels path: ", kernel_dir, ").\n",
+            "⚠️  [OpenCLeaR] OpenCL environment loaded but NOT yet bound to hardware!\n",
+            "👉 PLEASE RUN: ActivateDeviceWithIndex(0) to select and initialize your GPU/CPU.\n",
+            "=========================================================================="
+        )
+    }
 }
 
 ##' Initialzes OpenCL driver.
@@ -99,18 +112,17 @@ ensure_opencl_initialized <- function() {
   return(status)
 }
 
-#' Holt den aktuell im C++-Backend gesetzten Kernel-Pfad
-#' @return Ein String mit dem Pfad
-#' @export
+##' Holt den aktuell im C++-Backend gesetzten Kernel-Pfad
+##' @return Ein String mit dem Pfad
+##' @export
 GetKernelsPath <- function() {
-  # Nutzt den sicheren Tunnel zur neuen internen C++-Funktion
-  return(OpenCLeaR:::.GetKernelsPath_cpp())
+                                        # Nutzt den sicheren Tunnel zur neuen internen C++-Funktion
+    return(OpenCLeaR:::.GetKernelsPath_cpp())
 }
 
-
-#' Activate OpenCL Device via Index
-#' @return logical, indicating success
-#' @export
+##' Aktiviert ein OpenCL-Gerät absolut fehlersicher
+##' @param idx Der Index des zu aktivierenden Geräts (Standard: 0)
+##' @export
 ActivateDeviceWithIndex <- function(idx) {
     idx_int <- as.integer(idx)
     env <- OpenCLeaR:::.OpenCLeaR_Env
@@ -145,12 +157,37 @@ ActivateDeviceWithIndex <- function(idx) {
             return(invisible(TRUE))
         }
     }
-
+    has_fp64 = FALSE
+    
     # 3. ZÜNDUNG:
-    if (.Platform$OS.type == "windows") {
-        ActivateDeviceWithIndex_Async(idx_int)
+    success <- tryCatch({
+        if (.Platform$OS.type == "windows") {
+            ## Nutzt deine asynchrone Rcpp-Funktion gegen den WDDM-Lock
+            ActivateDeviceWithIndex_Async(idx_int)
+        } else {
+            ## Nutzt den nativen C++ Pfad auf Linux und Mac
+            ActivateDeviceWithIndex_Native(idx_int)
+        }
+        TRUE
+    }, error = function(e) {
+        ## Sicherheitsnetz, falls auf ganz alten Treibern was schiefgeht
+        try({
+            ActivateDeviceWithIndex_Native(idx_int)
+            TRUE
+        }, silent = TRUE)
+        FALSE
+    })
+    
+    ## 🎯 3. STATUS FLIEGEND IM SYSTEM EINBRENNEN
+    if (success) {
+        options("OpenCLeaR.initialized" = TRUE)
+        options("OpenCLeaR.active_device" = idx)
+        options("OpenCLeaR.has_fp64" = GetActiveDeviceInfo()$FP64_Capable)
+        return(TRUE)
     } else {
-        ActivateDeviceWithIndex_Native(idx_int)
+        options("OpenCLeaR.initialized" = FALSE)
+        options("OpenCLeaR.has_fp64" = FALSE)
+        return(FALSE)
     }
 
     # 4. TRANSIENTEN POINTER BITSCHARF INITIALISIEREN:

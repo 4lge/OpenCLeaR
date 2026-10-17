@@ -42,7 +42,7 @@ sigma_obs <- sd(data)
 samples <- 10000000L # 10 Millionen Punkte!
 nchains <- 10000L    # 10.000 parallele Ketten!
 window_width <- as.integer(samples / nchains)
-nrecurrences <- 1  # cycle throuh window nrecurrences times
+nrecurrences <- 9  # cycle throuh window nrecurrences times
 # means: we calcalute 100 x 10 million point but keep nly the last 10 million!
 burnin  <- 100 # is now useless if nrecurrences > 1
 

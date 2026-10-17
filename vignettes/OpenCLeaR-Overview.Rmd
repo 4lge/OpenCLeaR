@@ -103,14 +103,14 @@ get compiler configuration:
 
 Kernel library
 
-### src/backend/kernel/libkernel.cl
-```{r, code=readLines('../src/backend/kernel/libkernel.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
+### inst/kernel/libkernel.cl
+```{r, code=readLines('../inst/kernel/libkernel.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
 ```
 
 Finally a some OpenCL kernels
 
-### src/backend/kernel/rnorm.cl
-```{r, code=readLines('../src/backend/kernel/rnorm.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="c", comment=""}
+### inst/kernel/rnorm.cl
+```{r, code=readLines('../inst/kernel/rnorm.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="c", comment=""}
 ```
 
 ### inst/kernel/idw_kernel.cl
@@ -164,7 +164,7 @@ configuration
 
 finally a test, currently unused
 
-### tests/testthat/test-rnormCL.R
-```{r, code=readLines('../tests/testthat/test-rnormCL.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+### tests/testthat/test-rnormOCL.R
+```{r, code=readLines('../tests/testthat/test-rnormOCL.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
 ```
 

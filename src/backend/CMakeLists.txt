@@ -3,6 +3,27 @@ PROJECT(BACKEND CXX)
 
 # Get the Rcpp minGW/gcc compilers in order to achieve highest degree of uniformity while users only have to install Rtools.
 include(cmake/find_toolchain.cmake)
+# ==============================================================================
+# 🍏 DER ABSOLUTE VINTAGE-MAC OCL-OVERRIDE FÜR CMAKE
+# ==============================================================================
+if(APPLE)
+    execute_process(COMMAND uname -r OUTPUT_VARIABLE DETECTED_DARWIN_VERSION)
+    string(REGEX MATCH "^[0-9]+" DARWIN_MAJOR "${DETECTED_DARWIN_VERSION}")
+    
+    # Darwin 16 = macOS 10.12 Sierra | Darwin 15 = OS X 10.11 El Capitan
+    if(DARWIN_MAJOR LESS_EQUAL 16)
+        set(VINTAGE_STD "-std=c++14")
+        if(DARWIN_MAJOR LESS_EQUAL 15)
+            set(VINTAGE_STD "-std=c++11") # Für den 2008er iMac
+        endif()
+        
+        message(STATUS "🍏 [OpenCLeaR] Override vererbtes R-Flag! Zwinge Compiler auf: ${VINTAGE_STD}")
+        
+        # 🔥 DAS IST DER MAGISCHE SCHALTER: 
+        # Zwingt die Compile-Optionen hart ins File und überschreibt R's gnu++17!
+        add_compile_options(${VINTAGE_STD})
+    endif()
+endif()
 
 # Pull the dependencies from Github
 include(ExternalProject)

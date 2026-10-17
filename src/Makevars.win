@@ -13,6 +13,13 @@ PKG_LIBS = -Lbackend/build -l:BACKEND.a -Lbackend/build/local_install/lib -lOpen
 
 SHLIB_LDFLAGS = $(SHLIB_CXXLDFLAGS) -g
 
+# ==============================================================================
+# 🚀 DYNAMISCHE GENERIERUNG DER KERNEL-LIBS BEIM PAKETBAU
+# ==============================================================================
+
+# Das prebuild-Target wird gestartet, BEVOR Rcpp oder das CMake-Backend anspringen!
+.PHONY: all prebuild
+
 # Unter Windows müssen wir jetzt KEINE BACKEND.dll mehr in die libs-Ordner kopieren,
 # da sie physisch in der Haupt-DLL verschwunden ist! Nur noch die OpenCL.dll mitgeben:
 all: $(SHLIB)
@@ -23,4 +30,9 @@ all: $(SHLIB)
 		cp "$$FOUND_OPENCL" $(R_PACKAGE_DIR)/libs$(R_ARCH)/; \
 	fi
 	@cp -f backend/BACKEND.a "$(R_PACKAGE_DIR)/libs/BACKEND.a" 2>/dev/null || cp -f BACKEND.a "$(R_PACKAGE_DIR)/libs/BACKEND.a" 2>/dev/null || true
+
+
+prebuild:
+	@echo "⏳ [OpenCLeaR Build] Generiere nmath.cl via R-Skript...\n"
+	@"$(R_HOME)/bin/Rscript" --vanilla ../tools/convert_nmath.R
 

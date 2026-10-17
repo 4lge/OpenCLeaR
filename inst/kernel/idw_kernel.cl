@@ -6,7 +6,7 @@
      real_t wsum = 0, num = 0;
      for (int j = 0; j < n; j++) {
          real_t d = sqrt((x0[i]-x[j])*(x0[i]-x[j]) + (y0[i]-y[j])*(y0[i]-y[j]));
-         if (d < (real_t)1e-9) { z0[i] = z[j]; return; }
+         if (d < GPGPU_EPSILON) { z0[i] = z[j]; return; }
          real_t w = (real_t)1 / pow(d, p);
          wsum += w; num += w * z[j];
      }

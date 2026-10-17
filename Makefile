@@ -5,12 +5,15 @@ all:
 clean:
 	rm -f src/*.o src/*.so src/*~
 	rm -f src/backend/src/*.so src/backend/src/*.o src/backend/src/*~
+	rm -rf src/backend/lib 
+	rm -f inst/bin/ocl*
 
 dist-clean: clean
 	find . -name \*SFConflict\* -delete
 	find . -name \*.orig -delete
 	find . -name \*.rej -delete
 	find . -name \*.o -delete
+	find . -name \*.a -delete
 	find . -name \*.obj -delete
 	find . -name \*.so -delete
 	find . -name \*.dll -delete

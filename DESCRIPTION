@@ -1,7 +1,7 @@
 Package: OpenCLeaR
 Type: Package
 Title: Easy Access to OpenCL using C++, CMake and Rcpp
-Version: 0.6.2
+Version: 0.6.4
 Author: Albrecht Gebhardt
 Authors@R: person(given = "Albrecht",
                 family = "Gebhardt",
@@ -16,12 +16,13 @@ Description: OpenCL Easy Accessible from R:
   Configuration is done automatically via CMake (thanks to
   <https://github.com/jmaerte/cmake-rcpp-template>).
 LinkingTo: Rcpp
-Imports: Rcpp, inline
+Imports: Rcpp, inline, methods
+Recommends: nmathopencl
 SystemRequirements: OpenCL, CMake
 Encoding: UTF-8
 License: MIT + file LICENSE
 Config/roxygen2/version: 8.0.0
-Suggests: testthat (>= 3.0.0), knitr (>= 1.50), markdown
+Suggests: testthat (>= 3.0.0), knitr (>= 1.50), markdown, opencltools
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 RoxygenNote: 7.3.3
