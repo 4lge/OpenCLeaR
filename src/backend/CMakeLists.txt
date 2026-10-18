@@ -52,7 +52,7 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINA
 ExternalProject_Add(OpenCL_Wrapper
     GIT_REPOSITORY https://github.com/4lge/OpenCL-Wrapper.git
     #GIT_TAG 6f6f00de23e28cc610fd15abd8252fdced031cdc
-    GIT_TAG 0eef12a8b27c3f10487e9b737b7295765446ed15
+    GIT_TAG 19d77886591361fdb668521db9df4501994957c6
     SOURCE_DIR ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
 
     CONFIGURE_COMMAND ""  # Don't run cmake
@@ -292,20 +292,38 @@ add_custom_command(TARGET BACKEND POST_BUILD
 # 🎯 AUTOMATISCHER STANDALONE-COMPILER BUILD (ocl_compiler)
 # ==============================================================================
 
-# 1. Wir definieren den Pfad, wo die Datei nach dem Git-Download liegen wird
-set(COMPILER_SOURCE_PATH "${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/ocl_compiler.cpp")
+# ==============================================================================
+# 🎯 AUTOMATISCHER STANDALONE-COMPILER BUILD (ocl_compiler)
+# ==============================================================================
 
-# 2. 🎯 DER TRICK: Wir sagen CMake explizit, dass diese Datei erst zur Build-Zeit generiert wird!
-# Das verhindert, dass CMake während 'R CMD INSTALL' beim Einlesen frustriert abbricht.
+# 1. Pfad zur Compiler-Quelle deklarieren
+set(COMPILER_SOURCE_PATH "${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/ocl_compiler.cpp")
 set_source_files_properties(${COMPILER_SOURCE_PATH} PROPERTIES GENERATED TRUE)
 
-# 3. Das Executable-Target definieren
+# 2. Das Executable-Target deklarieren
 ADD_EXECUTABLE(ocl_compiler ${COMPILER_SOURCE_PATH})
 
-# 4. 🎯 ZWANGS-REIHENFOLGE: ocl_compiler darf erst gebaut werden, WENN OpenCL_Wrapper fertig geladen ist!
+# 3. Basis-Abhängigkeit (Der Quellcode muss aus Git da sein)
 ADD_DEPENDENCIES(ocl_compiler OpenCL_Wrapper)
 
-# 5. Include-Pfade und OpenCL-Bibliotheken verlinken
+# 4. 🎯 DIE DYNAMISCHE WEICHE FÜR TREIBERLOSE SYSTEME:
+if(NOT OpenCL_FOUND)
+    message(STATUS "🔗 [CMake JIT] Kopple ocl_compiler an lokalen ICD-Loader-Build...")
+    
+    # Zwinge den Compiler zu warten, bis Headers und Loader fertig im Build-Ordner liegen
+    if(TARGET OpenCL_ICD_Loader)
+        add_dependencies(ocl_compiler OpenCL_Headers OpenCL_CLHPP OpenCL_ICD_Loader)
+    endif()
+
+    # Ergänze die Include-Pfade spezifisch um den lokalen Installationsordner
+    target_include_directories(ocl_compiler PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}/local_install/include
+        ${CMAKE_CURRENT_BINARY_DIR}/src/OpenCL-Headers
+        ${CMAKE_CURRENT_BINARY_DIR}/src/OpenCL-CLHPP/include
+    )
+endif()
+
+# 5. Allgemeine Include-Pfade verlinken (für alle Systeme gültig)
 TARGET_INCLUDE_DIRECTORIES(ocl_compiler PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${OpenCL_INCLUDE_DIRS}
@@ -315,14 +333,21 @@ TARGET_INCLUDE_DIRECTORIES(ocl_compiler PRIVATE
     ${CMAKE_SOURCE_DIR}/lib/OpenCL-CLHPP/include
 )
 
+# 6. Linker-Verzeichnis und Bibliotheken verknüpfen
+target_link_directories(ocl_compiler PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/lib)
+
 IF(WIN32)
   TARGET_LINK_LIBRARIES(ocl_compiler PRIVATE OpenCL_Local)
   ADD_DEPENDENCIES(ocl_compiler OpenCL_Local)
 ELSE()
-  TARGET_LINK_LIBRARIES(ocl_compiler PRIVATE ${OpenCL_LIBRARIES})
+  if(OpenCL_FOUND)
+    target_link_libraries(ocl_compiler PRIVATE ${OpenCL_LIBRARIES})
+  else()
+    target_link_libraries(ocl_compiler PRIVATE ${OpenCL_TARGET})
+  endif()
 ENDIF()
 
-# 6. 🚀 AUTOMATISCHER POST-BUILD-EXPORT NACH inst/bin/
+# 7. 🚀 AUTOMATISCHER POST-BUILD-EXPORT NACH inst/bin/
 ADD_CUSTOM_COMMAND(TARGET ocl_compiler POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/bin"
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:ocl_compiler> "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/bin/"

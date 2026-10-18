@@ -2,7 +2,7 @@
 
 // read input, compare to signature in oclFunction call:
 int r_n  = as<int>(n);
-int r_rate = as<real_t>(rate);
+real_t r_rate = as<real_t>(rate);
 
 // Allocate output variables
 NumericVector r_exp(r_n);

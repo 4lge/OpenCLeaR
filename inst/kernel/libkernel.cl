@@ -268,7 +268,9 @@ static inline real_t runif(__private real_t lower, __private real_t upper,
 // exponential distribution
 static inline real_t rexp(__private real_t rate,
                           __private int* idx, __private uint* mt) {
-  return 1.0/rate * (-log(mt_rand_01(&mt[0], &idx[0], mt)));
+  real_t u = mt_rand_01(&mt[0], &idx[0], mt);
+  if (u <= 0.0f) u = GPGPU_EPSILON; 
+  return 1.0f / rate * (-log(u));
 }
 // normal distribution
 static inline real_t rnorm(__private real_t mu, __private real_t sigma,
@@ -287,12 +289,6 @@ static inline real_t rt(__private int nu,
   real_t V = nu * (-log(mt_rand_01(&mt[0], &idx[0], mt)));
   return sqrt(-2.0 * log(mt_rand_01(&mt[0], &idx[0], mt))) *
     cos((real_t)2 * (real_t)M_PI * mt_rand_01(&mt[0], &idx[0], mt)) * sqrt(nu / V); // 🎯 Nutzen M_PI!
-}
-
-// chisquared distribution
-static inline real_t rchisq(__private int nu,
-                            __private int* idx, __private uint* mt) {
-  return nu * (-log(mt_rand_01(&mt[0], &idx[0], mt)));
 }
 
 
@@ -345,6 +341,14 @@ static inline real_t rinvgamma(__private real_t alpha,__private real_t beta,__pr
   if (gamma_val <= (real_t)0) return (real_t)1e10; // Schutz vor Division durch 0
   return (real_t)1.0f / gamma_val;
 }
+
+
+// chisquared distribution
+static inline real_t rchisq(__private int nu,
+                            __private int* idx, __private uint* mt) {
+  return rgamma((real_t)nu / 2.0f, 2.0f, &idx[0], mt);
+}
+
 // beta
 static inline real_t rbeta(__private real_t alpha, __private real_t beta,
                            __private int* idx, __private uint* mt) {
@@ -392,7 +396,7 @@ static inline uint rpois(__private real_t lambda,
   uint k = 0;
   real_t sum_exponentials = 0;
   while (sum_exponentials <= 1) { // Sum exponentials until exceed 1
-    sum_exponentials += -log(mt_rand_01(&mt[0], &idx[0], mt)) * lambda;
+    sum_exponentials += -log(mt_rand_01(&mt[0], &idx[0], mt)) * 1.0f / lambda;
     k++;
   }
   return k-1;
@@ -425,7 +429,7 @@ static inline uint rhyper(__private int white, __private int black, __private in
     // Ratio check
     if (u1 <= pmf * h / max_pmf) {
       if(k_candidate<n)
-        return ++k_candidate; // Accepted k value
+        return k_candidate; // Accepted k value
     }
   }
 }
