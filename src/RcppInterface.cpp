@@ -104,38 +104,40 @@ bool ActivateDeviceWithIndex_Async(int idx) {
 //' @export
 // [[Rcpp::export]]
 bool InitCL() {
-    // 🔐 Ein atomares Flag, um die Thread-Synchronisation abzusichern
+    // 🚀 SCHUTZWALL GEGEN DOPPEL-ZÜNDUNG & TIME-OUTS:
+    // Wenn die Brücke im RAM bereits steht, blockieren wir sofort jeden weiteren 
+    // Thread-Start. Das verhindert das 200-Sekunden-Warten unter Windows!
+    if (opencl_bridge_established && global_opencl_device != nullptr) {
+        return true;
+    }
+
     std::atomic<bool> is_done(false);
     std::atomic<bool> success(false);
 
-    // 🚀 DER WORKER-THREAD (Die opencltools-Strategie):
-    // Wir forken die blockierende Initialisierung komplett aus dem R-Scope heraus!
+    // 🔄 DER BEWÄHRTE WINDOWS-LOCK-BRECHER:
+    // Wir forken die Initialisierung weiterhin aus dem R-Scope heraus.
     std::thread cl_init_thread([&]() {
         try {
-            // Hier stehen Ihre originalen Backend-Aufrufe:
+            if (!opencl_bridge_established) {
             backend::initCL();
-            //NumericVector rand_init=runif(1, 0.0, 1.0);
+            }
             success = true;
         } catch (...) {
             success = false;
         }
-        is_done = true; // Dem R-Hauptthread signalisieren, dass wir durch sind
+        is_done = true; 
     });
 
-    // 🔄 DER BLOCKFREIE ATEM-LOOP IM R-HAUPTTHREAD:
-    // R bleibt hellwach, verarbeitet Signale und wird von Windows niemals blockiert!
+    // 🔄 DEIN ORIGINALER ATEM-LOOP (Hält R wach und bricht den WDDM-Lock):
     while (!is_done) {
-        // 1. Dem Windows-Scheduler 10 Millisekunden Zeit geben, den Hintergrund-Thread zu füttern
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5)); // Auf 5ms verschärft für schnellere Reaktion
 
         #ifdef _WIN32
-        // 2. Der R-Event-Schleife explizit Luft zum Atmen geben.
-        // Das bricht den Windows-WDDM-Busy-Waiting-Deadlock sofort auf!
+        // Zwingt den Windows-Scheduler zum Thread-Wechsel
         R_CheckUserInterrupt();
         #endif
     }
 
-    // Den Hintergrund-Thread wieder sauber einsammeln, um RAM-Lecks zu vermeiden
     if (cl_init_thread.joinable()) {
         cl_init_thread.join();
     }

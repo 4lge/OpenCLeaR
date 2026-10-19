@@ -31,10 +31,10 @@ Dieses Dokument fasst die wichtigsten Dateien des Pakets zusammen.
 ```{r, code=readLines('../R/Device.R', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
 ```
 
-### R/print.R (print Methoden)
+### R/print.R (print Methoden fuer Device info)
 ```{r, code=readLines('../R/print.R', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
 ```
-### src/RcppInterface.cpp (some declarations)
+### src/RcppInterface.cpp (Device Aktivierung)
 ```{r, code=readLines('../src/RcppInterface.cpp', warn=FALSE), eval=FALSE, echo=TRUE, comment="", class.source="cpp"}
 ```
 
@@ -107,10 +107,14 @@ Kernel library
 ```{r, code=readLines('../inst/kernel/libkernel.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="cpp", comment=""}
 ```
 
-Finally a some OpenCL kernels
+Finally some OpenCL kernels
 
 ### inst/kernel/rnorm.cl
 ```{r, code=readLines('../inst/kernel/rnorm.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="c", comment=""}
+```
+
+### inst/kernel/runif.cl
+```{r, code=readLines('../inst/kernel/runif.cl', warn=FALSE), eval=FALSE, echo=TRUE, class.source="c", comment=""}
 ```
 
 ### inst/kernel/idw_kernel.cl
@@ -131,7 +135,18 @@ plugin definitions and inline generator and future oclFunction (currentle (adapt
 ```{r, code=readLines('../R/inline.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
 ```
 
-example
+### R wrapper for oclFunctions
+
+### R/rnormOCL.R
+```{r, code=readLines('../R/rnormOCL.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+```
+
+### R/runifOCL.R
+```{r, code=readLines('../R/runifOCL.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+```
+
+## examples
+
 
 ### inst/examples/rnormCLinline.R
 ```{r, code=readLines('../inst/examples/rnormCLinline.R', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
@@ -142,8 +157,12 @@ example
 ```
 ## interface code
 
-### interface/idw_rcpp.cpp
-```{r, code=readLines('../inst/interface/idw_rcpp.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+### interface/rnorm.cpp
+```{r, code=readLines('../inst/interface/rnorm.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
+```
+
+### interface/runif.cpp
+```{r, code=readLines('../inst/interface/runif.cpp', warn=FALSE), eval=FALSE, echo=TRUE, class.source="r", comment=""}
 ```
 
 ### interface/idw_rcpp.cpp
