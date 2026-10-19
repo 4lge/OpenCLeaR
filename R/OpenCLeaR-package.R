@@ -54,6 +54,94 @@
     }
 }
 
+
+##' Aktiviert ein OpenCL-Gerät absolut fehlersicher und blockfrei
+##' 
+##' Falls kein Index übergeben wird, aktiviert die Funktion automatisch Gerät 0.
+##' @param idx Optionaler Integer-Index des Geräts (Standard: 0)
+##' @export
+ActivateDevice <- function(idx = 0) {
+    idx_int <- as.integer(idx)
+    env <- OpenCLeaR:::.OpenCLeaR_Env
+
+    # 🚀 1. WINDOWS-TREIBER-BREMSE LÖSEN & DOPPEL-TIMER FIXEN:
+    # Falls das OpenCL-Umfeld noch schläft, wecken wir es blockfrei über den Atem-Loop auf.
+    # Das setzt 'opencl_bridge_established' auf TRUE und verhindert den doppelten Konstruktor-Lauf!
+    if (!isTRUE(getOption("OpenCLeaR.initialized"))) {
+        initialized_now <- ensure_opencl_initialized()
+        if (!initialized_now) {
+            stop("💥 [OpenCLeaR] OpenCL-Subsystem konnte nicht initialisiert werden!")
+        }
+    }
+
+    # 2. Hardware-Tabelle einlesen (jetzt absolut gefahrlos und ohne Hänger)
+    devs <- tryCatch({ GetDeviceList() }, error = function(e) NULL)
+    if (is.null(devs) || !is.data.frame(devs)) {
+        stop("💥 [OpenCLeaR] Hardware-Tabelle konnte nicht gelesen werden!")
+    }
+
+    if (idx_int < 0 || idx_int >= nrow(devs)) {
+        warning("💥 [OpenCLeaR] Ungültiger Index: ", idx_int)
+        return(invisible(FALSE))
+    }
+
+    # Treiber-Koordinaten für das Zielgerät auslesen
+    ziel_platform <- as.integer(devs[devs$Index == idx_int, "Platform_ID"])
+    ziel_device   <- as.integer(devs[devs$Index == idx_int, "Device_ID"])
+
+    # 3. UNZERSTÖRBARER COCKPIT-VERGLEICH:
+    if (OpenCLeaR:::.is_device_bound_cpp()) {
+        active_info <- tryCatch({ GetActiveDeviceInfo() }, error = function(e) NULL)
+        
+        if (!is.null(active_info)) {
+            aktuelle_platform <- as.integer(active_info$Platform_ID)
+            aktuelles_device   <- as.integer(active_info$Device_ID)
+
+            if (!is.null(aktuelle_platform) && aktuelle_platform == ziel_platform &&
+                !is.null(aktuelles_device)   && aktuelles_device == ziel_device) {
+                # Gerät läuft schon -> Abbrechen ohne unnötigen OpenCL-Treiber-Stress
+                return(invisible(TRUE))
+            }
+        }
+    }
+    
+    # 4. ZÜNDUNG:
+    success <- tryCatch({
+        if (.Platform$OS.type == "windows") {
+            ## Nutzt die asynchrone Rcpp-Funktion gegen den WDDM-Treiber-Lock
+            ActivateDeviceWithIndex_Async(idx_int)
+        } else {
+            ## Nutzt den nativen C++ Pfad auf Linux und Mac
+            ActivateDeviceWithIndex_Native(idx_int)
+        }
+        TRUE
+    }, error = function(e) {
+        try({
+            ActivateDeviceWithIndex_Native(idx_int)
+            TRUE
+        }, silent = TRUE)
+        FALSE
+    })
+    
+    ## 5. STATUS IM SYSTEM REINBRETTERN
+    if (success) {
+        options("OpenCLeaR.initialized" = TRUE)
+        options("OpenCLeaR.active_device" = idx_int)
+        
+        # Sicher abfangen, falls die FP64-Abfrage beim allerersten Bind noch kurz zuckt
+        has_fp64_val <- tryCatch({
+            GetActiveDeviceInfo()$FP64_Capable
+        }, error = function(e) FALSE)
+        
+        options("OpenCLeaR.has_fp64" = has_fp64_val)
+        return(TRUE)
+    } else {
+        options("OpenCLeaR.initialized" = FALSE)
+        options("OpenCLeaR.has_fp64" = FALSE)
+        return(FALSE)
+    }
+}
+
 ##' Initialzes OpenCL driver.
 ##'
 ##' It tries also to silently fail on installations without any OpenCL available.
@@ -124,75 +212,5 @@ GetKernelsPath <- function() {
 ##' @param idx Der Index des zu aktivierenden Geräts (Standard: 0)
 ##' @export
 ActivateDeviceWithIndex <- function(idx) {
-    idx_int <- as.integer(idx)
-    env <- OpenCLeaR:::.OpenCLeaR_Env
-
-    # 1. Hardware-Tabelle einlesen
-    devs <- tryCatch({ GetDeviceList() }, error = function(e) NULL)
-    if (is.null(devs) || !is.data.frame(devs)) {
-        stop("💥 [OpenCLeaR] Hardware-Tabelle konnte nicht gelesen werden!")
-    }
-
-    if (idx_int < 0 || idx_int >= nrow(devs)) {
-        warning("💥 [OpenCLeaR] Ungültiger Index: ", idx_int)
-        return(invisible(FALSE))
-    }
-
-    # Treiber-Koordinaten für das Zielgerät auslesen
-    ziel_platform <- as.integer(devs[devs$Index == idx_int, "Platform_ID"])
-    ziel_device   <- as.integer(devs[devs$Index == idx_int, "Device_ID"])
-
-    # 2. 🎯 UNZERSTÖRBARER COCKPIT-VERGLEICH REIN AUF HARDWARE-EBENE:
-    if (OpenCLeaR:::.is_device_bound_cpp()) {
-        active_info <- GetActiveDeviceInfo()
-
-        # Wir holen uns die echten, vom aktuellen Gerät getragenen Treiber-IDs
-        aktuelle_platform <- as.integer(active_info$Platform_ID)
-        aktuelles_device   <- as.integer(active_info$Device_ID)
-
-        # Nur wenn exakt diese Hardware-Kombination schon läuft, blockieren wir!
-        if (!is.null(aktuelle_platform) && aktuelle_platform == ziel_platform &&
-            !is.null(aktuelles_device)   && aktuelles_device == ziel_device) {
-            message("  ⏱️ [OpenCLeaR] Gerät ist bereits aktiv. Aufruf blockiert.")
-            return(invisible(TRUE))
-        }
-    }
-    has_fp64 = FALSE
-    
-    # 3. ZÜNDUNG:
-    success <- tryCatch({
-        if (.Platform$OS.type == "windows") {
-            ## Nutzt deine asynchrone Rcpp-Funktion gegen den WDDM-Lock
-            ActivateDeviceWithIndex_Async(idx_int)
-        } else {
-            ## Nutzt den nativen C++ Pfad auf Linux und Mac
-            ActivateDeviceWithIndex_Native(idx_int)
-        }
-        TRUE
-    }, error = function(e) {
-        ## Sicherheitsnetz, falls auf ganz alten Treibern was schiefgeht
-        try({
-            ActivateDeviceWithIndex_Native(idx_int)
-            TRUE
-        }, silent = TRUE)
-        FALSE
-    })
-    
-    ## 🎯 3. STATUS FLIEGEND IM SYSTEM EINBRENNEN
-    if (success) {
-        options("OpenCLeaR.initialized" = TRUE)
-        options("OpenCLeaR.active_device" = idx)
-        options("OpenCLeaR.has_fp64" = GetActiveDeviceInfo()$FP64_Capable)
-        return(TRUE)
-    } else {
-        options("OpenCLeaR.initialized" = FALSE)
-        options("OpenCLeaR.has_fp64" = FALSE)
-        return(FALSE)
-    }
-
-    # 4. TRANSIENTEN POINTER BITSCHARF INITIALISIEREN:
-    #cat("🔄 [OpenCLeaR] Erzeuge transienten C++ Pointer (Platform:", ziel_platform, ", Device:", ziel_device, ")\n")
-    #env$active_device_ptr <- OpenCLeaR:::.create_transient_device_cpp(ziel_platform, ziel_device, env$kernels_path)
-
-    return(invisible(TRUE))
+   ActivateDevice(idx)
 }

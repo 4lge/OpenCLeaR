@@ -2,6 +2,7 @@
 
 S3method(print,OpenCLDeviceInfo)
 S3method(print,OpenCLDeviceList)
+export(ActivateDevice)
 export(ActivateDeviceWithIndex)
 export(ActivateDeviceWithIndex_Async)
 export(ActivateDeviceWithIndex_Native)

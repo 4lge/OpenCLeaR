@@ -25,7 +25,7 @@ namespace backend {
   bool CLpp::setupDevices() {
     this->kernel_path = global_temporary_kernel_path;
     try {
-      this->activeDevice = Device(select_device_with_id(0L), this->collect_opencl_c_code());
+      this->activeDevice = Device(select_device_with_id(0L));
 
       // Überprüfung auf virtuelles Dummy-Gerät
       if (this->activeDevice.info.name == "NULL device" || this->activeDevice.info.vendor == "Nobody") {
@@ -47,16 +47,16 @@ namespace backend {
   }
 
   void CLpp::activateDevice(Device_Info dev){
-    this->activeDevice = Device(dev, this->collect_opencl_c_code());
+    this->activeDevice = Device(dev);
   }
   void CLpp::activateDeviceWithMostFlops(){
-    this->activeDevice = Device(select_device_with_most_flops(), this->collect_opencl_c_code());
+    this->activeDevice = Device(select_device_with_most_flops());
   }
   void CLpp::activateDeviceWithMostMemory(){
-    this->activeDevice = Device(select_device_with_most_memory(), this->collect_opencl_c_code());
+    this->activeDevice = Device(select_device_with_most_memory());
   }
   void CLpp::activateDeviceWithIndex(int id){
-    this->activeDevice = Device(select_device_with_id(id), this->collect_opencl_c_code());
+    this->activeDevice = Device(select_device_with_id(id));
   }
   
   string CLpp::collect_opencl_c_code(){
