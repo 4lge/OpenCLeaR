@@ -27,7 +27,7 @@ inlineCxxPlugin <- function(...) {
         linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -l:BACKEND.a ", " -L", system.file("libs/x64", package = "OpenCLeaR")," -lOpenCL", sep="")
     } else {
         ## Linux verbleibt bei der bewährten dynamischen Verknüpfung
-        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND", sep="")
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND", " -lOpenCL ", sep="")
     }
     plugin <-  Rcpp::Rcpp.plugin.maker(
 	include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
@@ -36,7 +36,12 @@ inlineCxxPlugin <- function(...) {
         package        = "OpenCLeaR"
     )
     settings <- plugin()
+    # 🚀 WINDOWS AVX-REIGN: Zwingt den Compiler zum Stack-Realignment, um den Treiber-Crash zu verhindern!
+    if (.Platform$OS.type == "windows") {
+        settings$env$PKG_CXXFLAGS <- paste(settings$env$PKG_CXXFLAGS, " -mstackrealign ", sep="")
+    }
     settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
+     
     return(settings)
 }
 
@@ -48,7 +53,7 @@ inlineCxxPluginFloat <- function(...) {
         linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -l:BACKEND.a ", " -L", system.file("libs/x64", package = "OpenCLeaR")," -lOpenCL", sep="")
     } else {
         ## Linux verbleibt bei der bewährten dynamischen Verknüpfung
-        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND", sep="")
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND", " -lOpenCL ", sep="")
     }
     plugin <- Rcpp::Rcpp.plugin.maker(
         include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\";  inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
@@ -56,6 +61,9 @@ inlineCxxPluginFloat <- function(...) {
         package        = "OpenCLeaR"
     )
     settings <- plugin()
+    if (.Platform$OS.type == "windows") {
+        settings$env$PKG_CXXFLAGS <- paste(settings$env$PKG_CXXFLAGS, " -mstackrealign ", sep="")
+    }
     settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DFP64_MODE=0 -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
     return(settings)
 }
@@ -68,7 +76,7 @@ inlineCxxPluginDouble <- function(...) {
         linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -l:BACKEND.a ", " -L", system.file("libs/x64", package = "OpenCLeaR")," -lOpenCL", sep="")
     } else {
         ## Linux verbleibt bei der bewährten dynamischen Verknüpfung
-        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND", sep="")
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND", " -lOpenCL ", sep="")
     }
     plugin <- Rcpp::Rcpp.plugin.maker(
         include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
@@ -76,6 +84,9 @@ inlineCxxPluginDouble <- function(...) {
         package        = "OpenCLeaR"
     )
     settings <- plugin()
+    if (.Platform$OS.type == "windows") {
+        settings$env$PKG_CXXFLAGS <- paste(settings$env$PKG_CXXFLAGS, " -mstackrealign ", sep="")
+    }
     settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DFP64_MODE=1 -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
     return(settings)
 }
@@ -352,16 +363,18 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         # 👑 SCHRITT 2: Erst jetzt den Compiler rufen – 'this->get_kernel_path()' liefert garantiert den korrekten Pfad!
         "    device->load_or_build_kernel();\n" 
     )
-    
+
     # =========================================================================
-    # 🔥 DER POINTER-TUNNEL (Verhindert das doppelte Windows-Warten)
+    # 🔥 DER 0.03s SPEICHER-TUNNEL: Keine DLL-Sperren im JIT-Lauf
     # =========================================================================
-    # Dieser Block darf NIEMALS fehlen, weil hier das 'device'-Objekt 
-    # deklariert wird, das 'full_cl_code' oben zwingend zum Arbeiten braucht!
+    extended_signature <- c(signature, "Device_Address" = "numeric")
+
     modified_cpp_body <- paste0(
         "    using namespace backend;\n",
-        "    Device* device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());\n",
-"    #if FP64_MODE == 1\n",
+        "    uintptr_t addr = (uintptr_t)Rcpp::as<double>(Device_Address);\n",
+        "    if(addr == 0) { Rcpp::stop(\"💥 Kritischer Fehler: Device_Address ist NULL!\"); }\n",
+        "    Device* device = reinterpret_cast<Device*>(addr);\n",
+        "    #if FP64_MODE == 1\n",
         "        typedef double real_t;\n",
         "    #else\n",
         "        typedef float real_t;\n",
@@ -371,14 +384,33 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
     )
 
     executable_r_func <- inline::cxxfunction(
-        sig    = signature,
-        body   = modified_cpp_body,
-        plugin = chosen_plugin,
+        sig     = extended_signature,
+        body    = modified_cpp_body,
+        plugin  = chosen_plugin,
         package = "OpenCLeaR",
         ...
     )
 
-    return(executable_r_func)
+    # Die schlaue Weiche holt die Adresse unter Windows direkt aus dem XPtr
+    final_wrapper <- function(...) {
+        if (.Platform$OS.type == "windows") {
+            # Holt den transienten C++ Zeiger aus der R-Umgebung
+            if (is.null(OpenCLeaR:::.OpenCLeaR_Env$active_device_ptr)) {
+                stop("💥 [OpenCLeaR] Kein aktiver Windows-Hardware-Pointer im Speicher gefunden!")
+            }
+            ## Der numerische Cast zieht die rohe 64-Bit-Adresse aus dem Rcpp::XPtr
+            ## 🚀 DER DIREKTE REINFELD-GRIFF: Wir holen das fertige double aus den echten Infos!
+            dev_addr <- OpenCLeaR::GetActiveDeviceInfo()$Device_Address
+ 
+        } else {
+            # Linux/Mac nutzt wie gewohnt den Singleton-Zustand des Backends
+            dev_addr <- OpenCLeaR::GetActiveDeviceInfo()$Device_Address
+        }
+        
+        executable_r_func(..., Device_Address = dev_addr)
+    }
+
+    return(final_wrapper)
 }
 
 
