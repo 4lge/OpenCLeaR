@@ -2,7 +2,6 @@ Package: OpenCLeaR
 Type: Package
 Title: Easy Access to OpenCL using C++, CMake and Rcpp
 Version: 0.6.6
-Author: Albrecht Gebhardt
 Authors@R: person(given = "Albrecht",
                 family = "Gebhardt",
                 role = c("aut", "cre"),
@@ -17,7 +16,7 @@ Description: OpenCL Easy Accessible from R:
   <https://github.com/jmaerte/cmake-rcpp-template>).
 LinkingTo: Rcpp
 Imports: Rcpp, inline, methods
-Recommends: nmathopencl
+Suggests: nmathopencl
 SystemRequirements: OpenCL, CMake
 Encoding: UTF-8
 License: MIT + file LICENSE

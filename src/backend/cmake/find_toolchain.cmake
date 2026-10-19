@@ -16,15 +16,17 @@ else()
     set(_exe_suffix "")
 endif()
 
-# Suche nach dem R-Programm mittels Umgebungsvariablen
-find_program(R_EXE
-    NAMES R${_exe_suffix}
-    PATHS 
-        ENV PATH                  # Durchsucht die normale System-PATH-Variable
-        ENV R_HOME                # Nutzt eine optionale, explizite R_HOME-Variable
-    PATH_SUFFIXES "bin" "bin/x64" # Typische Unterordner, in denen R liegt
-)
-
+# 🚀 CRAN-STRATEGIE: Wir verbieten die nackte PATH-Suche komplett!
+# Wir bauen den Pfad absolut bombensicher direkt aus der R_HOME-Umgebungsvariable.
+if(DEFINED ENV{R_HOME})
+    set(R_EXE "$ENV{R_HOME}/bin/R${_exe_suffix}")
+    # Unter Windows/MinGW absichern, dass Backslashes CMake nicht verwirren
+    file(TO_CMAKE_PATH "${R_EXE}" R_EXE)
+else()
+    # Fallback, falls R_HOME nicht gesetzt ist (Sicherheitsnetz)
+    find_program(R_EXE NAMES R${_exe_suffix} PATHS ENV R_HOME PATH_SUFFIXES "bin" "bin/x64" NO_DEFAULT_PATH)
+endif()
+    
 # Überprüfe, ob das Programm erfolgreich gefunden wurde
 if(R_EXE)
     message(STATUS "R ausführbare Datei gefunden: ${R_EXE}")

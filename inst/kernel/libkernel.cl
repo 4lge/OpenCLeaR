@@ -276,19 +276,19 @@ static inline real_t rexp(__private real_t rate,
 static inline real_t rnorm(__private real_t mu, __private real_t sigma,
                            __private int* idx, __private uint* mt) {
   if(get_global_id(0) % 2 == 0)
-    return mu + sigma * sqrt(-2 * log(mt_rand_01(&mt[0], &idx[0], mt))) *
-      cos((real_t)2 * (real_t)M_PI * mt_rand_01(&mt[0], &idx[0], mt)); // 🎯 Nutzen M_PI und saubere Typ-Casts!
+    return mu + sigma * sqrt((real_t)-2.0f * log(mt_rand_01(&mt[0], &idx[0], mt))) *
+      cos((real_t)2.0f * (real_t)M_PI * mt_rand_01(&mt[0], &idx[0], mt)); // 🎯 Nutzen M_PI und saubere Typ-Casts!
   else
-    return mu + sigma * sqrt(-2 * log(mt_rand_01(&mt[0], &idx[0], mt))) *
-      cos((real_t)2 * (real_t)M_PI * mt_rand_01(&mt[0], &idx[0], mt));
+    return mu + sigma * sqrt((real_t)-2.0f * log(mt_rand_01(&mt[0], &idx[0], mt))) *
+      cos((real_t)2.0f * (real_t)M_PI * mt_rand_01(&mt[0], &idx[0], mt));
 }
 
 // t distribution
 static inline real_t rt(__private int nu,
                         __private int* idx, __private uint* mt) {
   real_t V = nu * (-log(mt_rand_01(&mt[0], &idx[0], mt)));
-  return sqrt(-2.0 * log(mt_rand_01(&mt[0], &idx[0], mt))) *
-    cos((real_t)2 * (real_t)M_PI * mt_rand_01(&mt[0], &idx[0], mt)) * sqrt(nu / V); // 🎯 Nutzen M_PI!
+  return sqrt((real_t)-2.0f * log(mt_rand_01(&mt[0], &idx[0], mt))) *
+    cos((real_t)2.0f * (real_t)M_PI * mt_rand_01(&mt[0], &idx[0], mt)) * sqrt(nu / V); // 🎯 Nutzen M_PI!
 }
 
 

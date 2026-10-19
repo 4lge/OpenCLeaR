@@ -1,4 +1,5 @@
 (^|/)\.gitkeep$
+^src/backend/lib/.*$
 ^src/backend/lib/
 ^src/backend/lib/.*/\.git$
 ^src/backend/lib/.*\.git$

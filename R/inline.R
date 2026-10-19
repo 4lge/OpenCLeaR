@@ -22,12 +22,16 @@
 ##' }
 ##' @export
 inlineCxxPlugin <- function(...) {
+    sys_name <- Sys.info()[["sysname"]]
     if (.Platform$OS.type == "windows") {
-        ## Zwingt MinGW statisch gegen das .a Archiv zu linken und verhindert DLL-Inflation!
+        ## 🪟 Windows: Statische Verknüpfung gegen BACKEND.a
         linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -l:BACKEND.a ", " -L", system.file("libs/x64", package = "OpenCLeaR")," -lOpenCL", sep="")
+    } else if (sys_name == "Darwin") {
+        ## 🍏 macOS: Nutzen das native Apple-Framework (kein -lOpenCL!)
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND -framework OpenCL", sep="")
     } else {
-        ## Linux verbleibt bei der bewährten dynamischen Verknüpfung
-        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND", " -lOpenCL ", sep="")
+        ## 🐧 Linux: Verbleibt bei der bewährten dynamischen ICD-Verknüpfung
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND -lOpenCL", sep="")
     }
     plugin <-  Rcpp::Rcpp.plugin.maker(
 	include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
@@ -48,12 +52,16 @@ inlineCxxPlugin <- function(...) {
 ##' @rdname inline
 ##' @export
 inlineCxxPluginFloat <- function(...) {
-    if (.Platform$OS.type == "windows") {
-        ## Zwingt MinGW statisch gegen das .a Archiv zu linken und verhindert DLL-Inflation!
+        sys_name <- Sys.info()[["sysname"]]
+        if (.Platform$OS.type == "windows") {
+        ## 🪟 Windows: Statische Verknüpfung gegen BACKEND.a
         linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -l:BACKEND.a ", " -L", system.file("libs/x64", package = "OpenCLeaR")," -lOpenCL", sep="")
+    } else if (sys_name == "Darwin") {
+        ## 🍏 macOS: Nutzen das native Apple-Framework (kein -lOpenCL!)
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND -framework OpenCL", sep="")
     } else {
-        ## Linux verbleibt bei der bewährten dynamischen Verknüpfung
-        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND", " -lOpenCL ", sep="")
+        ## 🐧 Linux: Verbleibt bei der bewährten dynamischen ICD-Verknüpfung
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND -lOpenCL", sep="")
     }
     plugin <- Rcpp::Rcpp.plugin.maker(
         include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\";  inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
@@ -71,12 +79,16 @@ inlineCxxPluginFloat <- function(...) {
 ##' @rdname inline
 ##' @export
 inlineCxxPluginDouble <- function(...) {
+    sys_name <- Sys.info()[["sysname"]]
     if (.Platform$OS.type == "windows") {
-        ## Zwingt MinGW statisch gegen das .a Archiv zu linken und verhindert DLL-Inflation!
+        ## 🪟 Windows: Statische Verknüpfung gegen BACKEND.a
         linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -l:BACKEND.a ", " -L", system.file("libs/x64", package = "OpenCLeaR")," -lOpenCL", sep="")
+    } else if (sys_name == "Darwin") {
+        ## 🍏 macOS: Nutzen das native Apple-Framework (kein -lOpenCL!)
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND -framework OpenCL", sep="")
     } else {
-        ## Linux verbleibt bei der bewährten dynamischen Verknüpfung
-        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND", " -lOpenCL ", sep="")
+        ## 🐧 Linux: Verbleibt bei der bewährten dynamischen ICD-Verknüpfung
+        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND -lOpenCL", sep="")
     }
     plugin <- Rcpp::Rcpp.plugin.maker(
         include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
