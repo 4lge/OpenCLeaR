@@ -98,13 +98,13 @@ namespace backend {
     if (inst->setupDevices()) {
       // ERFOLG (z.B. auf Ihrem Linux-Rechner): 
       // Das Objekt bleibt bestehen und ist voll einsatzbereit!
-      std::cout << "OpenCL erfolgreich initialisiert: Gerät bereit!" << std::endl;
+     // std::cout << "OpenCL erfolgreich initialisiert: Gerät bereit!" << std::endl;
     } else {
       // FEHLERFALL (z.B. im treiberlosen Docker-Container):
       // Lösche das fehlerhafte Objekt und ersetze es durch den sicheren Dummy
       delete inst;
       inst = new CLpp(true);
-      std::cout << "OpenCL Fallback aktiviert: Sicheres Dummy-Objekt wird genutzt." << std::endl;
+      // std::cout << "OpenCL Fallback aktiviert: Sicheres Dummy-Objekt wird genutzt." << std::endl;
     }
   }
   return *inst;    

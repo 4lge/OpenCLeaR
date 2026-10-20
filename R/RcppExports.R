@@ -27,6 +27,8 @@ ActivateDeviceWithIndex_Native <- function(idx) {
 }
 
 #' OpenCL asynchronous device activation routine to break Windows WDDM context lock
+#'
+#' @param idx Integer index of the device to activate asynchronously.
 #' @export
 ActivateDeviceWithIndex_Async <- function(idx) {
     .Call(`_OpenCLeaR_ActivateDeviceWithIndex_Async`, idx)
@@ -49,6 +51,9 @@ SetKernelsPath <- function(kernelPath) {
     invisible(.Call(`_OpenCLeaR_SetKernelsPath`, kernelPath))
 }
 
+#' Check if OpenCL device is ready.
+#' 
+#' @value logical, indicates state of device
 #' @export
 IsOpenCLReady <- function() {
     .Call(`_OpenCLeaR_IsOpenCLReady`)
@@ -84,10 +89,19 @@ GetKernelCode <- function() {
     .Call(`_OpenCLeaR_GetKernelCode`)
 }
 
+#' Creates an OpenCL device in C++ realm and gives the pointer to R
+#' 
+#' @param platform_id platform id of the device 
+#' @param device_id device id within the platform of the device
+#' @param kernel_path path to kernel store
 .create_transient_device_cpp <- function(platform_id, device_id, kernel_path) {
     .Call(`_OpenCLeaR_create_transient_device_cpp`, platform_id, device_id, kernel_path)
 }
 
+#' pass a kernel path to the transient device
+#'
+#' @param device_xptr Rcpp Xptr of the C++ device
+#' @param kernel_path path to kernel store to save in the transient device
 .set_transient_device_path_cpp <- function(device_xptr, kernel_path) {
     invisible(.Call(`_OpenCLeaR_set_transient_device_path_cpp`, device_xptr, kernel_path))
 }

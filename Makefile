@@ -50,3 +50,6 @@ vignettes/OpenCLeaR-Overview.md: vignettes/OpenCLeaR-Overview.Rmd
 
 source: dist-clean
 	(cd ..; R CMD build OpenCLeaR)
+
+cleanchars:
+	perl -i -pe 's/[^\x00-\x7F]//g' R/OpenCLeaR-package.R R/debug.R R/nmath.R

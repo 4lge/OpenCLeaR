@@ -1,6 +1,6 @@
-#' S3 Print-Methode für OpenCL-Geräteinformationen
-#' @param x Ein Objekt der Klasse OpenCLDeviceInfo
-#' @param ... Weitere Argumente (ignoriert)
+#' S3 Print method for OpenCL device information
+#' @param x An object of the OpenCLDeviceInfo class
+#' @param ... more arguments 
 #' @method print OpenCLDeviceInfo
 #' @export
 print.OpenCLDeviceInfo <- function(x, ...) {

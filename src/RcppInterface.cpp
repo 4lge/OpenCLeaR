@@ -55,6 +55,8 @@ void ActivateDeviceWithIndex_Native(int idx) {
 }
 
 //' OpenCL asynchronous device activation routine to break Windows WDDM context lock
+//'
+//' @param idx Integer index of the device to activate asynchronously.
 //' @export
 // [[Rcpp::export(name = "ActivateDeviceWithIndex_Async", rng = FALSE)]]
 bool ActivateDeviceWithIndex_Async(int idx) {
@@ -162,6 +164,9 @@ void SetKernelsPath(String kernelPath) {
     }
 }
 
+//' Check if OpenCL device is ready.
+//' 
+//' @value logical, indicates state of device
 //' @export
 // [[Rcpp::export(name = "IsOpenCLReady", rng = FALSE)]]
 bool IsOpenCLReady() {

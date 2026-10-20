@@ -13,16 +13,15 @@
 
 ## onLoad function:
  .onLoad <- function(libname, pkgname) {
-     ## 🛡️ NVIDIA-TURBO FÜR WINDOWS:
      ## Wir schalten den fehlerhaften Nvidia-Festplatten-Cache komplett ab!
      if (.Platform$OS.type == "windows") {
          Sys.setenv(CUDA_CACHE_DISABLE = "1")
          Sys.setenv(OMP_NUM_THREADS = "1") # Verhindert, dass OpenMP-Hintergrundthreads im R-Lader blockieren
      }
-     ## 🚀 Den echten, absoluten Installationspfad der Kernel im Paket ermitteln!
+     ##  Den echten, absoluten Installationspfad der Kernel im Paket ermitteln!
      kernel_dir <- system.file("kernel", package = pkgname, lib.loc = libname)
      if (kernel_dir == "") {
-         ## Fallback für die lokale Entwicklungsumgebung
+         ## Fallback fr die lokale Entwicklungsumgebung
          kernel_dir <- normalizePath("./kernel", mustWork = FALSE)
      }
      .OpenCLeaR_Env$kernel_path <- kernel_dir
@@ -32,55 +31,56 @@
      inline::registerPlugin("OpenCLeaRFloat", inlineCxxPluginFloat)
      inline::registerPlugin("OpenCLeaRDouble", inlineCxxPluginDouble)
 
-     ## Wir setzen im R-Zustand standardmäßig ein Flag auf FALSE.
-     ## Es wird erst TRUE, wenn die Initialisierung später klappt.
+     ## Wir setzen im R-Zustand standardmig ein Flag auf FALSE.
+     ## Es wird erst TRUE, wenn die Initialisierung spter klappt.
      options(OpenCLeaR.initialized = FALSE)
      options(OpenCLeaR.has_fp64 = FALSE)
  }
 
 
-## 🏎️ 2. ONATTACH: Der perfekte Ort für den fehlersicheren Hardware-Autostart!
+##  2. ONATTACH: Der perfekte Ort fr den fehlersicheren Hardware-Autostart!
 .onAttach <- function(libname, pkgname) {
-    ## Zeige den Hinweis NUR, wenn KEIN Gerät automatisch gebunden werden konnte!
+    ## Zeige den Hinweis NUR, wenn KEIN Gert automatisch gebunden werden konnte!
     if (!isTRUE(getOption("OpenCLeaR.initialized"))) {
         kernel_dir <- .OpenCLeaR_Env$kernel_path
         packageStartupMessage(
             "\n==========================================================================\n",
             "  (Kernels path: ", kernel_dir, ").\n",
-            "⚠️  [OpenCLeaR] OpenCL environment loaded but NOT yet bound to hardware!\n",
-            "👉 PLEASE RUN: ActivateDeviceWithIndex(0) to select and initialize your GPU/CPU.\n",
+            "  [OpenCLeaR] OpenCL environment loaded but NOT yet bound to hardware!\n",
+            "  PLEASE RUN: GetDevicelist() and use ActivateDevice(<index>) to select\n",
+            "  and initialize your GPU/CPU OpenCL device.\n",
             "=========================================================================="
         )
     }
 }
 
 
-##' Aktiviert ein OpenCL-Gerät absolut fehlersicher und blockfrei
+##' Aktiviert ein OpenCL-Gert absolut fehlersicher und blockfrei
 ##' 
-##' @param idx Optionaler Integer-Index des Geräts (Standard: 0)
+##' @param idx Optionaler Integer-Index des Gerts (Standard: 0)
 ##' @export
 ActivateDevice <- function(idx = 0) {
     idx_int <- as.integer(idx)
     env <- OpenCLeaR:::.OpenCLeaR_Env
 
     # =========================================================================
-    # 🪟 DER UNZERSTÖRBARE v0.5.10 WINDOWS-PFAD (Direkt-Backport)
+    #  DER UNZERSTRBARE v0.5.10 WINDOWS-PFAD (Direkt-Backport)
     # =========================================================================
     if (.Platform$OS.type == "windows") {
         devs <- tryCatch({ GetDeviceList() }, error = function(e) NULL)
         if (is.null(devs) || !is.data.frame(devs)) {
-            stop("💥 [OpenCLeaR] Windows-Hardware-Tabelle konnte nicht gelesen werden!")
+            stop(" [OpenCLeaR]  OpenCL hardware list could not be read!")
         }
 
         if (idx_int < 0 || idx_int >= nrow(devs)) {
-            warning("💥 [OpenCLeaR] Ungültiger Windows-Index: ", idx_int)
+            warning(" [OpenCLeaR] invalid index: ", idx_int)
             return(invisible(FALSE))
         }
 
         ziel_platform <- as.integer(devs[devs$Index == idx_int, "Platform_ID"])
         ziel_device   <- as.integer(devs[devs$Index == idx_int, "Device_ID"])
 
-        cat("🔄 [OpenCLeaR Windows] Zünde v0.5.10 Pointer-Brücke (Platform:", ziel_platform, ", Device:", ziel_device, ")\n")
+        cat(" [OpenCLeaR Windows] Znde v0.5.10 Pointer-Brcke (Platform:", ziel_platform, ", Device:", ziel_device, ")\n")
         
         # Erzeugt das transiente Objekt im RAM ohne Singleton-Sperre:
         env$active_device_ptr <- OpenCLeaR:::.create_transient_device_cpp(ziel_platform, ziel_device, env$kernel_path)
@@ -93,22 +93,22 @@ ActivateDevice <- function(idx = 0) {
     }
 
     # =========================================================================
-    # 🐧 LINUX / MAC v0.6.5 ORIGINAL-PFAD (Unverändert)
+    #  LINUX / MAC v0.6.5 ORIGINAL-PFAD (Unverndert)
     # =========================================================================
     if (!isTRUE(getOption("OpenCLeaR.initialized"))) {
-        initialized_now <- ensure_opencl_initialized()
+        initialized_now <- EnsureOpenclInitialized()
         if (!initialized_now) {
-            stop("💥 [OpenCLeaR] OpenCL-Subsystem konnte nicht initialisiert werden!")
+            stop(" [OpenCLeaR] OpenCL subsystem could not be initialised!")
         }
     }
 
     devs <- tryCatch({ GetDeviceList() }, error = function(e) NULL)
     if (is.null(devs) || !is.data.frame(devs)) {
-        stop("💥 [OpenCLeaR] Hardware-Tabelle konnte nicht gelesen werden!")
+        stop(" [OpenCLeaR] OpenCL hardware list could not be read!")
     }
 
     if (idx_int < 0 || idx_int >= nrow(devs)) {
-        warning("💥 [OpenCLeaR] Ungültiger Index: ", idx_int)
+        warning(" [OpenCLeaR] invalid index: ", idx_int)
         return(invisible(FALSE))
     }
 
@@ -150,10 +150,19 @@ ActivateDevice <- function(idx = 0) {
 ##' This is needed to be built e.g. on CRANs win-builder platform or other CRAN
 ##' package checkers.
 ##' @export
-ensure_opencl_initialized <- function() {
-  # Wenn schon erfolgreich initialisiert, direkt zurückkehren
-  if (isTRUE(getOption("OpenCLeaR.initialized"))) return(TRUE)
-  # 🪟 WINDOWS-DOCKER-SCHUTZWALL: Registry prüfen, bevor C++ die DLL lädt!
+EnsureOpenclInitialized <- function() {
+  # return if already initialized
+    if (isTRUE(getOption("OpenCLeaR.initialized"))) return(TRUE)
+
+    ## in case that during R CMD check bin/ocl_compiler lost its execution rights:
+    if (.Platform$OS.type == "unix") {
+        compiler_binary <- file.path(system.file("bin", package = "OpenCLeaR"), "ocl_compiler")
+        if (file.exists(compiler_binary)) {
+            Sys.chmod(compiler_binary, mode = "0755", use_umask = FALSE)
+        }
+    }
+
+  # under Windows check registry for registered OpenCL providers
   if (.Platform$OS.type == "windows") {
     has_vendors <- tryCatch({
       # Scannt den offiziellen Khronos-Registry-Pfad nach installierten Treibern
@@ -179,14 +188,10 @@ ensure_opencl_initialized <- function() {
 
   # Versuche die Hardware zu aktivieren
   status <- tryCatch({
-    # 🚀 SCHRITT 1: Die Hardware absolut sicher und blockfrei scannen (setupDevices)
+    # SCHRITT 1: Die Hardware absolut sicher und blockfrei scannen (setupDevices)
     InitCL()
-
-    # 🚀 SCHRITT 2: Erst jetzt das beste Gerät aus der geladenen Liste aktivieren!
-
-    # done in initCl with Index(0) ActivateDeviceWithMostFlops()
     
-    # JETZT PRÜFEN: Ist es ein echtes Gerät oder nur das Dummy-Objekt?
+    # JETZT PRFEN: Ist es ein echtes Gert oder nur das Dummy-Objekt?
     if (IsOpenCLReady()) {
       options(OpenCLeaR.initialized = TRUE)
       TRUE
@@ -210,8 +215,8 @@ GetKernelsPath <- function() {
     return(OpenCLeaR:::.GetKernelsPath_cpp())
 }
 
-##' Aktiviert ein OpenCL-Gerät absolut fehlersicher
-##' @param idx Der Index des zu aktivierenden Geräts (Standard: 0)
+##' Aktiviert ein OpenCL-Gert absolut fehlersicher
+##' @param idx Der Index des zu aktivierenden Gerts (Standard: 0)
 ##' @export
 ActivateDeviceWithIndex <- function(idx) {
    ActivateDevice(idx)

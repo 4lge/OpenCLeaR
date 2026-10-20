@@ -72,9 +72,11 @@ print.OpenCLDeviceInfo <- function(x, ...) {
   invisible(x) # R-Standard: Gibt das Objekt unsichtbar zurück
 }
 
-#' S3 Print-Methode fuer die OpenCL-Geraeteliste
-#' @method print OpenCLDeviceList
-#' @export
+##' S3 print method for the OpenCL device list
+##' @param x object of class \code{OpenclDeviceList}
+##' @param ... additional arguments
+##' @method print OpenCLDeviceList
+##' @export
 print.OpenCLDeviceList <- function(x, ...) {
   if (nrow(x) == 0) {
     cat("Keine OpenCL-Geraete im System gefunden.\n")

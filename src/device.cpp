@@ -9,7 +9,12 @@ extern "C" Device* global_opencl_device;
 
 using namespace Rcpp;
 
-// 🚀 DIE BRÜCKE: Erzeugt das Gerät im C++ RAM und gibt den Pointer an R
+
+//' Creates an OpenCL device in C++ realm and gives the pointer to R
+//' 
+//' @param platform_id platform id of the device 
+//' @param device_id device id within the platform of the device
+//' @param kernel_path path to kernel store
 // [[Rcpp::export(name = ".create_transient_device_cpp")]]
 SEXP create_transient_device_cpp(int platform_id, int device_id, std::string kernel_path) {
     // Ruft den Konstruktor deines Structs auf (der clCreateContext etc. ausführt)
@@ -28,6 +33,10 @@ SEXP create_transient_device_cpp(int platform_id, int device_id, std::string ker
     return ptr;
 }
 
+//' pass a kernel path to the transient device
+//'
+//' @param device_xptr Rcpp Xptr of the C++ device
+//' @param kernel_path path to kernel store to save in the transient device
 // [[Rcpp::export(name = ".set_transient_device_path_cpp")]]
 void set_transient_device_path_cpp(SEXP device_xptr, std::string kernel_path) {
     Rcpp::XPtr<TransientDevice> ptr(device_xptr);

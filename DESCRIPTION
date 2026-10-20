@@ -16,12 +16,11 @@ Description: OpenCL Easy Accessible from R:
   <https://github.com/jmaerte/cmake-rcpp-template>).
 LinkingTo: Rcpp
 Imports: Rcpp, inline, methods
-Suggests: nmathopencl
 SystemRequirements: OpenCL, CMake
 Encoding: UTF-8
 License: MIT + file LICENSE
 Config/roxygen2/version: 8.0.0
-Suggests: knitr (>= 1.50), markdown, opencltools, tinytest
+Suggests: knitr (>= 1.50), markdown, opencltools, tinytest, nmathopencl
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 RoxygenNote: 7.3.3
