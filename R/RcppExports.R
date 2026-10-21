@@ -53,7 +53,7 @@ SetKernelsPath <- function(kernelPath) {
 
 #' Check if OpenCL device is ready.
 #' 
-#' @value logical, indicates state of device
+#' @return logical, indicates state of device
 #' @export
 IsOpenCLReady <- function() {
     .Call(`_OpenCLeaR_IsOpenCLReady`)

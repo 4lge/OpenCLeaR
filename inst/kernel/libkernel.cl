@@ -20,7 +20,13 @@
 #define M_E  2.7182818285f
 #endif
 #endif
-
+#if defined(cl_khr_fp64) || defined(cl_amd_fp64)
+  // Wenn wir im Double-Modus sind
+  #define REAL_MIN DBL_MIN
+#else
+  // Wenn wir im erzwungenen Float-Modus (-f) sind
+  #define REAL_MIN FLT_MIN
+#endif
 // oerloads for int arguments to functions working on real_t  arguments
 __attribute__((overloadable)) static inline real_t lgamma(int x) { return lgamma((real_t)x); }
 __attribute__((overloadable)) static inline real_t log(int x)    { return log((real_t)x); }
@@ -58,7 +64,6 @@ static inline uint mt_rand(__private uint* state, __private int* idx, __private 
   return x;
 }
 
-#define pnorm normal_pdf
 
 
 // Mersenne Twister scaled to [0,1]
@@ -432,6 +437,140 @@ static inline uint rhyper(__private int white, __private int black, __private in
         return k_candidate; // Accepted k value
     }
   }
+}
+
+// quantile functions
+
+// 🚀 ORIGINALER BITSCHARFER R-CORE WICHURA (AS 241) QUANTILS-KERNEL
+static inline real_t qnorm(real_t p, real_t mu, real_t sigma) {
+  if (sigma <= (real_t)0.0f) return (real_t)0.0f;
+  if (p <= (real_t)0.0f) return -INFINITY;
+  if (p >= (real_t)1.0f) return INFINITY;
+
+  real_t q, r, t;
+
+  if (p > (real_t)0.025f && p < (real_t)0.975f) {
+    // 1. ZENTRALE REGION
+    q = p - (real_t)0.5f;
+    r = q * q;
+    t = q * ((((((((real_t)-2.5490809287301226727e3f * r + 
+                  (real_t)3.3430585583326954329e4f) * r - 
+                 (real_t)6.7265770927008700105e4f) * r + 
+                (real_t)4.5921953931549871457e4f) * r - 
+               (real_t)1.3731693765509461125e4f) * r + 
+              (real_t)1.9715909503065094404e3f) * r - 
+             (real_t)1.3314166789178437745e2f) * r + 
+            (real_t)3.3871328727963666080e0f) /
+         ((((((((real_t)5.2264952788528545610e3f * r - 
+              (real_t)2.8729085735721942674e4f) * r + 
+             (real_t)3.9307895800092710610e4f) * r - 
+            (real_t)2.1213794301586595851e4f) * r + 
+           (real_t)5.3941960214247511077e3f) * r - 
+          (real_t)6.8718700749205790830e2f) * r + 
+         (real_t)4.2313330701600911252e1f) * r - (real_t)1.0f);
+  } else {
+    // 2. RAND-REGION (Exakt skaliert nach AS 241)
+    r = (p <= (real_t)0.025f) ? p : ((real_t)1.0f - p);
+    t = sqrt(-(real_t)log(r)); // Das ist das echte unskalierte t des R-Cores!
+    
+    q = ((((((((real_t)7.4245853427844152930e-4f * t + 
+               (real_t)2.1384464432927050751e-2f) * t + 
+              (real_t)2.3158182032484056381e-1f) * t + 
+             (real_t)1.2851316852056238754e0f) * t + 
+            (real_t)3.6478483247632046050e0f) * t + 
+           (real_t)5.7694972214606914055e0f) * t + 
+          (real_t)4.6303378461565452959e0f) * t + 
+         (real_t)1.4234371107496835773e0f) /
+      ((((((((real_t)9.1798364847372227220e-3f * t + 
+              (real_t)1.5497255561113713508e-1f) * t + 
+             (real_t)1.1370089758332959491e0f) * t + 
+            (real_t)4.3413143505342411516e0f) * t + 
+           (real_t)8.7508276002690394774e0f) * t + 
+          (real_t)9.1404456299847534446e0f) * t + 
+         (real_t)4.7784653641792713111e0f) * t + (real_t)1.0f);
+         
+    if (p <= (real_t)0.025f) q = -q;
+  }
+
+  real_t x = mu + q * sigma;
+
+  // 3. Newton-Raphson Feinschliff (Zieht die letzten Bits auf R-Niveau)
+  for (int i = 0; i < 5; ++i) {
+    real_t pdf = normal_pdf(x, mu, sigma);
+    if (isnan(pdf) || isinf(pdf) || fabs(pdf) < (real_t)REAL_MIN) break;
+    
+    real_t diff = normal_cdf(x, mu, sigma) - p;
+    x -= diff / pdf; 
+  }
+
+  return x;
+}
+// 🚀 DIE SCHUSSFESTE PADÉ-QUANTILSFUNKTION MIT SICHEREM UMSCHALT-TOR (4.0)
+static inline real_t qnorm2(real_t p, real_t mu, real_t sigma) {
+  if (sigma <= (real_t)0.0f) return (real_t)0.0f;
+  if (p <= (real_t)0.0f) return -INFINITY;
+  if (p >= (real_t)1.0f) return INFINITY;
+
+  real_t q, w, t;
+  real_t u = (real_t)2.0f * p - (real_t)1.0f;
+  
+  // Symmetrische Transformation: w wird groß an den Rändern
+  w = -(real_t)log(((real_t)1.0f - u) * ((real_t)1.0f + u));
+
+  // 🎯 DAS NEUE SICHERE TOR: Wechselt weit vor der kritischen Polstelle!
+  if (w < (real_t)4.0f) {
+    // 1. ZENTRALE PADÉ-REGION (w < 4.0: p liegt im sicheren Kernbereich)
+    real_t zaehler = ((((((real_t)-1.230922087e-3f * w + 
+                           (real_t)2.138541525e-2f) * w - 
+                          (real_t)1.043791307e-1f) * w + 
+                         (real_t)5.011415795e-1f) * w - 
+                        (real_t)9.423483907e-1f) * w + 
+                       (real_t)1.000000000e0f);
+    real_t nenner  = (((((((real_t)1.583407028e-3f * w + 
+                           (real_t)3.010465335e-2f) * w + 
+                          (real_t)1.359489467e-1f) * w + 
+                         (real_t)3.143232420e-1f) * w + 
+                        (real_t)4.004131589e-1f) * w + 
+                       (real_t)2.186989681e-1f) * w + (real_t)1.0f);
+    
+    q = u * (zaehler / nenner);
+  } else {
+    // 2. RAND-PADÉ-REGION (w >= 4.0: Hier landet dein p = 0.001 nun absolut sicher!)
+    t = sqrt(w) - (real_t)2.0f; // Auf den neuen stabilen Entwicklungspunkt angepasst
+    
+    real_t zaehler = ((((((((real_t)-4.575128315e-5f * t + 
+                            (real_t)8.330753238e-4f) * t - 
+                           (real_t)5.774916843e-3f) * t + 
+                          (real_t)2.366525758e-2f) * t - 
+                         (real_t)6.279234585e-2f) * t + 
+                        (real_t)1.083162329e-1f) * t - 
+                       (real_t)4.828524874e-2f) * t + (real_t)7.424585342e-4f);
+    real_t nenner  = ((((((((real_t)-5.453733035e-5f * t + 
+                           (real_t)9.432025345e-4f) * t - 
+                          (real_t)6.004863486e-3f) * t + 
+                         (real_t)2.181059905e-2f) * t - 
+                        (real_t)3.568452538e-2f) * t + 
+                       (real_t)2.666479840e-2f) * t + 
+                      (real_t)1.520143325e-2f) * t + (real_t)1.0f);
+                      
+    q = zaehler / nenner;
+         
+    if (u < (real_t)0.0f) q = -q;
+  }
+
+  // Transformation auf das standardnormierte Quantil (sqrt(2) * q)
+  real_t x = mu + (real_t)1.414213562373095f * q * sigma;
+
+  // 3. Newton-Raphson Feinschliff für die ultimative Präzision
+  for (int i = 0; i < 6; ++i) {
+    real_t pdf = normal_pdf(x, mu, sigma);
+    if (isnan(pdf) || isinf(pdf) || fabs(pdf) < (real_t)REAL_MIN) break;
+    
+    real_t diff = normal_cdf(x, mu, sigma) - p;
+    x -= diff / pdf; 
+  }
+
+  return x;
 }
 
 // some linear algebra for model fitting

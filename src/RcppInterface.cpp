@@ -166,7 +166,7 @@ void SetKernelsPath(String kernelPath) {
 
 //' Check if OpenCL device is ready.
 //' 
-//' @value logical, indicates state of device
+//' @return logical, indicates state of device
 //' @export
 // [[Rcpp::export(name = "IsOpenCLReady", rng = FALSE)]]
 bool IsOpenCLReady() {

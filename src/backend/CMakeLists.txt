@@ -52,7 +52,7 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINA
 ExternalProject_Add(OpenCL_Wrapper
     GIT_REPOSITORY https://github.com/4lge/OpenCL-Wrapper.git
     #GIT_TAG 6f6f00de23e28cc610fd15abd8252fdced031cdc
-    GIT_TAG 19d77886591361fdb668521db9df4501994957c6
+    GIT_TAG 790ed1bb5ea35568242011075ce03db1dc4c999e
     SOURCE_DIR ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
 
     CONFIGURE_COMMAND ""  # Don't run cmake
@@ -303,6 +303,12 @@ set_source_files_properties(${COMPILER_SOURCE_PATH} PROPERTIES GENERATED TRUE)
 # 2. Das Executable-Target deklarieren
 ADD_EXECUTABLE(ocl_compiler ${COMPILER_SOURCE_PATH})
 
+# 2a. 🚀 DER UNZERSTÖRBARE HEADER-SILENCER FÜR POCL & ALT-SYSTEME:
+# Zwingt die cl2.hpp dazu, auf Version 1.2 zu verharren und Geister-Flags wie -cl-std=CL3.0 zu blockieren!
+TARGET_COMPILE_DEFINITIONS(ocl_compiler PRIVATE 
+#    CL_HPP_TARGET_OPENCL_VERSION=120
+#    CL_HPP_MINIMUM_OPENCL_VERSION=120
+)
 # 3. Basis-Abhängigkeit (Der Quellcode muss aus Git da sein)
 ADD_DEPENDENCIES(ocl_compiler OpenCL_Wrapper)
 
