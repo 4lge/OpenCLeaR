@@ -115,17 +115,17 @@ ActivateDevice <- function(idx = 0) {
     ziel_platform <- as.integer(devs[devs$Index == idx_int, "Platform_ID"])
     ziel_device   <- as.integer(devs[devs$Index == idx_int, "Device_ID"])
 
-    if (OpenCLeaR:::.is_device_bound_cpp()) {
-        active_info <- tryCatch({ GetActiveDeviceInfo() }, error = function(e) NULL)
-        if (!is.null(active_info)) {
-            aktuelle_platform <- as.integer(active_info$Platform_ID)
-            aktuelles_device   <- as.integer(active_info$Device_ID)
-            if (!is.null(aktuelle_platform) && aktuelle_platform == ziel_platform &&
-                !is.null(aktuelles_device)   && aktuelles_device == ziel_device) {
-                return(invisible(TRUE))
-            }
-        }
-    }
+    ## if (OpenCLeaR:::.is_device_bound_cpp()) {
+    ##     active_info <- tryCatch({ GetActiveDeviceInfo() }, error = function(e) NULL)
+    ##     if (!is.null(active_info)) {
+    ##         aktuelle_platform <- as.integer(active_info$Platform_ID)
+    ##         aktuelles_device   <- as.integer(active_info$Device_ID)
+    ##         if (!is.null(aktuelle_platform) && aktuelle_platform == ziel_platform &&
+    ##             !is.null(aktuelles_device)   && aktuelles_device == ziel_device) {
+    ##             return(invisible(TRUE))
+    ##         }
+    ##     }
+    ## }
     
     success <- tryCatch({
         ActivateDeviceWithIndex_Native(idx_int)
@@ -135,7 +135,7 @@ ActivateDevice <- function(idx = 0) {
     if (success) {
         options("OpenCLeaR.initialized" = TRUE)
         options("OpenCLeaR.active_device" = idx_int)
-        options("OpenCLeaR.has_fp64" = tryCatch({ GetActiveDeviceInfo()$FP64_Capable }, error = function(e) FALSE))
+        options("OpenCLeaR.has_fp64" = as.logical(devs[devs$Index == idx_int, "FP64_Capable"]))
         return(TRUE)
     } else {
         options("OpenCLeaR.initialized" = FALSE)

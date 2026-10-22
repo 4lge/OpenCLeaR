@@ -76,18 +76,27 @@ static inline real_t mt_rand_01(__private uint* state, __private int* idx, __pri
 static inline real_t normal_pdf(real_t x, real_t mu, real_t sigma) {
   if (sigma <= 0) return 0;
   real_t z = (x - mu) / sigma;
-  return (1 / (sigma * sqrt(2 * M_PI))) * exp(-0.5f * z * z);
+  return (1.0f / (sigma * sqrt(2.0f * M_PI))) * exp(-0.5f * z * z);
 }
 
 // Normal CDF Approximation (using erf approximation)
+//static inline real_t normal_cdf(real_t x, real_t mu, real_t sigma) {
+//  if (sigma <= 0) return 0;
+//  real_t z = (x - mu) / sigma;
+//  real_t t = 1 / (1 + 0.5f * fabs(z));
+//  real_t erf_approx = 1 - t * exp(-z * z - 1.26523f * t * (t - 1 + 0.045f * t));
+//  return 0.5f * (1 + sign(z) * erf_approx);
+//}
+//
+// 🚀 NATIVER, BITSCHARFER NORMAL-CDF ACCELERATOR VIA OPENCL-ERFC
 static inline real_t normal_cdf(real_t x, real_t mu, real_t sigma) {
-  if (sigma <= 0) return 0;
+  if (sigma <= (real_t)0.0f) return (real_t)0.0f;
   real_t z = (x - mu) / sigma;
-  real_t t = 1 / (1 + 0.5f * fabs(z));
-  real_t erf_approx = 1 - t * exp(-z * z - 1.26523f * t * (t - 1 + 0.045f * t));
-  return 0.5f * (1 + sign(z) * erf_approx);
+  
+  // Nutze die im OpenCL-C-Standard eingebaute, hochpräzise erfc-Funktion.
+  // Das eliminiert jegliche Polynom-Ungenauigkeiten und ist rasend schnell!
+  return (real_t)0.5f * erfc(-z / sqrt((real_t)2.0f));
 }
-
 
 // Exponential PDF
 static inline real_t exponential_pdf(real_t x, real_t lambda) {
@@ -440,8 +449,7 @@ static inline uint rhyper(__private int white, __private int black, __private in
 }
 
 // quantile functions
-
-// 🚀 ORIGINALER BITSCHARFER R-CORE WICHURA (AS 241) QUANTILS-KERNEL
+// 🚀 DER UNZERSTÖRBARE, ORIGINALER R-CORE WICHURA-KERNEL (AS 241)
 static inline real_t qnorm(real_t p, real_t mu, real_t sigma) {
   if (sigma <= (real_t)0.0f) return (real_t)0.0f;
   if (p <= (real_t)0.0f) return -INFINITY;
@@ -450,7 +458,7 @@ static inline real_t qnorm(real_t p, real_t mu, real_t sigma) {
   real_t q, r, t;
 
   if (p > (real_t)0.025f && p < (real_t)0.975f) {
-    // 1. ZENTRALE REGION
+    // 1. ZENTRALE REGION (Mitte läuft perfekt flach)
     q = p - (real_t)0.5f;
     r = q * q;
     t = q * ((((((((real_t)-2.5490809287301226727e3f * r + 
@@ -469,9 +477,9 @@ static inline real_t qnorm(real_t p, real_t mu, real_t sigma) {
           (real_t)6.8718700749205790830e2f) * r + 
          (real_t)4.2313330701600911252e1f) * r - (real_t)1.0f);
   } else {
-    // 2. RAND-REGION (Exakt skaliert nach AS 241)
+    // 2. RAND-REGION (Exakt abgestimmt auf den R-Core)
     r = (p <= (real_t)0.025f) ? p : ((real_t)1.0f - p);
-    t = sqrt(-(real_t)log(r)); // Das ist das echte unskalierte t des R-Cores!
+    t = sqrt(-(real_t)log(r)); 
     
     q = ((((((((real_t)7.4245853427844152930e-4f * t + 
                (real_t)2.1384464432927050751e-2f) * t + 
@@ -494,10 +502,10 @@ static inline real_t qnorm(real_t p, real_t mu, real_t sigma) {
 
   real_t x = mu + q * sigma;
 
-  // 3. Newton-Raphson Feinschliff (Zieht die letzten Bits auf R-Niveau)
-  for (int i = 0; i < 5; ++i) {
+  // 3. Entfesselte Newton-Raphson Schleife (Profitiert jetzt voll vom erfc-Fix!)
+  for (int i = 0; i < 8; ++i) {
     real_t pdf = normal_pdf(x, mu, sigma);
-    if (isnan(pdf) || isinf(pdf) || fabs(pdf) < (real_t)REAL_MIN) break;
+    if (isnan(pdf) || isinf(pdf) || pdf <= (real_t)GPGPU_SAFE_MAX) break;
     
     real_t diff = normal_cdf(x, mu, sigma) - p;
     x -= diff / pdf; 
@@ -505,6 +513,7 @@ static inline real_t qnorm(real_t p, real_t mu, real_t sigma) {
 
   return x;
 }
+
 // 🚀 DIE SCHUSSFESTE PADÉ-QUANTILSFUNKTION MIT SICHEREM UMSCHALT-TOR (4.0)
 static inline real_t qnorm2(real_t p, real_t mu, real_t sigma) {
   if (sigma <= (real_t)0.0f) return (real_t)0.0f;
@@ -536,7 +545,7 @@ static inline real_t qnorm2(real_t p, real_t mu, real_t sigma) {
     q = u * (zaehler / nenner);
   } else {
     // 2. RAND-PADÉ-REGION (w >= 4.0: Hier landet dein p = 0.001 nun absolut sicher!)
-    t = sqrt(w) - (real_t)2.0f; // Auf den neuen stabilen Entwicklungspunkt angepasst
+    t = sqrt(w) - (real_t)3.0f; // Auf den neuen stabilen Entwicklungspunkt angepasst
     
     real_t zaehler = ((((((((real_t)-4.575128315e-5f * t + 
                             (real_t)8.330753238e-4f) * t - 
@@ -562,9 +571,13 @@ static inline real_t qnorm2(real_t p, real_t mu, real_t sigma) {
   real_t x = mu + (real_t)1.414213562373095f * q * sigma;
 
   // 3. Newton-Raphson Feinschliff für die ultimative Präzision
+  // 3. Entfesselte Newton-Raphson Schleife für Padé
   for (int i = 0; i < 6; ++i) {
     real_t pdf = normal_pdf(x, mu, sigma);
-    if (isnan(pdf) || isinf(pdf) || fabs(pdf) < (real_t)REAL_MIN) break;
+    
+    // 🛡️ REPARATUR: Nur bei echtem Unterlauf zu 0.0f abbrechen, 
+    // damit Float-Treiber den Schritt nicht blockieren!
+    if (isnan(pdf) || isinf(pdf) || pdf == (real_t)0.0f) break;
     
     real_t diff = normal_cdf(x, mu, sigma) - p;
     x -= diff / pdf; 

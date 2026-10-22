@@ -553,7 +553,20 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
 
     ## handle chached version
     kernel_base_name <- tools::file_path_sans_ext(basename(kernel_file))
-    cache_key <- paste0(".", kernel_base_name, "_ocl_internal")
+    
+    ##  Suffixe für Modifikatoren erstellen, die die Kompilierung verändern
+    fp64_suffix    <- if(isTRUE(getOption("OpenCLeaR.has_fp64"))) "_fp64" else "_fp32"
+    prec_suffix <- if (force_float) "_force_float" else "_no_force_float"
+    ## math_suffix <- if (math_lib) "_math" else "_nomath"
+    
+    # Der Cache-Key wird dadurch eindeutig für diese Konfiguration!
+    cache_key <- paste0(".",
+                        kernel_base_name,
+                        fp64_suffix,
+                        prec_suffix,
+                        ##math_suffix,
+                        "_ocl_internal")
+    
     cache_env <- asNamespace("OpenCLeaR")$.OpenCLeaR_Env
     
     if (cache && exists(cache_key, envir = cache_env)) {
@@ -561,8 +574,7 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
         if (is.function(func)) {
             return(func)
         }
-    }
-    
+    }    
     #  hide state via lexical scoping here
     compiled_func   <- NULL
     last_device_id  <- NULL

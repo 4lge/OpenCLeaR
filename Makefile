@@ -21,6 +21,7 @@ dist-clean: clean
 	find . -name \*~ -delete
 	rm -rf 	src/backend/CMakeFiles/ 
 	rm -rf 	.cl_cache
+	rm -rf 	inst/tinytest/.cl_cache
 	rm -rf inst/include/*
 	rm -rf inst/tinytest/.cl_cache
 	rm -f src/backend/CMakeCache.txt
