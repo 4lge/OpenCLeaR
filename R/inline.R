@@ -367,6 +367,14 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         "    device->set_kernel_file(\"", kernel_file, "\");\n",
         "    device->set_kernel_name(\"", kernel_file, "\");\n",
         "    device->initialize_binary_cache_path();\n",
+        # HIER IST DIE BRÜCKE ZUM C++ BACKEND:
+        # Wenn force_float aktiv ist, zwingen wir das C++-Device-Objekt in den Float-Modus.
+        # Dadurch hängt das C++-Backend beim ocl_compiler-Aufruf automatisch das '-f' an!
+        if (isTRUE(force_float)) {
+            "    device->info.is_fp64_capable = 0;\n"
+        } else {
+            ""
+        },
         math_lib_injection,
         if (isTRUE(debug)) {
             paste0(
@@ -554,49 +562,80 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
     ## handle chached version
     kernel_base_name <- tools::file_path_sans_ext(basename(kernel_file))
     
-    ##  Suffixe für Modifikatoren erstellen, die die Kompilierung verändern
-    fp64_suffix    <- if(isTRUE(getOption("OpenCLeaR.has_fp64"))) "_fp64" else "_fp32"
-    prec_suffix <- if (force_float) "_force_float" else "_no_force_float"
-    ## math_suffix <- if (math_lib) "_math" else "_nomath"
-    
-    # Der Cache-Key wird dadurch eindeutig für diese Konfiguration!
-    cache_key <- paste0(".",
-                        kernel_base_name,
-                        fp64_suffix,
-                        prec_suffix,
-                        ##math_suffix,
-                        "_ocl_internal")
-    
-    cache_env <- asNamespace("OpenCLeaR")$.OpenCLeaR_Env
-    
-    if (cache && exists(cache_key, envir = cache_env)) {
-        func <- get(cache_key, envir = cache_env)
-        if (is.function(func)) {
-            return(func)
-        }
-    }    
     #  hide state via lexical scoping here
-    compiled_func   <- NULL
-    last_device_id  <- NULL
-    last_fp64_state <- NULL
+    compiled_func    <- NULL
+    last_device_id   <- NULL
+    last_fp64_state  <- NULL
     last_force_float <- NULL
+    last_cache_key   <- NULL 
 
-    # the final function
+    # the final function (wird an .rnorm_ocl_internal geliefert)
     function(...) {
-        #  1. get hardware state
-        current_device  <- OpenCLeaR::GetActiveDeviceInfo()
-        current_id      <- current_device$Device_ID
         
-        # determin fp64 capability, ignoriered  if force_float is set
-        current_fp64    <- isTRUE(getOption("OpenCLeaR.has_fp64"))
+        ##  1. OS und CPU-Architektur ermitteln & bereinigen
+        sys_info <- Sys.info()
+        platform_prefix <- paste0(tolower(sys_info[["sysname"]]), "_", tolower(sys_info[["machine"]]))
+        
+        ## ⚡ 2. Aktive OpenCL-Hardware auslesen & bereinigen
+        dev_info <- OpenCLeaR::GetActiveDeviceInfo()
+        
+        # 🛡️ Absicherung gegen NULL / Länge 0 (Verhindert 'argument is of length zero')
+        raw_vendor <- dev_info$Vendor
+        raw_device <- dev_info$Name
+        
+        if (is.null(raw_vendor) || length(raw_vendor) == 0 || raw_vendor == "") {
+            raw_vendor <- "unbound"
+        }
+        if (is.null(raw_device) || length(raw_device) == 0 || raw_device == "") {
+            raw_device <- "device"
+        }
+        
+        # Jetzt sind die Strings garantiert valide und wir können sie sicher transformieren
+        clean_vendor <- gsub("[^a-zA-Z0-9]", "_", tolower(raw_vendor))
+        clean_device <- gsub("[^a-zA-Z0-9]", "_", tolower(raw_device))
+        
+        # Optionale Bereinigung von doppelten Unterstrichen
+        clean_vendor <- gsub("_+", "_", clean_vendor)
+        clean_device <- gsub("_+", "_", clean_device)
+        ##  3. Präzisions-Suffixe bestimmen
+        fp64_suffix <- if(isTRUE(getOption("OpenCLeaR.has_fp64"))) "_fp64" else "_fp32"
+        prec_suffix <- if (force_float) "_force_float" else "_no_force_float"
+        
+        ##  DER UNZERSTÖRBARE MULTI-PLATFORM CACHE-KEY:
+        cache_key <- paste0(".",
+                            kernel_base_name, "_",
+                            platform_prefix, "_",
+                            clean_vendor, "_",
+                            clean_device,
+                            fp64_suffix,
+                            prec_suffix,
+                            "_ocl_internal")
+        
+        cache_env <- asNamespace("OpenCLeaR")$.OpenCLeaR_Env
+    
+        #  DER TRICK: Wenn im globalen Cache, laden wir sie lokal in den Scope!
+        if (cache && is.null(compiled_func) && exists(cache_key, envir = cache_env)) {
+            global_func <- get(cache_key, envir = cache_env)
+            if (is.function(global_func)) {
+                compiled_func <<- global_func
+                last_cache_key   <<- cache_key
+                last_device_id   <<- dev_info$Index
+                last_fp64_state  <<- isTRUE(getOption("OpenCLeaR.has_fp64"))
+                last_force_float <<- force_float
+            }
+        }    
+
+        ##  4. Lokaler Hardware-Zustand für den Re-Compile-Check bestimmen
+        current_id   <- dev_info$Index
+        current_fp64 <- isTRUE(getOption("OpenCLeaR.has_fp64"))
 
         if (isTRUE(force_float)) {
             current_fp64 <- FALSE
         }
 
-        ##  2. has an hardware chaneg occured or is this the initial call?
-        ##browser()
+        ##  5. Hat sich das Device geändert oder ist die lokale Instanz veraltet?
         need_recompile <- is.null(compiled_func) ||
+                          (cache_key != last_cache_key) || 
                           (current_id != last_device_id) ||
                           (current_fp64 != last_fp64_state) ||
                           (force_float != last_force_float)
@@ -604,7 +643,6 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
         if (need_recompile) {
             cat(" [OpenCLeaR Runtime] hardware change or float/double mode change detected! recompile ...\n")
 
-            #  pass all arguments here
             compiled_func <<- OpenCLeaR::inlineCL(
                 signature      = signature,
                 kernel_file    = kernel_file,
@@ -614,17 +652,19 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
                 verbose        = verbose,
                 debug          = debug
             )
-
-            # save states for next call
+            
+            last_cache_key   <<- cache_key
             last_device_id   <<- current_id
             last_fp64_state  <<- current_fp64
             last_force_float <<- force_float
+            
+            ##  6. Im globalen Paket-Environment für andere Wrapper/Sitzungen sichern
+            if (cache) {
+                assign(cache_key, compiled_func, envir = cache_env)
+            }
         }
-        ## update chache
-        if (cache) {
-            assign(cache_key, compiled_func, envir = cache_env)
-        }
-        #  3. direct run
+        
+        #  7. Ausführen mit den echten Argumenten (Liefert IMMER Daten!)
         return(compiled_func(...))
     }
 }

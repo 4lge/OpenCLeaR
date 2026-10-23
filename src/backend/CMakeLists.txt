@@ -51,8 +51,7 @@ ExternalProject_Add(OpenCL_CLHPP
 execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install/include/")
 ExternalProject_Add(OpenCL_Wrapper
     GIT_REPOSITORY https://github.com/4lge/OpenCL-Wrapper.git
-    #GIT_TAG 6f6f00de23e28cc610fd15abd8252fdced031cdc
-    GIT_TAG 790ed1bb5ea35568242011075ce03db1dc4c999e
+    GIT_TAG 2b6756b895ac16f3581deb431c6216eb4a6887eb
     SOURCE_DIR ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
 
     CONFIGURE_COMMAND ""  # Don't run cmake
@@ -310,7 +309,7 @@ TARGET_COMPILE_DEFINITIONS(ocl_compiler PRIVATE
 #    CL_HPP_MINIMUM_OPENCL_VERSION=120
 )
 # 3. Basis-Abhängigkeit (Der Quellcode muss aus Git da sein)
-ADD_DEPENDENCIES(ocl_compiler OpenCL_Wrapper)
+ADD_DEPENDENCIES(ocl_compiler OpenCL_Headers OpenCL_CLHPP OpenCL_Wrapper)
 
 # 4. 🎯 DIE DYNAMISCHE WEICHE FÜR TREIBERLOSE SYSTEME:
 if(NOT OpenCL_FOUND)
@@ -335,6 +334,10 @@ TARGET_INCLUDE_DIRECTORIES(ocl_compiler PRIVATE
     ${OpenCL_INCLUDE_DIRS}
     ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
     ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src
+    # 🚀 FIX: Wir tunneln den Compiler direkt auf den lokalen JIT-Installations-Ordner!
+    # Da dieser Pfad innerhalb des Build-Verzeichnisses liegt, wertet CMake ihn dynamisch aus.
+    ${CMAKE_CURRENT_BINARY_DIR}/local_install/include
+    # Als eiserne Fallbacks für lokale Builds:
     ${CMAKE_SOURCE_DIR}/lib/OpenCL-Headers
     ${CMAKE_SOURCE_DIR}/lib/OpenCL-CLHPP/include
 )
