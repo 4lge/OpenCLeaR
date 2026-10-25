@@ -9,21 +9,21 @@ int total_matrix_size = N_dim * N_dim;
 NumericVector out_K(total_matrix_size);
 
 // 3. Create OpenCL variables using your native Memory layers
-Memory<real_t> GpuX(*device, N_dim);
-Memory<real_t> GpuK(*device, total_matrix_size);
+Memory<real> GpuX(*device, N_dim);
+Memory<real> GpuK(*device, total_matrix_size);
 
 // 4. Fill OpenCL host-buffer components
 for(int i = 0; i < N_dim; ++i) {
-    GpuX[i] = (real_t)r_x[i];
+    GpuX[i] = (real)r_x[i];
 }
 
 // 5. Transfer input coordinates from host to VRAM
 GpuX.write_to_device();
 
-// 6. Map constants and scalars safely to real_t
-real_t length_scale_typed = as<real_t>(length_scale);
-real_t sigma_f_sq_typed   = as<real_t>(sigma_f_sq);
-real_t sigma_n_sq_typed   = as<real_t>(sigma_n_sq);
+// 6. Map constants and scalars safely to real
+real length_scale_typed = as<real>(length_scale);
+real sigma_f_sq_typed   = as<real>(sigma_f_sq);
+real sigma_n_sq_typed   = as<real>(sigma_n_sq);
 
 // 7. Define local workgroup size (0 triggers the driver's automatic selection)
 uint local_workgroup_size = 0;

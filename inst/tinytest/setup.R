@@ -1,5 +1,7 @@
 library(OpenCLeaR)
-EnsureOpenclInitialized()
+ActivateDevice(0)
+if(!(EnsureOpenclInitialized()))
+   exit_file("could not initialize OpenCL")
 inline::registerPlugin("inlineCxxPlugin", OpenCLeaR::inlineCxxPlugin())
 inline::registerPlugin("inlineCxxPluginFloat", OpenCLeaR::inlineCxxPluginFloat())
 inline::registerPlugin("inlineCxxPluginDouble", OpenCLeaR::inlineCxxPluginDouble())

@@ -2,8 +2,8 @@
 
 // read input, compare to signature in oclFunction call:
 int r_n        = as<int>(n);
-real_t r_mean  = as<real_t>(mean);
-real_t r_sd    = as<real_t>(sd);
+real r_mean  = as<real>(mean);
+real r_sd    = as<real>(sd);
 
 // Allocate output variables
 NumericVector r_norm(r_n);
@@ -14,7 +14,7 @@ std::vector<int> r_seed = e[".Random.seed"];
 int base_seed = r_seed[r_seed[1] + 1];
 
 // Create OpenCL variables (Nur Output-Buffer auf der GPU)
-Memory<real_t> Output(*device, r_n);
+Memory<real> Output(*device, r_n);
 
 // create the kernel (base_seed wird als const int übergeben)
 Kernel rnorm(*device, r_n, "norm_rng", Output, base_seed, r_mean, r_sd);

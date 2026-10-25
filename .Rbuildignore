@@ -19,3 +19,7 @@
 # 4. Ignoriert R-spezifische Check-Überbleibsel
 ^OpenCLeaR\.Rcheck/
 ^.*\.Rcheck$
+
+Makefile
+NAMESPACE.in
+TODO.md

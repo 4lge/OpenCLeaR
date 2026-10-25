@@ -8,12 +8,12 @@ int n0 = x0.size();
 int n = x.size(); 
 NumericVector r_z0(n0);
 
-Memory<real_t> gpu_x0(*device, n0); 
-Memory<real_t> gpu_y0(*device, n0); 
-Memory<real_t> gpu_z0(*device, n0);
-Memory<real_t> gpu_x(*device, n); 
-Memory<real_t> gpu_y(*device, n); 
-Memory<real_t> gpu_z(*device, n);
+Memory<real> gpu_x0(*device, n0); 
+Memory<real> gpu_y0(*device, n0); 
+Memory<real> gpu_z0(*device, n0);
+Memory<real> gpu_x(*device, n); 
+Memory<real> gpu_y(*device, n); 
+Memory<real> gpu_z(*device, n);
 
 // Jetzt klappt der Zugriff über [] absolut makellos und performant!
 for(int i=0; i<n0; ++i) { gpu_x0[i] = x0[i]; gpu_y0[i] = y0[i]; }
@@ -22,7 +22,7 @@ for(int j=0; j<n; ++j)  { gpu_x[j] = x[j]; gpu_y[j] = y[j]; gpu_z[j] = z[j]; }
 gpu_x0.write_to_device(); gpu_y0.write_to_device();
 gpu_x.write_to_device(); gpu_y.write_to_device(); gpu_z.write_to_device();
 
-Kernel k(*device, n0, "idw_kernel", gpu_x0, gpu_y0, gpu_z0, gpu_x, gpu_y, gpu_z, n0, n, as<real_t>(p));
+Kernel k(*device, n0, "idw_kernel", gpu_x0, gpu_y0, gpu_z0, gpu_x, gpu_y, gpu_z, n0, n, as<real>(p));
 k.run(); 
 gpu_z0.read_from_device();
 

@@ -2,7 +2,7 @@
 
 // read input, compare to signature in oclFunction call:
 int r_n         = as<int>(n);
-real_t r_lambda = as<real_t>(lambda);
+real r_lambda = as<real>(lambda);
 
 // Allocate output variables
 IntegerVector r_pois(r_n);

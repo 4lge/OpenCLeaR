@@ -51,7 +51,8 @@ ExternalProject_Add(OpenCL_CLHPP
 execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install/include/")
 ExternalProject_Add(OpenCL_Wrapper
     GIT_REPOSITORY https://github.com/4lge/OpenCL-Wrapper.git
-    GIT_TAG 2b6756b895ac16f3581deb431c6216eb4a6887eb
+#    GIT_TAG 4187a43cdb2098eee935f6ee95ea1a8e1cdaeb6a
+    GIT_TAG eb7dd8dc341d7f29e6925f3d3479937a4de65c68
     SOURCE_DIR ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
 
     CONFIGURE_COMMAND ""  # Don't run cmake
@@ -363,3 +364,59 @@ ADD_CUSTOM_COMMAND(TARGET ocl_compiler POST_BUILD
     COMMENT "📦 Kompiliere ocl_compiler mit R-Toolchain und kopiere nach inst/bin/"
 )
 
+# Fix für "not terminated with a newline" Warnungen aus R CMD check
+install(CODE "
+  set(FILES_TO_FIX
+    \"\${CMAKE_CURRENT_SOURCE_DIR}/inst/include/cl_error_lookup.hpp\"
+    \"\${CMAKE_CURRENT_BINARY_DIR}/local_install/include/cl_error_lookup.hpp\"
+    # Falls die externen Test-Dateien im Quellcode auch korrigiert werden sollen:
+    \"\${CMAKE_CURRENT_SOURCE_DIR}/src/backend/lib/CLErrorLookup/CLErrorLookup/include/cl_error_lookup.hpp\"
+    \"\${CMAKE_CURRENT_SOURCE_DIR}/src/backend/lib/OpenCL-CLHPP/tests/test_versions.cpp\"
+  )
+
+  foreach(FILE_PATH \${FILES_TO_FIX})
+    if(EXISTS \"\${FILE_PATH}\")
+      # Datei einlesen
+      file(READ \"\${FILE_PATH}\" FILE_CONTENT)
+      
+      # Wenn die Datei nicht mit einem Newline endet, eines anhängen
+      if(NOT \"\${FILE_CONTENT}\" MATCHES \"\\n$\")
+        message(STATUS \"[OpenCLeaR] Füge fehlendes Newline an: \${FILE_PATH}\")
+        file(APPEND \"\${FILE_PATH}\" \"\\n\")
+      endif()
+    endif()
+  endforeach()
+")
+
+# Bereinigung der Dateien, die R CMD check stören
+# Dieser Code läuft am Ende des Build-Prozesses
+#add_custom_target(cleanup_r_check ALL
+#    COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install"
+#    COMMAND ${CMAKE_COMMAND} -E remove -f
+#        "${CMAKE_CURRENT_SOURCE_DIR}/lib/OpenCL-CLHPP/external/CMock/vendor/unity/examples/example_2/test/test_runners/TestProductionCode2_Runner.c"
+#        "${CMAKE_CURRENT_SOURCE_DIR}/lib/OpenCL-CLHPP/external/CMock/vendor/unity/examples/example_2/test/test_runners/TestProductionCode_Runner.c"
+#    COMMENT "Bereinige temporäre Dateien für R CMD check..."
+#)
+# Bereinigung nach Abschluss aller Build- und Installationsschritte
+install(CODE "
+  message(STATUS \"[OpenCLeaR] Starte Bereinigung für R CMD check...\")
+
+  # 1. Pfade definieren
+  set(LOCAL_INSTALL_DIR \"\${CMAKE_CURRENT_BINARY_DIR}/local_install\")
+  set(UNITY_RUNNER_1 \"\${CMAKE_CURRENT_SOURCE_DIR}/lib/OpenCL-CLHPP/external/CMock/vendor/unity/examples/example_2/test/test_runners/TestProductionCode2_Runner.c\")
+  set(UNITY_RUNNER_2 \"\${CMAKE_CURRENT_SOURCE_DIR}/lib/OpenCL-CLHPP/external/CMock/vendor/unity/examples/example_2/test/test_runners/TestProductionCode_Runner.c\")
+
+  # 2. local_install Ordner sicher entfernen (falls er nicht mehr gebraucht wird)
+  if(IS_DIRECTORY \"\${LOCAL_INSTALL_DIR}\")
+    message(STATUS \"[OpenCLeaR] Entferne temporären Ordner: \${LOCAL_INSTALL_DIR}\")
+    file(REMOVE_RECURSE \"\${LOCAL_INSTALL_DIR}\")
+  endif()
+
+  # 3. Die unvollständigen Unity-C-Dateien löschen
+  foreach(RUNNER_FILE \${UNITY_RUNNER_1} \${UNITY_RUNNER_2})
+    if(EXISTS \"\${RUNNER_FILE}\")
+      message(STATUS \"[OpenCLeaR] Entferne fehlerhafte Test-Datei: \${RUNNER_FILE}\")
+      file(REMOVE \"\${RUNNER_FILE}\")
+    endif()
+  endforeach()
+")

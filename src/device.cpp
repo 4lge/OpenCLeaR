@@ -1,4 +1,5 @@
 #include <Rcpp.h>
+
 #include "device.hpp" // Enthält die Definition deines TransientDevice-Structs
 #include "opencl.hpp" // Enthält deine modifizierte Device-Klasse
 #include "backend/init.hpp" // 🚀 Macht global_opencl_device und Device sichtbar!

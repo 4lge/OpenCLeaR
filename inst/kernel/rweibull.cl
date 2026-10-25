@@ -1,17 +1,5 @@
 // -*- mode: C -*-
-    
-       kernel void weibull_rng(global real_t* output, const int seed,
-                               const real_t shape, const real_t scale) {
-	 
-         // Initialize Mersenne Twister state
-         uint mt[624];
-         int idx = 624;
-         mt[0] = seed + get_global_id(0);
-         for (int i = 1; i < 624; ++i) {
-           mt[i] = (181243 * (mt[i - 1] ^ (mt[i - 1] >> 30)) + i);
-         }
-
-         real_t r_weibull = rweibull(scale, shape, &idx, mt);
-
-         output[get_global_id(0)] = r_weibull;
-       }
+kernel void weibull_rng(global real* output, const int seed, const real shape, const real scale) {
+  INIT_MT(seed);
+  output[get_global_id(0)] = rweibull(shape, scale);
+}

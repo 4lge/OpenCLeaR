@@ -17,9 +17,9 @@ c_code_inline <- gsub(
   perl = TRUE
 )
 
-# 3. Fließkommatypen bitscharf auf dein portables real_t umerziehen
-c_code_inline <- gsub("\\bdouble(\\s*\\*+)?\\b", "real_t\\1", c_code_inline, perl = TRUE)
-c_code_inline <- gsub("\\bfloat(\\s*\\*+)?\\b", "real_t\\1", c_code_inline, perl = TRUE)
+# 3. Fließkommatypen bitscharf auf dein portables real umerziehen
+c_code_inline <- gsub("\\bdouble(\\s*\\*+)?\\b", "real\\1", c_code_inline, perl = TRUE)
+c_code_inline <- gsub("\\bfloat(\\s*\\*+)?\\b", "real\\1", c_code_inline, perl = TRUE)
 
 # 4. Windows Wagenrückläufe (\r) restlos eliminieren
 c_code_inline <- gsub("\r", "", c_code_inline)

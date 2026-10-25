@@ -2,8 +2,8 @@
 
 // read input, compare to signature in oclFunction call:
 int r_n = as<int>(n);
-real_t r_min        = as<real_t>(min);
-real_t r_max        = as<real_t>(max);
+real r_min        = as<real>(min);
+real r_max        = as<real>(max);
 
 // Allocate output variables
 NumericVector r_unif(r_n);
@@ -14,9 +14,9 @@ Environment e = Environment::global_env();
 std::vector<int> r_seed = e[".Random.seed"];
 int base_seed = r_seed[r_seed[1] + 1];
 
-// Create OpenCL variables, use real_t instead of flaot or double so it will
+// Create OpenCL variables, use real instead of flaot or double so it will
 // adapt automatically to the hardware capabilies found in your OpenCL device
-Memory<real_t> Output(*device, r_n);
+Memory<real> Output(*device, r_n);
 
 
 

@@ -1,17 +1,12 @@
 // -*- mode: C -*-
     
-kernel void unif_rng(global real_t* output, const int seed,
-                     const real_t lower, const real_t upper) {
+kernel void unif_rng(global real* output, const int seed,
+                     const real lower, const real upper) {
   
   // Initialize Mersenne Twister state
-  uint mt[624];
-  int idx = 624;
-  mt[0] = seed + get_global_id(0);
-  for (int i = 1; i < 624; ++i) {
-    mt[i] = (181243 * (mt[i - 1] ^ (mt[i - 1] >> 30)) + i);
-  }
+  INIT_MT(seed);
   
-  real_t r_unif = runif(lower, upper, &idx, mt);
+  real r_unif = runif(lower, upper);
   
   output[get_global_id(0)] = r_unif;
 }

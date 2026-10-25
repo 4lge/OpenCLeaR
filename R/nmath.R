@@ -27,8 +27,8 @@ ImportNmathKernels <- function(target_dir = NULL) {
     perl = TRUE
   )
   
-  c_code_inline <- gsub("\\bdouble(\\s*\\*+)?\\b", "real_t\\1", c_code_inline, perl = TRUE)
-  c_code_inline <- gsub("\\bfloat(\\s*\\*+)?\\b", "real_t\\1", c_code_inline, perl = TRUE)
+  c_code_inline <- gsub("\\bdouble(\\s*\\*+)?\\b", "real\\1", c_code_inline, perl = TRUE)
+  c_code_inline <- gsub("\\bfloat(\\s*\\*+)?\\b", "real\\1", c_code_inline, perl = TRUE)
   c_code_inline <- gsub("\r", "", c_code_inline)
   
   if(is.null(target_dir)){

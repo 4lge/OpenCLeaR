@@ -14,7 +14,7 @@
 ##' take care about the float/double characteristics on your own.
 ##' You can force the use of float or double by choosing
 ##' \code{inclineCxxPluginFloat} or  \code{inclineCxxPluginDouble} explicitely
-##' while using \code{real_t} as automatically generated typedef both in your CL und
+##' while using \code{real} as automatically generated typedef both in your CL und
 ##' C++ code. An esier way is to use \code{inlineCL} which automates to inline call or
 ##' even \code{oclFunction} which completely automates this task and adapts on the fly to your
 ##' OpenCL device.
@@ -120,11 +120,11 @@ inlineCxxPluginDouble <- function(...) {
 ##' @details This function automates the process of generating a OpenCL function
 ##' via the inline Plugin(s) attached to this library. You have to specify
 ##'   1. A file (or in future vesions a string) containing the CL C code. You should use
-##'      \code{real_t} to get automatically \code{double} or \code{float}
+##'      \code{real} to get automatically \code{double} or \code{float}
 ##'      according to your active OpenCL device.
 ##'   2. A file (or in furture vesions a string) containing the Rcpp interface using the OpenCL
 ##'      abstraction (Device, Memory, Kernel) delivered by OpenCL-Wrapper.
-##'      Again you should use \code{real_t} to get automatically
+##'      Again you should use \code{real} to get automatically
 ##'      \code{double} or \code{float} according to your active OpenCL device.
 ##'      You alread have access to a correctly prepared Device object with there
 ##'      pointer \code{device*}.
@@ -135,16 +135,16 @@ inlineCxxPluginDouble <- function(...) {
 ##' if(EnsureOpenclInitialized()){
 ##'# an invers distance weighting example:
 ##' kernel_src <- "
-##' __kernel void idw_kernel(__global const real_t* x0, __global const real_t* y0, __global real_t* z0,
-##'                          __global const real_t* x, __global const real_t* y, __global const real_t* z,
-##'                          const int n0, const int n, const real_t p) {
+##' __kernel void idw_kernel(__global const real* x0, __global const real* y0, __global real* z0,
+##'                          __global const real* x, __global const real* y, __global const real* z,
+##'                          const int n0, const int n, const real p) {
 ##'     int i = get_global_id(0);
 ##'     if (i >= n0) return;
-##'     real_t wsum = 0.0, num = 0.0;
+##'     real wsum = 0.0, num = 0.0;
 ##'     for (int j = 0; j < n; j++) {
-##'         real_t d = sqrt((x0[i]-x[j])*(x0[i]-x[j]) + (y0[i]-y[j])*(y0[i]-y[j]));
+##'         real d = sqrt((x0[i]-x[j])*(x0[i]-x[j]) + (y0[i]-y[j])*(y0[i]-y[j]));
 ##'         if (d < 1e-9) { z0[i] = z[j]; return; }
-##'         real_t w = 1.0 / pow(d, p);
+##'         real w = 1.0 / pow(d, p);
 ##'         wsum += w; num += w * z[j];
 ##'     }
 ##'     z0[i] = num / wsum;
@@ -162,12 +162,12 @@ inlineCxxPluginDouble <- function(...) {
 ##'     int n = x.size(); 
 ##'     NumericVector r_z0(n0);
 ##'
-##'     Memory<real_t> gpu_x0(*device, n0); 
-##'     Memory<real_t> gpu_y0(*device, n0); 
-##'     Memory<real_t> gpu_z0(*device, n0);
-##'     Memory<real_t> gpu_x(*device, n); 
-##'     Memory<real_t> gpu_y(*device, n); 
-##'     Memory<real_t> gpu_z(*device, n);
+##'     Memory<real> gpu_x0(*device, n0); 
+##'     Memory<real> gpu_y0(*device, n0); 
+##'     Memory<real> gpu_z0(*device, n0);
+##'     Memory<real> gpu_x(*device, n); 
+##'     Memory<real> gpu_y(*device, n); 
+##'     Memory<real> gpu_z(*device, n);
 ##'     
 ##'     // Jetzt klappt der Zugriff über [] absolut makellos und performant!
 ##'     for(int i=0; i<n0; ++i) { gpu_x0[i] = x0[i]; gpu_y0[i] = y0[i]; }
@@ -176,7 +176,7 @@ inlineCxxPluginDouble <- function(...) {
 ##'     gpu_x0.write_to_device(); gpu_y0.write_to_device();
 ##'     gpu_x.write_to_device(); gpu_y.write_to_device(); gpu_z.write_to_device();
 ##'     
-##'     Kernel k(*device, n0, \"idw_kernel\", gpu_x0, gpu_y0, gpu_z0, gpu_x, gpu_y, gpu_z, n0, n, as<real_t>(p));
+##'     Kernel k(*device, n0, \"idw_kernel\", gpu_x0, gpu_y0, gpu_z0, gpu_x, gpu_y, gpu_z, n0, n, as<real>(p));
 ##'     k.run(); 
 ##'     gpu_z0.read_from_device();
 ##'     
@@ -358,8 +358,8 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         "    Rcpp::Function system_file(\"system.file\");\n",
         "    std::string compiler_dir = Rcpp::as<std::string>(system_file(\"bin\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
         "    std::string kernel_dir  = Rcpp::as<std::string>(system_file(\"kernel\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
-        "    std::cout << \"Installierter Compiler-Pfad aus Rcpp: \" << compiler_dir << std::endl;\n",
-        "    std::cout << \"Installierter Kernels-Pfad aus Rcpp: \" << kernel_dir << std::endl;\n",
+        "    //std::cout << \"Installierter Compiler-Pfad aus Rcpp: \" << compiler_dir << std::endl;\n",
+        "    //std::cout << \"Installierter Kernels-Pfad aus Rcpp: \" << kernel_dir << std::endl;\n",
         
         #  SCHRITT 1: Pfad im Device-Objekt festschreiben, BEVOR die JIT-Pipeline anläuft!
         "    device->set_kernel_path(kernel_dir);\n", 
@@ -403,9 +403,9 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         "    if(addr == 0) { Rcpp::stop(\" Kritischer Fehler: Device_Address ist NULL!\"); }\n",
         "    Device* device = reinterpret_cast<Device*>(addr);\n",
         "    #if FP64_MODE == 1\n",
-        "        typedef double real_t;\n",
+        "        typedef double real;\n",
         "    #else\n",
-        "        typedef float real_t;\n",
+        "        typedef float real;\n",
         "    #endif\n",
         full_cl_code,
         cpp_source

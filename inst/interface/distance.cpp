@@ -8,11 +8,11 @@
     int total_threads = nout; 
 
     // 2. Allokationsfreier Hardware-Tunnel
-    Memory<real_t> Input(*device, nin);
-    Memory<real_t> Output(*device, nout);
+    Memory<real> Input(*device, nin);
+    Memory<real> Output(*device, nout);
 
     for (int i = 0; i < nin; ++i) {
-        Input[i] = (real_t)r_mat[i];
+        Input[i] = (real)r_mat[i];
     }
     Input.write_to_device();
 

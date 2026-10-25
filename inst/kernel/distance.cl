@@ -1,6 +1,6 @@
 __kernel void distance_matrix(
-                              __global real_t* output,
-                              __global real_t* input,
+                              __global real* output,
+                              __global real* input,
                               const int N,
                               const int DIM){
 
@@ -19,9 +19,9 @@ __kernel void distance_matrix(
     
     // Symmetrie ausnutzen
     if (j < i) {
-      real_t tmpRes = 0; // 🎯 Dynamische 0 statt hartes 0.0f!
+      real tmpRes = 0; // 🎯 Dynamische 0 statt hartes 0.0f!
       for (int k = 0; k < DIM; ++k) {
-        real_t diff = input[i + k * N] - input[j + k * N];
+        real diff = input[i + k * N] - input[j + k * N];
         tmpRes += diff * diff;
       }
       tmpRes = sqrt(tmpRes);
