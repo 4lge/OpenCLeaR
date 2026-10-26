@@ -30,10 +30,22 @@ cmake .. -DCMAKE_BUILD_TYPE=Release || {
 	exit 1
 }
 
+# =========================================================================
+# 🎯 REPARATUR VOR DEM BUILD (Eliminiert die allerletzte Newline-NOTE)
+# =========================================================================
+TARGET_HEADER="src/backend/lib/CLErrorLookup/CLErrorLookup/include/cl_error_lookup.hpp"
+if [ -f "../../$TARGET_HEADER" ]; then
+    if [ "$(tail -c1 "../../$TARGET_HEADER" | wc -l)" -eq 0 ]; then
+        echo "📝 [configure] Füge fehlendes Newline an Quell-Header an..."
+        echo "" >> "../../$TARGET_HEADER"
+    fi
+fi
+
 cmake --build . || {
 	echo "Build failed..."
 	exit 1
 }
+
 
 # Copy the binary in src/
 DLL_NAME="libBACKEND."${SHLIB_EXT}
@@ -73,7 +85,7 @@ UNAME=$(uname)
 if [ "${UNAME}" = "Darwin" ]; then
     # 🍏 macOS Version: Suchpfad erweitert auf ../lib/ relativ zu libs/OpenCLeaR.so
     cat << 'EOF' > src/Makevars
-PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include 
+PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD
 PKG_LIBS = -Wl,-rpath,@loader_path/../lib/ -Wl,-rpath,@loader_path/ -L. -lBACKEND
 
 .PHONY: all prebuild
@@ -83,23 +95,63 @@ all: $(SHLIB)
 	@mkdir -p $(R_PACKAGE_DIR)/lib/
 	@if [ -f libBACKEND.dylib ]; then cp libBACKEND.dylib $(R_PACKAGE_DIR)/lib/; fi
 	@if [ -f backend/build/local_install/lib/libOpenCL.dylib ]; then cp backend/build/local_install/lib/libOpenCL.dylib $(R_PACKAGE_DIR)/lib/; fi
+	@echo "🧹 [OpenCLeaR] Entferne libBACKEND.dylib aus src/, um Duplikate in libs/ zu verhindern..."
+	@rm -f libBACKEND.so libBACKEND.dylib
 EOF
 
 else
     # 🐧 Linux Version: Suchpfad erweitert auf $ORIGIN/../lib
-    cat << 'EOF' > src/Makevars
-PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include 
+cat << 'EOF' > src/Makevars
+PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD 
 PKG_LIBS = -Wl,-rpath,'$$ORIGIN/../lib:$$ORIGIN' -Wl,--enable-new-dtags -L. -lBACKEND
 
 .PHONY: all prebuild
 
 all: $(SHLIB)
-	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das CRAN-konforme inst/lib Verzeichnis (Linux)..."
+	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das CRAN-konforme inst/lib Verzeichnis..."
 	@mkdir -p $(R_PACKAGE_DIR)/lib/
 	@if [ -f libBACKEND.so ]; then cp libBACKEND.so $(R_PACKAGE_DIR)/lib/; fi
 	@if [ -f backend/build/local_install/lib/libOpenCL.so ]; then cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/lib/; fi
 	@echo "🧹 [OpenCLeaR] Entferne libBACKEND.so aus src/, um Duplikate in libs/ zu verhindern..."
-	@rm -f libBACKEND.so
+	@rm -f libBACKEND.so libBACKEND.dylib
 EOF
 fi
+
+# =========================================================================
+# 🎯 NACHLAGE-REINIGUNG DIREKT IM CONFIGURATOR (CRAN-GARANTIE)
+# =========================================================================
+# Da wir hier garantiert im aktiven Build-Verzeichnis von R CMD build stehen,
+# löschen wir die Git-Reste und Makefiles plattformunabhängig per Shell:
+
+echo "🧹 [configure] Säubere Git-Rückstände und CMake-Artefakte..."
+rm -rf src/backend/lib/CLErrorLookup/.git
+rm -rf src/backend/lib/OpenCL-CLHPP/.git
+rm -rf src/backend/lib/OpenCL-Headers/.git
+rm -rf src/backend/lib/OpenCL-Wrapper/.git
+
+# Lösche die temporären GNU-Makefiles, die das Check-System bemängelt
+#rm -rf src/backend/build/  << das ist zu viel!
+rm -f  src/backend/build/Makefile
+rm -f  src/backend/lib/OpenCL-CLHPP/external/CMock/vendor/unity/extras/fixture/test/Makefile
+rm -f  src/backend/lib/OpenCL-CLHPP/external/CMock/vendor/unity/extras/memory/test/Makefile
+rm -f  src/backend/lib/OpenCL-CLHPP/external/CMock/vendor/unity/test/Makefile
+
+
+echo "📝 [configure] Repariere fehlende Newlines in Headern und C-Files..."
+
+for FILE in \
+    "src/backend/lib/CLErrorLookup/CLErrorLookup/include/cl_error_lookup.hpp" \
+    "src/backend/lib/OpenCL-CLHPP/external/CMock/vendor/unity/examples/example_2/test/test_runners/TestProductionCode2_Runner.c" \
+    "src/backend/lib/OpenCL-CLHPP/external/CMock/vendor/unity/examples/example_2/test/test_runners/TestProductionCode_Runner.c" \
+    "src/backend/lib/OpenCL-CLHPP/tests/test_versions.cpp" \
+    "inst/include/cl_error_lookup.hpp"    ; do
+    if [ -f "$FILE" ]; then
+        # Prüfen, ob das letzte Zeichen ein Newline ist
+        if [ "$(tail -c1 "$FILE" | wc -l)" -eq 0 ]; then
+            echo "   -> Füge Newline an: $FILE"
+            echo "" >> "$FILE"
+        fi
+    fi
+done
+
 exit 0

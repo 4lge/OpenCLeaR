@@ -47,7 +47,22 @@ inlineCxxPlugin <- function(...) {
     if (.Platform$OS.type == "windows") {
         settings$env$PKG_CXXFLAGS <- paste(settings$env$PKG_CXXFLAGS, " -mstackrealign ", sep="")
     }
-    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
+    
+    # 🚀 SCHRITT 6 UNIVERSELL ERWEITERT (Für Windows, Linux, macOS):
+    # Füge die CRAN-Schutzwall-Flags zu den CPPFLAGS hinzu, damit opencl.hpp stumm schaltet
+    # und Rcpp::Rcout zur Ausgabesteuerung lädt.
+    settings$env$PKG_CPPFLAGS <- paste(
+        settings$env$PKG_CPPFLAGS, 
+        " -DPLUGIN=1 -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD -I", 
+        system.file("include", package = "OpenCLeaR"), 
+        sep=""
+    )
+    
+    # 🚀 ZWINGE INLINE DIE RCPP-HEADER BEREITZUSTELLEN:
+    # Ohne diesen Eintrag bricht der Tinytest beim Parsen von opencl.hpp ab,
+    # weil der Compiler im temporären Verzeichnis "Rcpp.h" nicht finden kann.
+    settings$Depends <- unique(c(settings$Depends, "Rcpp"))
+    
     return(settings)
 }
 
@@ -77,7 +92,21 @@ inlineCxxPluginFloat <- function(...) {
     if (.Platform$OS.type == "windows") {
         settings$env$PKG_CXXFLAGS <- paste(settings$env$PKG_CXXFLAGS, " -mstackrealign ", sep="")
     }
-    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DFP64_MODE=0 -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
+    # 🚀 SCHRITT 6 UNIVERSELL ERWEITERT (Für Windows, Linux, macOS):
+    # Füge die CRAN-Schutzwall-Flags zu den CPPFLAGS hinzu, damit opencl.hpp stumm schaltet
+    # und Rcpp::Rcout zur Ausgabesteuerung lädt.
+    settings$env$PKG_CPPFLAGS <- paste(
+        settings$env$PKG_CPPFLAGS, 
+        " -DFP64_MODE=0 -DPLUGIN=1 -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD -I", 
+        system.file("include", package = "OpenCLeaR"), 
+        sep=""
+    )
+    
+    # 🚀 ZWINGE INLINE DIE RCPP-HEADER BEREITZUSTELLEN:
+    # Ohne diesen Eintrag bricht der Tinytest beim Parsen von opencl.hpp ab,
+    # weil der Compiler im temporären Verzeichnis "Rcpp.h" nicht finden kann.
+    settings$Depends <- unique(c(settings$Depends, "Rcpp"))
+
     return(settings)
 }
 
@@ -107,7 +136,21 @@ inlineCxxPluginDouble <- function(...) {
     if (.Platform$OS.type == "windows") {
         settings$env$PKG_CXXFLAGS <- paste(settings$env$PKG_CXXFLAGS, " -mstackrealign ", sep="")
     }
-    settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DFP64_MODE=1 -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
+    # 🚀 SCHRITT 6 UNIVERSELL ERWEITERT (Für Windows, Linux, macOS):
+    # Füge die CRAN-Schutzwall-Flags zu den CPPFLAGS hinzu, damit opencl.hpp stumm schaltet
+    # und Rcpp::Rcout zur Ausgabesteuerung lädt.
+    settings$env$PKG_CPPFLAGS <- paste(
+        settings$env$PKG_CPPFLAGS, 
+        " -DFP64_MODE=1 -DPLUGIN=1 -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD -I", 
+        system.file("include", package = "OpenCLeaR"), 
+        sep=""
+    )
+    
+    # 🚀 ZWINGE INLINE DIE RCPP-HEADER BEREITZUSTELLEN:
+    # Ohne diesen Eintrag bricht der Tinytest beim Parsen von opencl.hpp ab,
+    # weil der Compiler im temporären Verzeichnis "Rcpp.h" nicht finden kann.
+    settings$Depends <- unique(c(settings$Depends, "Rcpp"))
+
     return(settings)
 }
 
