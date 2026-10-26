@@ -25,46 +25,49 @@
 ##' @export
 inlineCxxPlugin <- function(...) {
     sys_name <- Sys.info()[["sysname"]]
+    pkg_lib_dir <- system.file("lib", package = "OpenCLeaR")
+    
     if (.Platform$OS.type == "windows") {
-        ##  Windows: Statische Verknüpfung gegen BACKEND.a
+        ## 🎯 Windows bleibt exakt so wie in 0.6.8: Statische Verknüpfung, KEIN rpath!
         linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -l:BACKEND.a ", " -L", system.file("libs/x64", package = "OpenCLeaR")," -lOpenCL", sep="")
     } else if (sys_name == "Darwin") {
-        ##  macOS: Nutzen das native Apple-Framework (kein -lOpenCL!)
-        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND -framework OpenCL", sep="")
+        ##  macOS: Verlinke gegen den neuen 'lib'-Pfad und nutze macOS rpath
+        linker_flags <- paste(" -Wl,-rpath,", pkg_lib_dir, " -L", pkg_lib_dir, " -lBACKEND -framework OpenCL", sep="")
     } else {
-        ##  Linux: Verbleibt bei der bewährten dynamischen ICD-Verknüpfung
-        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND -lOpenCL", sep="")
+        ##  Linux: Verlinke gegen den neuen 'lib'-Pfad und nutze Linux rpath
+        linker_flags <- paste(" -Wl,-rpath,", pkg_lib_dir, " -L", pkg_lib_dir, " -lBACKEND -lOpenCL", sep="")
     }
-    plugin <-  Rcpp::Rcpp.plugin.maker(
-	include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
-
+    
+    plugin <- Rcpp::Rcpp.plugin.maker(
+        include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
         libs           = linker_flags,
         package        = "OpenCLeaR"
     )
     settings <- plugin()
-    # 🚀 WINDOWS AVX-REIGN: Zwingt den Compiler zum Stack-Realignment, um den Treiber-Crash zu verhindern!
     if (.Platform$OS.type == "windows") {
         settings$env$PKG_CXXFLAGS <- paste(settings$env$PKG_CXXFLAGS, " -mstackrealign ", sep="")
     }
     settings$env$PKG_CPPFLAGS <- paste(settings$env$PKG_CPPFLAGS, " -DPLUGIN=1 -I", system.file("include", package = "OpenCLeaR"), sep="")
-     
     return(settings)
 }
 
 ##' @rdname inline
 ##' @export
 inlineCxxPluginFloat <- function(...) {
-        sys_name <- Sys.info()[["sysname"]]
-        if (.Platform$OS.type == "windows") {
-        ##  Windows: Statische Verknüpfung gegen BACKEND.a
+    sys_name <- Sys.info()[["sysname"]]
+    pkg_lib_dir <- system.file("lib", package = "OpenCLeaR")
+    
+    if (.Platform$OS.type == "windows") {
+        ## 🎯 Windows bleibt exakt so wie in 0.6.8: Statische Verknüpfung, KEIN rpath!
         linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -l:BACKEND.a ", " -L", system.file("libs/x64", package = "OpenCLeaR")," -lOpenCL", sep="")
     } else if (sys_name == "Darwin") {
-        ##  macOS: Nutzen das native Apple-Framework (kein -lOpenCL!)
-        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND -framework OpenCL", sep="")
+        ##  macOS: Verlinke gegen den neuen 'lib'-Pfad und nutze macOS rpath
+        linker_flags <- paste(" -Wl,-rpath,", pkg_lib_dir, " -L", pkg_lib_dir, " -lBACKEND -framework OpenCL", sep="")
     } else {
-        ##  Linux: Verbleibt bei der bewährten dynamischen ICD-Verknüpfung
-        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND -lOpenCL", sep="")
+        ##  Linux: Verlinke gegen den neuen 'lib'-Pfad und nutze Linux rpath
+        linker_flags <- paste(" -Wl,-rpath,", pkg_lib_dir, " -L", pkg_lib_dir, " -lBACKEND -lOpenCL", sep="")
     }
+
     plugin <- Rcpp::Rcpp.plugin.maker(
         include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\";  inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
         libs           = linker_flags,
@@ -82,16 +85,19 @@ inlineCxxPluginFloat <- function(...) {
 ##' @export
 inlineCxxPluginDouble <- function(...) {
     sys_name <- Sys.info()[["sysname"]]
+    pkg_lib_dir <- system.file("lib", package = "OpenCLeaR")
+    
     if (.Platform$OS.type == "windows") {
-        ##  Windows: Statische Verknüpfung gegen BACKEND.a
+        ## 🎯 Windows bleibt exakt so wie in 0.6.8: Statische Verknüpfung, KEIN rpath!
         linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -l:BACKEND.a ", " -L", system.file("libs/x64", package = "OpenCLeaR")," -lOpenCL", sep="")
     } else if (sys_name == "Darwin") {
-        ##  macOS: Nutzen das native Apple-Framework (kein -lOpenCL!)
-        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND -framework OpenCL", sep="")
+        ##  macOS: Verlinke gegen den neuen 'lib'-Pfad und nutze macOS rpath
+        linker_flags <- paste(" -Wl,-rpath,", pkg_lib_dir, " -L", pkg_lib_dir, " -lBACKEND -framework OpenCL", sep="")
     } else {
-        ##  Linux: Verbleibt bei der bewährten dynamischen ICD-Verknüpfung
-        linker_flags <- paste(" -L", system.file("libs", package = "OpenCLeaR"), " -lBACKEND -lOpenCL", sep="")
+        ##  Linux: Verlinke gegen den neuen 'lib'-Pfad und nutze Linux rpath
+        linker_flags <- paste(" -Wl,-rpath,", pkg_lib_dir, " -L", pkg_lib_dir, " -lBACKEND -lOpenCL", sep="")
     }
+
     plugin <- Rcpp::Rcpp.plugin.maker(
         include.before = "#include \"CLpp.hpp\"\n#include \"init.hpp\"\nstatic std::string global_math_library_code = \"\\n\"; inline std::string get_opencl_c_code() { return global_math_library_code; }\n",
         libs           = linker_flags,
@@ -105,7 +111,9 @@ inlineCxxPluginDouble <- function(...) {
     return(settings)
 }
 
-##' Generische GPGPU-Laufzeit-Kompilierung für OpenCL Kernel
+
+
+##' Generic GPGPU JIT compiled function for OpenCL access
 ##'
 ##' @param signature Named list or vector of R arguments (like inline::cxxfunction)
 ##' @param kernel_file A (TODO: R-string or a) path to a *.cl file containing the GPU kernel

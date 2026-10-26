@@ -1,6 +1,11 @@
 # 1. Entfernt radikal alle verbleibenden .git-Verzeichnisse in den Submodulen
 ^src/backend/lib/.*/\.git(/|$)
 ^src/backend/.*\.git(/|$)
+^src/backend/lib/CLErrorLookup/\.git(/|$)
+^src/backend/lib/OpenCL-CLHPP/\.git(/|$)
+^src/backend/lib/OpenCL-Headers/\.git(/|$)
+^src/backend/lib/OpenCL-Wrapper\.git(/|$)
+
 
 # 2. Ignoriert den kompletten CMake-Build-Ordner und lokale Installationen im Backend
 ^src/backend/build(/|$)
@@ -19,6 +24,7 @@
 ^TODO\.md$
 ^Makefile$
 ^inst/\.gitkeep$
+^\.gitkeep$
 
 #
 ^inst/bin/ocl_compiler.*$

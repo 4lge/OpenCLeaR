@@ -71,34 +71,33 @@ fi
 UNAME=$(uname)
 
 if [ "${UNAME}" = "Darwin" ]; then
-    # 🍏 macOS Version: R_PACKAGE_DIR-Kopiertarget nutzt den lokalen src/-Pfad
+    # 🍏 macOS Version: Suchpfad erweitert auf ../lib/ relativ zu libs/OpenCLeaR.so
     cat << 'EOF' > src/Makevars
 PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include 
-PKG_LIBS = -Wl,-rpath,@loader_path/ -Wl,-rpath,@loader_path/../ -Wl,-rpath,@loader_path/../src/ -L. -lBACKEND
+PKG_LIBS = -Wl,-rpath,@loader_path/../lib/ -Wl,-rpath,@loader_path/ -L. -lBACKEND
 
 .PHONY: all prebuild
 
 all: $(SHLIB)
-	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das temporäre macOS-Zielverzeichnis..."
-	@mkdir -p $(R_PACKAGE_DIR)/src/ $(R_PACKAGE_DIR)/libs/
-	@if [ -f libBACKEND.dylib ]; then cp libBACKEND.dylib $(R_PACKAGE_DIR)/src/ && cp libBACKEND.dylib $(R_PACKAGE_DIR)/libs/; fi
-	@if [ -f backend/build/local_install/lib/libOpenCL.dylib ]; then cp backend/build/local_install/lib/libOpenCL.dylib $(R_PACKAGE_DIR)/src/ && cp backend/build/local_install/lib/libOpenCL.dylib $(R_PACKAGE_DIR)/libs/; fi
+	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das CRAN-konforme inst/lib Verzeichnis (macOS)..."
+	@mkdir -p $(R_PACKAGE_DIR)/lib/
+	@if [ -f libBACKEND.dylib ]; then cp libBACKEND.dylib $(R_PACKAGE_DIR)/lib/; fi
+	@if [ -f backend/build/local_install/lib/libOpenCL.dylib ]; then cp backend/build/local_install/lib/libOpenCL.dylib $(R_PACKAGE_DIR)/lib/; fi
 EOF
 
 else
-    # 🐧 Linux Version
+    # 🐧 Linux Version: Suchpfad erweitert auf $ORIGIN/../lib
     cat << 'EOF' > src/Makevars
 PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include 
-PKG_LIBS = -Wl,-rpath,'$$ORIGIN:.:./src' -Wl,--enable-new-dtags -L. -lBACKEND
+PKG_LIBS = -Wl,-rpath,'$$ORIGIN/../lib:$$ORIGIN' -Wl,--enable-new-dtags -L. -lBACKEND
 
 .PHONY: all prebuild
 
 all: $(SHLIB)
-	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das temporäre Linux-Zielverzeichnis..."
-	@mkdir -p $(R_PACKAGE_DIR)/src/ $(R_PACKAGE_DIR)/libs/
-	@if [ -f libBACKEND.so ]; then cp libBACKEND.so $(R_PACKAGE_DIR)/src/ && cp libBACKEND.so $(R_PACKAGE_DIR)/libs/; fi
-	@if [ -f backend/build/local_install/lib/libOpenCL.so ]; then cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/src/ && cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/libs/; fi
+	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das CRAN-konforme inst/lib Verzeichnis (Linux)..."
+	@mkdir -p $(R_PACKAGE_DIR)/lib/
+	@if [ -f libBACKEND.so ]; then cp libBACKEND.so $(R_PACKAGE_DIR)/lib/; fi
+	@if [ -f backend/build/local_install/lib/libOpenCL.so ]; then cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/lib/; fi
 EOF
 fi
-
 exit 0
