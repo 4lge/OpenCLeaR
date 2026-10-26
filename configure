@@ -98,6 +98,8 @@ all: $(SHLIB)
 	@mkdir -p $(R_PACKAGE_DIR)/lib/
 	@if [ -f libBACKEND.so ]; then cp libBACKEND.so $(R_PACKAGE_DIR)/lib/; fi
 	@if [ -f backend/build/local_install/lib/libOpenCL.so ]; then cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/lib/; fi
+	@echo "🧹 [OpenCLeaR] Entferne libBACKEND.so aus src/, um Duplikate in libs/ zu verhindern..."
+	@rm -f libBACKEND.so
 EOF
 fi
 exit 0

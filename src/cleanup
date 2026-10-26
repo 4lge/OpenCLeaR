@@ -1,0 +1,7 @@
+#!/bin/sh
+echo "🧹 [OpenCLeaR] Starte kompromisslose Post-Build-Bereinigung..."
+rm -rf backend/build/
+rm -rf backend/lib/
+rm -rf backend/CMakeFiles/
+rm -f backend/CMakeCache.txt
+

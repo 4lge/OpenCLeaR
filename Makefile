@@ -38,15 +38,16 @@ dist-clean: clean
 NAMESPACE: NAMESPACE.in src/RcppExports.cpp
 	cp NAMESPACE.in NAMESPACE
 	@echo "Starte dynamischen Roxygen-Lösch-Prozess..."
-	Rscript -e "pkgload::load_all('.'); if (file.exists('NAMESPACE')) file.remove('NAMESPACE'); roxygen2::roxygenise(package.dir = '.',roclets='namespace')"
+	LD_LIBRARY_PATH="$(PWD)/src:$(PWD)/inst/lib:$(LD_LIBRARY_PATH)" Rscript -e "pkgload::load_all('.'); if (file.exists('NAMESPACE')) file.remove('NAMESPACE'); roxygen2::roxygenise(package.dir = '.',roclets='namespace')"
 
 src/RcppExports.cpp: src/*.cpp 
 	@echo "🔄 Starte Rcpp::compileAttributes()..."
 	Rscript -e "Rcpp::compileAttributes()"
 
 RdFiles: src/RcppExports.cpp dist-clean
-	@echo "📚 Generiere Rd-Dokumentation via Roxygen2..."
-	Rscript -e "roxygen2::roxygenise(package.dir = '.', roclets='rd')"
+	@echo "📚 Generiere Rd-Dokumentation via Roxygen2 mit temporärem LD_LIBRARY_PATH..."
+	LD_LIBRARY_PATH="$(PWD)/src:$(PWD)/inst/lib:$(LD_LIBRARY_PATH)" Rscript -e "roxygen2::roxygenise(package.dir = '.', roclets='rd')"
+
 
 vignettes/OpenCLeaR-Overview.md: vignettes/OpenCLeaR-Overview.Rmd
 		cd vignettes; Rscript -e "rmarkdown::render(\"OpenCLeaR-Overview.Rmd\", output_format = \"md_document\")"

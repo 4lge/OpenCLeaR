@@ -1,65 +1,10 @@
-# -*- mode: makefile; -*-
-
-# should work on Linux and macOS:
-
-PKG_LIBS = -Wl,-rpath,'$$ORIGIN:.:./src' -Wl,-rpath,@loader_path/ -Wl,-rpath,@loader_path/../ -Wl,-rpath,@loader_path/../src/ -Wl,--enable-new-dtags -L. -lBACKEND
-
-
 PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include 
-
-PKG_LIBS = $(RPATH_FLAGS) -L. -lBACKEND
-
-
-
-# ==============================================================================
-# 🚀 DYNAMISCHE GENERIERUNG DER KERNEL-LIBS BEIM PAKETBAU
-# ==============================================================================
-
-# Das prebuild-Target wird gestartet, BEVOR Rcpp oder das CMake-Backend anspringen!
-.PHONY: all prebuild
-
-
-# Force R to bundle [lib]BACKEND[.so|.dll] (and possibly [lib]OpenCl[.so|.dll]) into the temporary library installation directory
-# -*- mode: makefile; -*-
-
-# POSIX-konforme, direkte Zuweisungen ohne '+=' oder ':='
-PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include
-
-# Zusammengeführte RPATH-Flags für Linux und macOS.
-# Der Linker ignoriert Plattform-Flags, die er nicht kennt (z.B. --enable-new-dtags auf Mac),
-# filtert aber keine Fehler. Durch die explizite Notation von $$ORIGIN (mit doppeltem $) 
-# wird es sicher an den Linux-Linker gereicht.
-PKG_LIBS = -Wl,-rpath,'$$ORIGIN:.:./src' -Wl,-rpath,@loader_path/ -Wl,-rpath,@loader_path/../ -Wl,-rpath,@loader_path/../src/ -Wl,--enable-new-dtags -L. -lBACKEND
-
-# ==============================================================================
-# 🚀 AUTOMATISCHER TRANSFER BEIM PAKETBAU
-# ==============================================================================
+PKG_LIBS = -Wl,-rpath,'$$ORIGIN/../lib:$$ORIGIN' -Wl,--enable-new-dtags -L. -lBACKEND
 
 .PHONY: all prebuild
 
-# Standard POSIX-Regel: Keine GNU-spezifischen Variablenweichen
 all: $(SHLIB)
-	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das temporäre Zielverzeichnis..."
-	@mkdir -p $(R_PACKAGE_DIR)/src/ $(R_PACKAGE_DIR)/libs/
-	@if [ -f libBACKEND.so ]; then \
-		cp libBACKEND.so $(R_PACKAGE_DIR)/src/; \
-		cp libBACKEND.so $(R_PACKAGE_DIR)/libs/; \
-	fi
-	@if [ -f libBACKEND.dylib ]; then \
-		cp libBACKEND.dylib $(R_PACKAGE_DIR)/src/; \
-		cp libBACKEND.dylib $(R_PACKAGE_DIR)/libs/; \
-	fi
-	@if [ -f backend/build/local_install/lib/libOpenCL.so ]; then \
-		cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/src/; \
-		cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/libs/; \
-	fi
-	@if [ -f backend/build/local_install/lib/libOpenCL.dylib ]; then \
-		cp backend/build/local_install/lib/libOpenCL.dylib $(R_PACKAGE_DIR)/src/; \
-		cp backend/build/local_install/lib/libOpenCL.dylib $(R_PACKAGE_DIR)/libs/; \
-	fi
-
-# not yet used:
-prebuild:
-	@echo "⏳ [OpenCLeaR Build] Generiere nmath.cl via R-Skript...\n"
-	@"$(R_HOME)/bin/Rscript" --vanilla ../tools/convert_nmath.R
-
+	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das CRAN-konforme inst/lib Verzeichnis (Linux)..."
+	@mkdir -p $(R_PACKAGE_DIR)/lib/
+	@if [ -f libBACKEND.so ]; then cp libBACKEND.so $(R_PACKAGE_DIR)/lib/; fi
+	@if [ -f backend/build/local_install/lib/libOpenCL.so ]; then cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/lib/; fi
