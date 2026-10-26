@@ -2,6 +2,11 @@ if (getRversion() >= "2.15.1") {
     utils::globalVariables(".rbinom_ocl_internal")
 }
 ##' Random number generation from a binomial distribution via OpenCL
+##' 
+##' @param n Number of random values to generate
+##' @param size  number of trials (zero or more).
+##' @param prob  probability of success on each trial.
+##' @param ...   arguments passed through to \code{\link{oclFunction}}
 ##' @export
 rbinomOCL <- (function() {
   .rbinom_ocl_internal <- NULL

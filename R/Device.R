@@ -4,7 +4,7 @@
 #' @export
 GetActiveDeviceInfo <- function() {
   # 1. Ruft die interne, versteckte Rcpp-Funktion blockfrei ab
-  info <- OpenCLeaR:::.GetActiveDeviceInfo_cpp()
+  info <- .GetActiveDeviceInfo_cpp()
   
   # 2. Die S3-Klasse aufprägen
   class(info) <- "OpenCLDeviceInfo"
@@ -16,7 +16,7 @@ GetActiveDeviceInfo <- function() {
 #' @export
 GetDeviceList <- function() {
   # 1. Ruft die interne, versteckte Rcpp-Funktion blockfrei ab
-  df <- OpenCLeaR:::.GetDeviceList_cpp()
+  df <- .GetDeviceList_cpp()
   
   # 2. Die S3-Klasse aufprägen (der DataFrame bleibt im Kern erhalten!)
   class(df) <- c("OpenCLDeviceList", "data.frame")
@@ -28,7 +28,7 @@ GetDeviceList <- function() {
 #' @export
 GetKernelsPath <- function() {
   # Nutzt den sicheren Tunnel zur neuen internen C++-Funktion
-  return(OpenCLeaR:::.GetKernelsPath_cpp())
+  return(.GetKernelsPath_cpp())
 }
 
 #' S3 Print-Methode für OpenCL-Geräteinformationen

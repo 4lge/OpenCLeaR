@@ -1,25 +1,24 @@
-(^|/)\.gitkeep$
-^src/backend/lib/.*$
-^src/backend/lib/
-^src/backend/lib/.*/\.git$
-^src/backend/lib/.*\.git$
+# 1. Entfernt radikal alle verbleibenden .git-Verzeichnisse in den Submodulen
+^src/backend/lib/.*/\.git(/|$)
+^src/backend/.*\.git(/|$)
 
-^inst/tinytest/.cl_cache/.*$
-^src/backend/build/
-# 1. Schützt davor, dass versteckte .git-Ordner aus src/backend mitgenommen werden
-^src/backend/.*\.git$
+# 2. Ignoriert den kompletten CMake-Build-Ordner und lokale Installationen im Backend
+^src/backend/build(/|$)
+^src/backend/lib(/|$)
 
-# 2. Ignoriert den kompletten CMake-Build-Ordner im Backend
-^src/backend/build/
-^inst/bin/ocl.*$
+# 3. Ignoriert OpenCL-Laufzeit-Caches und Test-Artefakte überall im Paket
+^inst/tinytest/\.cl_cache(/|$)
+^\.cl_cache(/|$)
 
-# 3. Ignoriert lokale Test-Cache-Verzeichnisse (falls vorhanden)
-^\.cl_cache/
+# 4. Ignoriert R-spezifische Check-Überbleibsel und Tarballs
+^OpenCLeaR_.*\.tar\.gz$
+^.*\.Rcheck(/|$)
 
-# 4. Ignoriert R-spezifische Check-Überbleibsel
-^OpenCLeaR\.Rcheck/
-^.*\.Rcheck$
+# 5. Entwickler-Dateien ausschließen
+^NAMESPACE\.in$
+^TODO\.md$
+^Makefile$
+^inst/\.gitkeep$
 
-Makefile
-NAMESPACE.in
-TODO.md
+#
+^inst/bin/ocl_compiler.*$

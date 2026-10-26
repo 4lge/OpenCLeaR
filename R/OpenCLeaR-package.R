@@ -2,17 +2,35 @@
 ##' @importFrom inline cxxfunction
 ##' @importFrom Rcpp evalCpp sourceCpp
 ##' @importFrom methods signature
+##' @importFrom utils getFromNamespace 
 ##' @useDynLib OpenCLeaR, .registration = TRUE
 
 
 "_PACKAGE"
 
-## FIXME: is this really used?? or ueful??
+## This collects device state variables as well as cached JIT
+## compiled functions
 .OpenCLeaR_Env <- new.env(parent = emptyenv())
 
 
 ## onLoad function:
  .onLoad <- function(libname, pkgname) {
+     # =========================================================================
+     # 🐧🍏 Dynamic Linker Preload-Weiche für Linux und macOS
+     # =========================================================================
+     if (.Platform$OS.type == "unix") {
+         is_mac <- grepl("darwin", R.version$os)
+         ext    <- if (is_mac) ".dylib" else ".so"
+         
+         backend_file <- paste0("libBACKEND", ext)
+         backend_so   <- system.file("libs", backend_file, package = pkgname)
+         
+         ## Lädt die Symbole vorab global, damit OpenCLeaR.so linkt
+         if (file.exists(backend_so)) {
+             dyn.load(backend_so, local = FALSE, now = TRUE)
+         }
+     }
+     
      ## Wir schalten den fehlerhaften Nvidia-Festplatten-Cache komplett ab!
      if (.Platform$OS.type == "windows") {
          Sys.setenv(CUDA_CACHE_DISABLE = "1")
@@ -45,7 +63,7 @@
         kernel_dir <- .OpenCLeaR_Env$kernel_path
         packageStartupMessage(
             "\n==========================================================================\n",
-            "  (Kernels path: ", kernel_dir, ").\n",
+            "  (Kernel path: ", kernel_dir, ").\n",
             "  [OpenCLeaR] OpenCL environment loaded but NOT yet bound to hardware!\n",
             "  PLEASE RUN: GetDevicelist() and use ActivateDevice(<index>) to select\n",
             "  and initialize your GPU/CPU OpenCL device.\n",
@@ -55,13 +73,14 @@
 }
 
 
-##' Aktiviert ein OpenCL-Gert absolut fehlersicher und blockfrei
+##' Activagte OpenCL devices
 ##' 
+##' Activates an OpenCL device in a fail-safe and block-free manner.
 ##' @param idx Optionaler Integer-Index des Gerts (Standard: 0)
 ##' @export
 ActivateDevice <- function(idx = 0) {
     idx_int <- as.integer(idx)
-    env <- OpenCLeaR:::.OpenCLeaR_Env
+    env <- .OpenCLeaR_Env
 
     # =========================================================================
     #  DER UNZERSTRBARE v0.5.10 WINDOWS-PFAD (Direkt-Backport)
@@ -83,7 +102,7 @@ ActivateDevice <- function(idx = 0) {
         cat(" [OpenCLeaR Windows] Znde v0.5.10 Pointer-Brcke (Platform:", ziel_platform, ", Device:", ziel_device, ")\n")
         
         # Erzeugt das transiente Objekt im RAM ohne Singleton-Sperre:
-        env$active_device_ptr <- OpenCLeaR:::.create_transient_device_cpp(ziel_platform, ziel_device, env$kernel_path)
+        env$active_device_ptr <- .create_transient_device_cpp(ziel_platform, ziel_device, env$kernel_path)
         
         options("OpenCLeaR.initialized" = TRUE)
         options("OpenCLeaR.active_device" = idx_int)
@@ -212,7 +231,7 @@ EnsureOpenclInitialized <- function() {
 ##' @export
 GetKernelsPath <- function() {
                                         # Nutzt den sicheren Tunnel zur neuen internen C++-Funktion
-    return(OpenCLeaR:::.GetKernelsPath_cpp())
+    return(.GetKernelsPath_cpp())
 }
 
 ##' Aktiviert ein OpenCL-Gert absolut fehlersicher

@@ -185,7 +185,7 @@ else()
       ${KERNELS}
       "${CLERROR_SRC}/cl_error_lookup.cpp"
       "${CLERROR_SRC}/get_error_info.cpp"
-  )
+  )  
 endif()
 
 # Zwingt GNU Make, das Git-Repo fertig zu laden, BEVOR das Backend kompiliert!
@@ -388,35 +388,40 @@ install(CODE "
   endforeach()
 ")
 
-# Bereinigung der Dateien, die R CMD check stören
-# Dieser Code läuft am Ende des Build-Prozesses
-#add_custom_target(cleanup_r_check ALL
-#    COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install"
-#    COMMAND ${CMAKE_COMMAND} -E remove -f
-#        "${CMAKE_CURRENT_SOURCE_DIR}/lib/OpenCL-CLHPP/external/CMock/vendor/unity/examples/example_2/test/test_runners/TestProductionCode2_Runner.c"
-#        "${CMAKE_CURRENT_SOURCE_DIR}/lib/OpenCL-CLHPP/external/CMock/vendor/unity/examples/example_2/test/test_runners/TestProductionCode_Runner.c"
-#    COMMENT "Bereinige temporäre Dateien für R CMD check..."
-#)
 # Bereinigung nach Abschluss aller Build- und Installationsschritte
 install(CODE "
-  message(STATUS \"[OpenCLeaR] Starte Bereinigung für R CMD check...\")
+  message(STATUS \"[OpenCLeaR] Starte finale Bereinigung für R CMD check...\")
 
   # 1. Pfade definieren
   set(LOCAL_INSTALL_DIR \"\${CMAKE_CURRENT_BINARY_DIR}/local_install\")
-  set(UNITY_RUNNER_1 \"\${CMAKE_CURRENT_SOURCE_DIR}/lib/OpenCL-CLHPP/external/CMock/vendor/unity/examples/example_2/test/test_runners/TestProductionCode2_Runner.c\")
-  set(UNITY_RUNNER_2 \"\${CMAKE_CURRENT_SOURCE_DIR}/lib/OpenCL-CLHPP/external/CMock/vendor/unity/examples/example_2/test/test_runners/TestProductionCode_Runner.c\")
+  set(LIB_DIR \"\${CMAKE_CURRENT_SOURCE_DIR}/lib\")
+  set(BUILD_DIR \"\${CMAKE_CURRENT_BINARY_DIR}\")
 
-  # 2. local_install Ordner sicher entfernen (falls er nicht mehr gebraucht wird)
+  # 2. Temporären local_install Ordner entfernen
   if(IS_DIRECTORY \"\${LOCAL_INSTALL_DIR}\")
     message(STATUS \"[OpenCLeaR] Entferne temporären Ordner: \${LOCAL_INSTALL_DIR}\")
     file(REMOVE_RECURSE \"\${LOCAL_INSTALL_DIR}\")
   endif()
 
-  # 3. Die unvollständigen Unity-C-Dateien löschen
-  foreach(RUNNER_FILE \${UNITY_RUNNER_1} \${UNITY_RUNNER_2})
-    if(EXISTS \"\${RUNNER_FILE}\")
-      message(STATUS \"[OpenCLeaR] Entferne fehlerhafte Test-Datei: \${RUNNER_FILE}\")
-      file(REMOVE \"\${RUNNER_FILE}\")
+  # 3. KRIITISCH FÜR CRAN: Entferne alle .git-Verzeichnisse der Submodule im Quellcode-Ordner
+  set(GIT_DIRS
+    \"\${LIB_DIR}/CLErrorLookup/.git\"
+    \"\${LIB_DIR}/OpenCL-CLHPP/.git\"
+    \"\${LIB_DIR}/OpenCL-Headers/.git\"
+    \"\${LIB_DIR}/OpenCL-Wrapper/.git\"
+  )
+
+  foreach(GIT_DIR \${GIT_DIRS})
+    if(IS_DIRECTORY \"\${GIT_DIR}\")
+      message(STATUS \"[OpenCLeaR] Entferne Git-Rückstand: \${GIT_DIR}\")
+      file(REMOVE_RECURSE \"\${GIT_DIR}\")
     endif()
   endforeach()
+
+  # 4. Optional: Ganzen lib-Ordner und build-Ordner im Quellbaum plätten, 
+  # falls CMake sie nach dem Linken nicht mehr braucht
+  if(IS_DIRECTORY \"\${LIB_DIR}\")
+    file(REMOVE_RECURSE \"\${LIB_DIR}\")
+    message(STATUS \"[OpenCLeaR] Drittanbieter-Quelltexte komplett bereinigt.\")
+  endif()
 ")

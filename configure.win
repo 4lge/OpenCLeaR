@@ -42,13 +42,13 @@ echo "** SUCCESSFULLY BUILT OPENCL BACKEND CODE! **"
 cd "../../.."
 
 
-echo "** COPYING KERNELS! **"
+#echo "** COPYING KERNELS! **"
 
-mkdir -p inst/kernel
+#mkdir -p inst/kernel
 
-cp src/backend/kernel/*.cl inst/kernel/ 2>/dev/null
+#cp src/backend/kernel/*.cl inst/kernel/ 2>/dev/null
 
-echo "** SUCCESSFULLY COPIED KERNELS! **"
+#echo "** SUCCESSFULLY COPIED KERNELS! **"
 
 echo "** COPYING INCLUDES! **"
 

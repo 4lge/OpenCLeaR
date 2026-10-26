@@ -1,23 +1,13 @@
 # -*- mode: makefile; -*-
-PKG_CXXFLAGS += 
-# Detect OS and set appropriate extension and rpath flags.
-# Tell the dynamic linker to check both the temporary folder ($ORIGIN) AND 
-# the local package compilation folder (.)
-UNAME := $(shell uname)
-ifeq ($(UNAME), Darwin)
-    # macOS settings
-    SHLIB_EXT_BACKEND = dylib
-    RPATH_FLAGS = -Wl,-rpath,@loader_path/ -Wl,-rpath,@loader_path/../ -Wl,-rpath,@loader_path/../src/
-else
-    # Linux settings
-    SHLIB_EXT_BACKEND = so
-    # Force the linker to inject RUNPATH and keep $ORIGIN intact
-    RPATH_FLAGS = -Wl,-rpath,'$$ORIGIN:.:./src',--enable-new-dtags
-endif
 
-PKG_CPPFLAGS += -I./backend/include -I./backend/build/local_install/include -Wno-misleading-indentation 
+# should work on Linux and macOS:
 
-PKG_LIBS += $(RPATH_FLAGS) -L. -lBACKEND
+PKG_LIBS = -Wl,-rpath,'$$ORIGIN:.:./src' -Wl,-rpath,@loader_path/ -Wl,-rpath,@loader_path/../ -Wl,-rpath,@loader_path/../src/ -Wl,--enable-new-dtags -L. -lBACKEND
+
+
+PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include 
+
+PKG_LIBS = $(RPATH_FLAGS) -L. -lBACKEND
 
 
 
@@ -30,21 +20,45 @@ PKG_LIBS += $(RPATH_FLAGS) -L. -lBACKEND
 
 
 # Force R to bundle [lib]BACKEND[.so|.dll] (and possibly [lib]OpenCl[.so|.dll]) into the temporary library installation directory
-all: $(SHLIB)
-	@if [ -f libBACKEND.$(SHLIB_EXT_BACKEND) ]; then \
-		mkdir -p $(R_PACKAGE_DIR)/src/; \
-		cp libBACKEND.$(SHLIB_EXT_BACKEND) $(R_PACKAGE_DIR)/src/; \
-		mkdir -p $(R_PACKAGE_DIR)/libs/; \
-		cp libBACKEND.$(SHLIB_EXT_BACKEND) $(R_PACKAGE_DIR)/libs/; \
-	fi
-	@FOUND_LIBOPENCL=$$(find backend/build/ -name "libOpenCL.$(SHLIB_EXT_BACKEND)" | head -n 1); \
-	if [ -n "$$FOUND_LIBOPENCL" ] && [ -f "$$FOUND_LIBOPENCL" ]; then \
-		mkdir -p $(R_PACKAGE_DIR)/src/; \
-		cp "$$FOUND_LIBOPENCL" $(R_PACKAGE_DIR)/src/; \
-		mkdir -p $(R_PACKAGE_DIR)/libs/; \
-		cp "$$FOUND_LIBOPENCL" $(R_PACKAGE_DIR)/libs/; \
-	fi	
+# -*- mode: makefile; -*-
 
+# POSIX-konforme, direkte Zuweisungen ohne '+=' oder ':='
+PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include
+
+# Zusammengeführte RPATH-Flags für Linux und macOS.
+# Der Linker ignoriert Plattform-Flags, die er nicht kennt (z.B. --enable-new-dtags auf Mac),
+# filtert aber keine Fehler. Durch die explizite Notation von $$ORIGIN (mit doppeltem $) 
+# wird es sicher an den Linux-Linker gereicht.
+PKG_LIBS = -Wl,-rpath,'$$ORIGIN:.:./src' -Wl,-rpath,@loader_path/ -Wl,-rpath,@loader_path/../ -Wl,-rpath,@loader_path/../src/ -Wl,--enable-new-dtags -L. -lBACKEND
+
+# ==============================================================================
+# 🚀 AUTOMATISCHER TRANSFER BEIM PAKETBAU
+# ==============================================================================
+
+.PHONY: all prebuild
+
+# Standard POSIX-Regel: Keine GNU-spezifischen Variablenweichen
+all: $(SHLIB)
+	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das temporäre Zielverzeichnis..."
+	@mkdir -p $(R_PACKAGE_DIR)/src/ $(R_PACKAGE_DIR)/libs/
+	@if [ -f libBACKEND.so ]; then \
+		cp libBACKEND.so $(R_PACKAGE_DIR)/src/; \
+		cp libBACKEND.so $(R_PACKAGE_DIR)/libs/; \
+	fi
+	@if [ -f libBACKEND.dylib ]; then \
+		cp libBACKEND.dylib $(R_PACKAGE_DIR)/src/; \
+		cp libBACKEND.dylib $(R_PACKAGE_DIR)/libs/; \
+	fi
+	@if [ -f backend/build/local_install/lib/libOpenCL.so ]; then \
+		cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/src/; \
+		cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/libs/; \
+	fi
+	@if [ -f backend/build/local_install/lib/libOpenCL.dylib ]; then \
+		cp backend/build/local_install/lib/libOpenCL.dylib $(R_PACKAGE_DIR)/src/; \
+		cp backend/build/local_install/lib/libOpenCL.dylib $(R_PACKAGE_DIR)/libs/; \
+	fi
+
+# not yet used:
 prebuild:
 	@echo "⏳ [OpenCLeaR Build] Generiere nmath.cl via R-Skript...\n"
 	@"$(R_HOME)/bin/Rscript" --vanilla ../tools/convert_nmath.R
