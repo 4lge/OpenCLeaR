@@ -21,7 +21,7 @@ struct TransientDevice {
   bool fp64_capable;
 
 
-  TransientDevice(int platform_id, int device_id, std::string k_path) {
+  TransientDevice(int index, int platform_id, int device_id, std::string k_path) {
     this->kernel_path = k_path;
     this->device = nullptr;
     this->context = nullptr;
@@ -101,14 +101,19 @@ struct TransientDevice {
     }
 
     // 5. Wrapper initialisieren
-    this->wrapper_device = new Device(this->context, this->device, this->queue);
+    // 🚀 HIER GREIFEN WIR EIN: Alle Indizes fließen sofort im Geburts-Konstruktor ein!
+    this->wrapper_device = new Device(
+        this->context, 
+        this->device, 
+        this->queue, 
+        index,        // 4. Parameter: idx
+        platform_id,  // 5. Parameter: p_idx
+        device_id     // 6. Parameter: d_idx
+    );
+    
+    // Die Metadaten und Pfade wie gewohnt zuweisen
     this->wrapper_device->info.is_fp64_capable = this->fp64_capable;
     this->wrapper_device->set_kernel_path(k_path);
-   // 🚀 DIE ABSOLUTE LEXBOOK-RETTUNG: Reicht die echten Indizes an den Wrapper weiter!
-    // 🚀 DIE ABSOLUTE REINFELD-ELEGANZ: 
-    // Wir nutzen deine echten, überladenen C++ Setter-Methoden der opencl.hpp!
-    this->wrapper_device->platform_id(platform_id); // Involviert den legalen private-Schreibzugriff
-    this->wrapper_device->device_id(device_id);     // Involviert den legalen private-Schreibzugriff
   }
   // Direkter Getter auf TransientDevice-Ebene
   std::string get_kernel_path() const {

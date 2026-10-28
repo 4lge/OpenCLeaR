@@ -1,10 +1,12 @@
-PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include 
+PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD 
 PKG_LIBS = -Wl,-rpath,'$$ORIGIN/../lib:$$ORIGIN' -Wl,--enable-new-dtags -L. -lBACKEND
 
 .PHONY: all prebuild
 
 all: $(SHLIB)
-	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das CRAN-konforme inst/lib Verzeichnis (Linux)..."
+	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das CRAN-konforme inst/lib Verzeichnis..."
 	@mkdir -p $(R_PACKAGE_DIR)/lib/
 	@if [ -f libBACKEND.so ]; then cp libBACKEND.so $(R_PACKAGE_DIR)/lib/; fi
 	@if [ -f backend/build/local_install/lib/libOpenCL.so ]; then cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/lib/; fi
+	@echo "🧹 [OpenCLeaR] Entferne libBACKEND.so aus src/, um Duplikate in libs/ zu verhindern..."
+	@rm -f libBACKEND.so libBACKEND.dylib

@@ -131,15 +131,16 @@ BEGIN_RCPP
 END_RCPP
 }
 // create_transient_device_cpp
-SEXP create_transient_device_cpp(int platform_id, int device_id, std::string kernel_path);
-RcppExport SEXP _OpenCLeaR_create_transient_device_cpp(SEXP platform_idSEXP, SEXP device_idSEXP, SEXP kernel_pathSEXP) {
+SEXP create_transient_device_cpp(int index, int platform_id, int device_id, std::string kernel_path);
+RcppExport SEXP _OpenCLeaR_create_transient_device_cpp(SEXP indexSEXP, SEXP platform_idSEXP, SEXP device_idSEXP, SEXP kernel_pathSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type index(indexSEXP);
     Rcpp::traits::input_parameter< int >::type platform_id(platform_idSEXP);
     Rcpp::traits::input_parameter< int >::type device_id(device_idSEXP);
     Rcpp::traits::input_parameter< std::string >::type kernel_path(kernel_pathSEXP);
-    rcpp_result_gen = Rcpp::wrap(create_transient_device_cpp(platform_id, device_id, kernel_path));
+    rcpp_result_gen = Rcpp::wrap(create_transient_device_cpp(index, platform_id, device_id, kernel_path));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -169,7 +170,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_OpenCLeaR_GetDeviceList", (DL_FUNC) &_OpenCLeaR_GetDeviceList, 0},
     {"_OpenCLeaR_GetKernelsPath", (DL_FUNC) &_OpenCLeaR_GetKernelsPath, 0},
     {"_OpenCLeaR_GetKernelCode", (DL_FUNC) &_OpenCLeaR_GetKernelCode, 0},
-    {"_OpenCLeaR_create_transient_device_cpp", (DL_FUNC) &_OpenCLeaR_create_transient_device_cpp, 3},
+    {"_OpenCLeaR_create_transient_device_cpp", (DL_FUNC) &_OpenCLeaR_create_transient_device_cpp, 4},
     {"_OpenCLeaR_set_transient_device_path_cpp", (DL_FUNC) &_OpenCLeaR_set_transient_device_path_cpp, 2},
     {NULL, NULL, 0}
 };

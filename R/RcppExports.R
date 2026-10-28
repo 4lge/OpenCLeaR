@@ -91,11 +91,12 @@ GetKernelCode <- function() {
 
 #' Creates an OpenCL device in C++ realm and gives the pointer to R
 #' 
+#' @param index global index of the device 
 #' @param platform_id platform id of the device 
 #' @param device_id device id within the platform of the device
 #' @param kernel_path path to kernel store
-.create_transient_device_cpp <- function(platform_id, device_id, kernel_path) {
-    .Call(`_OpenCLeaR_create_transient_device_cpp`, platform_id, device_id, kernel_path)
+.create_transient_device_cpp <- function(index, platform_id, device_id, kernel_path) {
+    .Call(`_OpenCLeaR_create_transient_device_cpp`, index, platform_id, device_id, kernel_path)
 }
 
 #' pass a kernel path to the transient device

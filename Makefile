@@ -46,7 +46,7 @@ src/RcppExports.cpp: src/*.cpp
 
 RdFiles: src/RcppExports.cpp dist-clean
 	@echo "📚 Generiere Rd-Dokumentation via Roxygen2 mit temporärem LD_LIBRARY_PATH..."
-	LD_LIBRARY_PATH="$(PWD)/src:$(PWD)/inst/lib:$(LD_LIBRARY_PATH)" Rscript -e "roxygen2::roxygenise(package.dir = '.', roclets='rd')"
+	LD_LIBRARY_PATH="$(PWD)/src:$(PWD)/inst/lib:$(PWD)/src/backend/build:$(LD_LIBRARY_PATH)" Rscript -e "roxygen2::roxygenise(package.dir = '.', roclets='rd')"
 
 
 vignettes/OpenCLeaR-Overview.md: vignettes/OpenCLeaR-Overview.Rmd

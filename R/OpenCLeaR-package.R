@@ -102,7 +102,7 @@ ActivateDevice <- function(idx = 0) {
         cat(" [OpenCLeaR Windows] Znde v0.5.10 Pointer-Brcke (Platform:", ziel_platform, ", Device:", ziel_device, ")\n")
         
         # Erzeugt das transiente Objekt im RAM ohne Singleton-Sperre:
-        env$active_device_ptr <- .create_transient_device_cpp(ziel_platform, ziel_device, env$kernel_path)
+        env$active_device_ptr <- .create_transient_device_cpp(idx_int, ziel_platform, ziel_device, env$kernel_path)
         
         options("OpenCLeaR.initialized" = TRUE)
         options("OpenCLeaR.active_device" = idx_int)

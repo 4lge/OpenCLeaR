@@ -6,6 +6,11 @@
 # -Wno-missing-braces i        -> needed to get silently through OpenCL ICD
 PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include -I./backend/lib/OpenCL-Wrapper/src  -DBUILDING_STATIC_R_PACKAGE
 
+
+# -mstackrealign repariert das R-MinGW-Stack-Problem
+# -O2 statt -O3 verhindert zu aggressive Loop-Optimierungen, die die CPU-Runtime killen
+PKG_CXXFLAGS = -mstackrealign -O2
+
 # 🚀 STATISCHES REINLINKEN: Wir verlinken die statische libBACKEND.a
 # und zwingen den Linker, die Symbole fest in die Haupt-DLL einzubetten.
 # Unter Windows nutzen wir -l:BACKEND.a, damit der MinGW-ld die Datei direkt findet.

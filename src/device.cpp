@@ -13,13 +13,14 @@ using namespace Rcpp;
 
 //' Creates an OpenCL device in C++ realm and gives the pointer to R
 //' 
+//' @param index global index of the device 
 //' @param platform_id platform id of the device 
 //' @param device_id device id within the platform of the device
 //' @param kernel_path path to kernel store
 // [[Rcpp::export(name = ".create_transient_device_cpp")]]
-SEXP create_transient_device_cpp(int platform_id, int device_id, std::string kernel_path) {
+SEXP create_transient_device_cpp(int index, int platform_id, int device_id, std::string kernel_path) {
     // Ruft den Konstruktor deines Structs auf (der clCreateContext etc. ausführt)
-    TransientDevice* t_dev = new TransientDevice(platform_id, device_id, kernel_path);
+  TransientDevice* t_dev = new TransientDevice(index, platform_id, device_id, kernel_path);
 
     // 🚀 DER GENIALE SOMMER-SYNC:
     // Wir weisen dem Backend das echte, intern erzeugte Wrapper-Geraet zu!
