@@ -38,7 +38,7 @@ dist-clean: clean
 NAMESPACE: NAMESPACE.in src/RcppExports.cpp
 	cp NAMESPACE.in NAMESPACE
 	@echo "Starte dynamischen Roxygen-Lösch-Prozess..."
-	LD_LIBRARY_PATH="$(PWD)/src:$(PWD)/inst/lib:$(LD_LIBRARY_PATH)" Rscript -e "pkgload::load_all('.'); if (file.exists('NAMESPACE')) file.remove('NAMESPACE'); roxygen2::roxygenise(package.dir = '.',roclets='namespace')"
+	LD_LIBRARY_PATH="$(PWD)/src:$(PWD)/inst/lib:$(PWD)/src/backend/build:$(LD_LIBRARY_PATH)" Rscript -e "pkgload::load_all('.'); if (file.exists('NAMESPACE')) file.remove('NAMESPACE'); roxygen2::roxygenise(package.dir = '.',roclets='namespace')"
 
 src/RcppExports.cpp: src/*.cpp 
 	@echo "🔄 Starte Rcpp::compileAttributes()..."

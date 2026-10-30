@@ -126,6 +126,13 @@ static inline real pt(real q, int df);
 static inline real qt(real p, int df);
 static inline real rt_internal(int df, __private int* idx, __private uint* mt);
 
+// --- Inverse Gamma Distribution ---
+static inline real dinvgamma(const real x, const real shape, const real rate);
+static inline real pinvgamma(const real x, const real shape, const real rate);
+static inline real qinvgamma(const real p, const real shape, const real rate);
+static inline real rinvgamma_internal(const real shape, const real rate, __private int* idx, __private uint* mt);
+
+
 // --- Beta Distribution ---
 static inline real dbeta(real x, real shape1, real shape2);
 static inline real pbeta(real q, real shape1, real shape2);
@@ -284,7 +291,7 @@ static inline real qnorm(real p, real mu, real sigma) {
 // RNG
 static inline real rnorm_internal(__private real mu, __private real sigma,
                                   __private int* idx, __private uint* mt) {
-  // Da 'mt' und 'idx' bereits Pointer sind, reichen wir sie DIREKT weiter!
+  // Since 'mt' and 'idx' are already pointers, we pass them DIRECTLY!
   real u1 = mt_rand_01(&idx[0], mt);
   real u2 = mt_rand_01(&idx[0], mt);
   if(get_global_id(0) % 2 == 1)
@@ -292,7 +299,7 @@ static inline real rnorm_internal(__private real mu, __private real sigma,
            cos((real)2.0f * (real)M_PI * u2);
   else
     return mu + sigma * sqrt((real)-2.0f * log(u1)) *
-           sin((real)2.0f * (real)M_PI * u2); // 💡 Tipp: Zweiter Zweig nutzt meist 'sin' für Box-Muller
+           sin((real)2.0f * (real)M_PI * u2); // Tip: Second branch usually uses 'sin' for Box-Muller
 }
 #define rnorm(mu, sigma) rnorm_internal((mu), (sigma), &idx, mt)
 
@@ -301,20 +308,20 @@ static inline real rnorm_internal(__private real mu, __private real sigma,
 // UNIFORM DISTRIBUTION 
 // =========================================================================
 
-// Dichte (PDF)
+// Density (PDF)
 static inline real dunif(real x, real min, real max) {
   if (x < min || x > max || min >= max) return (real)0.0f;
   return (real)1.0f / (max - min);
 }
 
-// Verteilungsfunktion (CDF)
+// Distribution function (CDF)
 static inline real punif(real q, real min, real max) {
   if (min >= max || q < min) return (real)0.0f;
   if (q >= max) return (real)1.0f;
   return (q - min) / (max - min);
 }
 
-// Quantilfunktion (Inverse CDF)
+// Quantile function (Inverse CDF)
 static inline real qunif(real p, real min, real max) {
   if (p < (real)0.0f || p > (real)1.0f || min >= max) return (real)NAN;
   return min + p * (max - min);
@@ -330,7 +337,7 @@ static inline real runif_internal(real min, real max, __private int* idx, __priv
 
 
 // =========================================================================
-// POISSON DISTRIBUTION (Poisson-Verteilung)
+// POISSON DISTRIBUTION (Poisson distribution)
 // =========================================================================
 
 // Wahrscheinlichkeitsfunktion (PMF / Dichte)
@@ -875,7 +882,45 @@ static inline real rchisq_internal(int df, __private int* idx, __private uint* m
 #define rchisq(df) rchisq_internal((df), &idx, mt)
 
 
-///// 1111
+
+// =========================================================================
+// INVERSE GAMMA MATHEMATIK-ERWEITERUNG (Für deine libkernel.cl)
+// =========================================================================
+
+// Dichte (PDF): Berechnet im stabilen Log-Raum via lgamma
+static inline real dinvgamma(const real x, const real shape, const real rate) {
+  if (x <= (real)0.0f || shape <= (real)0.0f || rate <= (real)0.0f) return (real)0.0f;
+  real log_pdf = shape * log(rate) - lgamma(shape) - (shape + (real)1.0f) * log(x) - (rate / x);
+  return exp(log_pdf);
+}
+
+// Verteilung (CDF): F_InvGamma(x; alpha, beta) = 1 - F_Gamma(1/x; alpha, 1/beta)
+// Nutzt deine bestehende gamma_cdf(x, shape, rate)
+static inline real pinvgamma(const real x, const real shape, const real rate) {
+  if (x <= (real)0.0f || shape <= (real)0.0f || rate <= (real)0.0f) return (real)0.0f;
+  return (real)1.0f - pgamma((real)1.0f / x, shape, (real)1.0f / rate);
+}
+
+// Quantile (QF): qinvgamma(p; alpha, beta) = 1 / qgamma(1 - p; alpha, 1/beta)
+// Nutzt deine bestehende gamma_q(p, shape, rate)
+static inline real qinvgamma(const real p, const real shape, const real rate) {
+  if (shape <= (real)0.0f || rate <= (real)0.0f || p <= (real)0.0f) return (real)0.0f;
+  if (p >= (real)1.0f) return INFINITY;
+  real qg = qgamma((real)1.0f - p, shape, (real)1.0f / rate);
+  if (qg <= (real)0.0f) return INFINITY;
+  return (real)1.0f / qg;
+}
+
+// RNG: rinvgamma(alpha, beta) = 1 / rgamma(alpha, beta)
+// Nutzt dein bestehendes rgamma(shape, rate) aus source 5
+static inline real rinvgamma_internal(const real shape, const real rate, __private int* idx, __private uint* mt) {
+  // Hier rgamma_internal direkt aufrufen und die MT-Zeiger bitscharf weiterreichen!
+  real g = rgamma_internal(shape, rate, idx, mt);
+  if (g <= (real)0.0f) return (real)1e10f; // Schutzwall vor Division durch 0
+  return (real)1.0f / g;
+}
+#define rinvgamma(shape, rate) rinvgamma_internal((shape), (rate), &idx, mt)
+
 // =========================================================================
 // BETA DISTRIBUTION & STUDENT-T DISTRIBUTION (Stabilized via Continued Fractions)
 // =========================================================================

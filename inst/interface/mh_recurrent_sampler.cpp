@@ -27,16 +27,16 @@ int base_seed = r_seed[r_seed[1] + 1];
 Memory<real> GpuData(*device, data_len);
 Memory<real> GpuMu(*device, total_output_size);
 Memory<real> GpuSigma(*device, total_output_size);
-Memory<int>    GpuSeeds(*device, chains);
+
 
 // fill OpenCL variables
 for(int i=0; i<data_len; ++i) GpuData[i] = (real)r_data[i];
-for(int i=0; i<chains; ++i)   GpuSeeds[i] = base_seed + (i * 777);
+
 
 
 // transfer from host to device
 GpuData.write_to_device();
-GpuSeeds.write_to_device();
+
 
 // Create remaining kernel arguments, avoid constants, instead assign them to real variables
 // for automatic float/double assignment
@@ -49,7 +49,7 @@ real prop_sd_sigma_typed = (real)0.05;
 Kernel mh_kernel(*device, chains, "mh_recurrent_sampler_kernel", 
                  GpuMu, GpuSigma, GpuData, data_len, 
                  window_width, total_mcmc_steps, chains,
-                 mu_init_typed, sigma_init_typed, prop_sd_mu_typed, prop_sd_sigma_typed, GpuSeeds);
+                 mu_init_typed, sigma_init_typed, prop_sd_mu_typed, prop_sd_sigma_typed, base_seed);
 
 
 // 🔥 kernel run

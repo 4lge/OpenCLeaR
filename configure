@@ -160,14 +160,20 @@ ADAPTER_H="src/backend/lib/OpenCL-ICD-Loader/loader/windows/adapter.h"
 
 echo "🔧 [OpenCLeaR Linux/macOS-Build] Starte präventiven CRAN-Check-Filter..."
 
-# 1. Pragma-Injektion für adapter.h (Sichert Linux cross-compiles ab)
+# 1. Pragma-Injektion für adapter.h (Absolut POSIX-konform via printf)
 if [ -f "$ADAPTER_H" ]; then
     echo "  -> Injiziere GCC-Pragmas in $ADAPTER_H"
-    echo -e '#if defined(__GNUC__) || defined(__clang__)\n#pragma GCC diagnostic push\n#pragma GCC diagnostic ignored "-Wpedantic"\n#endif\n' > "$ADAPTER_H.tmp"
+    
+    # printf interpretiert \n immer korrekt ohne Flags
+    printf '#if defined(__GNUC__) || defined(__clang__)\n#pragma GCC diagnostic push\n#pragma GCC diagnostic ignored "-Wpedantic"\n#endif\n\n' > "$ADAPTER_H.tmp"
+    
     cat "$ADAPTER_H" >> "$ADAPTER_H.tmp"
-    echo -e '\n#if defined(__GNUC__) || defined(__clang__)\n#pragma GCC diagnostic pop\n#endif' >> "$ADAPTER_H.tmp"
+    
+    printf '\n#if defined(__GNUC__) || defined(__clang__)\n#pragma GCC diagnostic pop\n#endif\n' >> "$ADAPTER_H.tmp"
+    
     mv "$ADAPTER_H.tmp" "$ADAPTER_H"
 fi
+
 
 # 2. Rekursives Umschreiben von () auf (void) im gesamten Vendor-Tree
 echo "  -> Bereinige leere C-Funktionsprototypen im gesamten Tree..."

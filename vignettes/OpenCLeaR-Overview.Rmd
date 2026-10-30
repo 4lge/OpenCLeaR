@@ -8,12 +8,11 @@ vignette: >
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
+# OpenCLeaR package source code
 
-# OpenCLeaR Paket-Quellcode
+This document summarizes the most important files in the package.
 
-Dieses Dokument fasst die wichtigsten Dateien des Pakets zusammen.
-
-## R-Code und Konfiguration
+## R code and build system configuration
 
 ### DESCRIPTION
 ```{r, code=readLines('../DESCRIPTION'), eval=FALSE, echo=TRUE}

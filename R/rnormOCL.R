@@ -1,4 +1,4 @@
-# Wir teilen R mit, dass diese internen JIT-Objekte fliegend erzeugt werden!
+# We tell R that these internal JIT objects will be created on the fly!
 if (getRversion() >= "2.15.1") {
   utils::globalVariables(".rnorm_ocl_internal")
 }

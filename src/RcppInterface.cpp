@@ -23,8 +23,8 @@ extern "C" std::string getKernelsPathFromBackend();
 //' @export
 // [[Rcpp::export]]
 void ActivateDeviceWithMostFlops() {
-    backend::activateDeviceWithMostFlops();
-    backend::sync_global_device();     
+  backend::activateDeviceWithMostFlops();
+  backend::sync_global_device();
 }
 
 //' Activate OpenCL devive with maximum memory
@@ -33,8 +33,8 @@ void ActivateDeviceWithMostFlops() {
 //' @export
 // [[Rcpp::export]]
 void ActivateDeviceWithMostMemory() {
-    backend::activateDeviceWithMostMemory();
-    backend::sync_global_device();     
+  backend::activateDeviceWithMostMemory();
+  backend::sync_global_device();
 }
 
 //' Activate OpenCL devive by Index
@@ -43,15 +43,15 @@ void ActivateDeviceWithMostMemory() {
 //' @export
 // [[Rcpp::export(name = "ActivateDeviceWithIndex_Native")]]
 void ActivateDeviceWithIndex_Native(int idx) {
-    // Vorbereitung für den sauberen Treiberwechsel im RAM
-    global_opencl_device = nullptr;
+  // Vorbereitung für den sauberen Treiberwechsel im RAM
+  global_opencl_device = nullptr;
 
-    // Das C++ Backend schaltet die Hardware frisch und hängerfrei um
-    backend::CLpp::instance().activateDeviceWithIndex(idx);
-    
-    // Synchronisiert den globalen C-Pointer für Rcpp frisch an die neue Adresse
-    // backend::sync_global_device();
-    global_opencl_device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());
+  // Das C++ Backend schaltet die Hardware frisch und hängerfrei um
+  backend::CLpp::instance().activateDeviceWithIndex(idx);
+
+  // Synchronisiert den globalen C-Pointer für Rcpp frisch an die neue Adresse
+  // backend::sync_global_device();
+  global_opencl_device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());
 }
 
 //' OpenCL asynchronous device activation routine to break Windows WDDM context lock
@@ -60,44 +60,40 @@ void ActivateDeviceWithIndex_Native(int idx) {
 //' @export
 // [[Rcpp::export(name = "ActivateDeviceWithIndex_Async", rng = FALSE)]]
 bool ActivateDeviceWithIndex_Async(int idx) {
-    std::atomic<bool> is_done(false);
-    std::atomic<bool> success(false);
-
-    // 🚀 DER WORKER-THREAD: Holt sich das Objekt und feuert die Methode per Pfeil -> ab!
+  std::atomic<bool> is_done(false);
+  std::atomic<bool> success(false);
+  // start in a separate thread:
   std::thread cl_activate_thread([&is_done, &success, idx]() {
-        try {
+    try {
       backend::activateDeviceWithIndex(idx);
-            
-            success = true;
-        } catch (...) {
-            success = false;
-        }
-        is_done = true; // Dem R-Hauptthread signalisieren, dass der Kontext im RAM steht!
-    });
 
-    // 🔄 DER BLOCKFREIE ATEM-LOOP IM R-HAUPTTHREAD:
-    // Hält R in Nanosekunden-Takt am Leben und hebelt die Windows-WDDM-Sperre aus!
-    while (!is_done) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        
-        #ifdef _WIN32
-        // Zwingt Windows im 5ms-Takt zum Thread-Wechsel, bevor das System einfriert!
-        R_CheckUserInterrupt();
-        #endif
+      success = true;
+    } catch (...) {
+      success = false;
     }
+    is_done = true; // Signal R main thread that the device is activated
+  });
 
-    // Den Thread sauber wieder einsammeln
-    if (cl_activate_thread.joinable()) {
-        cl_activate_thread.join();
-    }
+  // blocking free main loop in the main thread
+  // Keeps R alive and overrides the Windows WDDM lock!
+  while (!is_done) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
-    // 🔄 4. DIE GLOBALE SYNCHRONISATION (Sicher im Hauptthread platziert!)
-    if (success) {
-    //backend::sync_global_device();
+#ifdef _WIN32
+    // Force Windows to change threads before the system freezes!
+    R_CheckUserInterrupt();
+#endif
+  }
+
+  // catch the  thread cleanly again
+  if (cl_activate_thread.joinable()) {
+    cl_activate_thread.join();
+  }
+  //  Safely access globa device pointer
+  if (success) {
     global_opencl_device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());
-    }
-
-    return success;
+  }
+  return success;
 }
 
 //' OpenCL initialization routine
@@ -106,45 +102,45 @@ bool ActivateDeviceWithIndex_Async(int idx) {
 //' @export
 // [[Rcpp::export]]
 bool InitCL() {
-    // 🚀 SCHUTZWALL GEGEN DOPPEL-ZÜNDUNG & TIME-OUTS:
-    // Wenn die Brücke im RAM bereits steht, blockieren wir sofort jeden weiteren 
-    // Thread-Start. Das verhindert das 200-Sekunden-Warten unter Windows!
-    if (opencl_bridge_established && global_opencl_device != nullptr) {
-        return true;
+  // 🚀 SCHUTZWALL GEGEN DOPPEL-ZÜNDUNG & TIME-OUTS:
+  // Wenn die Brücke im RAM bereits steht, blockieren wir sofort jeden weiteren
+  // Thread-Start. Das verhindert das 200-Sekunden-Warten unter Windows!
+  if (opencl_bridge_established && global_opencl_device != nullptr) {
+    return true;
+  }
+
+  std::atomic<bool> is_done(false);
+  std::atomic<bool> success(false);
+
+  // 🔄 DER BEWÄHRTE WINDOWS-LOCK-BRECHER:
+  // Wir forken die Initialisierung weiterhin aus dem R-Scope heraus.
+  std::thread cl_init_thread([&]() {
+    try {
+      if (!opencl_bridge_established) {
+        backend::initCL();
+      }
+      success = true;
+    } catch (...) {
+      success = false;
     }
+    is_done = true;
+  });
 
-    std::atomic<bool> is_done(false);
-    std::atomic<bool> success(false);
+  // 🔄 DEIN ORIGINALER ATEM-LOOP (Hält R wach und bricht den WDDM-Lock):
+  while (!is_done) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5)); // Auf 5ms verschärft für schnellere Reaktion
 
-    // 🔄 DER BEWÄHRTE WINDOWS-LOCK-BRECHER:
-    // Wir forken die Initialisierung weiterhin aus dem R-Scope heraus.
-    std::thread cl_init_thread([&]() {
-        try {
-            if (!opencl_bridge_established) {
-            backend::initCL();
-            }
-            success = true;
-        } catch (...) {
-            success = false;
-        }
-        is_done = true; 
-    });
+#ifdef _WIN32
+    // Zwingt den Windows-Scheduler zum Thread-Wechsel
+    R_CheckUserInterrupt();
+#endif
+  }
 
-    // 🔄 DEIN ORIGINALER ATEM-LOOP (Hält R wach und bricht den WDDM-Lock):
-    while (!is_done) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5)); // Auf 5ms verschärft für schnellere Reaktion
+  if (cl_init_thread.joinable()) {
+    cl_init_thread.join();
+  }
 
-        #ifdef _WIN32
-        // Zwingt den Windows-Scheduler zum Thread-Wechsel
-        R_CheckUserInterrupt();
-        #endif
-    }
-
-    if (cl_init_thread.joinable()) {
-        cl_init_thread.join();
-    }
-
-    return success;
+  return success;
 }
 
 
@@ -155,22 +151,22 @@ bool InitCL() {
 //' @export
 // [[Rcpp::export(name = "SetKernelsPath", rng = FALSE)]]
 void SetKernelsPath(String kernelPath) {
-    std::string path = kernelPath.get_cstring();
-    backend::setKernelsPath(path);
-    if (!opencl_bridge_established) {
-        // 🚀 INITIAL-ZÜNDUNG: Das beim onLoad eingerichtete Gerät wird global scharfgeschaltet!
-        backend::sync_global_device();     
-        opencl_bridge_established = true;
-    }
+  std::string path = kernelPath.get_cstring();
+  backend::setKernelsPath(path);
+  if (!opencl_bridge_established) {
+    // 🚀 INITIAL-ZÜNDUNG: Das beim onLoad eingerichtete Gerät wird global scharfgeschaltet!
+    backend::sync_global_device();
+    opencl_bridge_established = true;
+  }
 }
 
 //' Check if OpenCL device is ready.
-//' 
+//'
 //' @return logical, indicates state of device
 //' @export
 // [[Rcpp::export(name = "IsOpenCLReady", rng = FALSE)]]
 bool IsOpenCLReady() {
-    return backend::CLpp::instance().isInitialized();
+  return backend::CLpp::instance().isInitialized();
 }
 
 
@@ -180,39 +176,39 @@ bool IsOpenCLReady() {
 //' @export
 // [[Rcpp::export(name = "ToggleOpenCLPrint", rng = FALSE)]]
 void ToggleOpenCLPrint(bool state) {
-    // 🚀 Schreibt den neuen Wert direkt über die Referenz in das C++11-Singleton!
-    get_opencl_print_enabled() = state;
+  // 🚀 Schreibt den neuen Wert direkt über die Referenz in das C++11-Singleton!
+  get_opencl_print_enabled() = state;
 }
 
 
 // [[Rcpp::export(name = ".GetActiveDeviceInfo_cpp", rng = FALSE)]]
 List GetActiveDeviceInfo() {
-    // 🛡️ DER ABSOLUTE C++ CRASH-SCHUTZWALL:
-    // Wir fangen den nullptr ab, BEVOR der Speicher-Controller meckert!
+  // 🛡️ DER ABSOLUTE C++ CRASH-SCHUTZWALL:
+  // Wir fangen den nullptr ab, BEVOR der Speicher-Controller meckert!
   if (global_opencl_device == nullptr || !global_opencl_device->exists()) {
-      Rcpp::stop("💥 OpenCLeaR Backend-Fehler: Es ist kein OpenCL-Gerät aktiv! Bitte aktiviere zuerst ein Gerät mit 'ActivateDeviceWithID()'.");
-    }
-    // Wir greifen direkt auf die info-Struktur Ihres globalen Speicherankers zu!
-    // Da dieses Objekt im RAM mitsynchronisiert wird, stehen hier immer die
-    // Daten der exakt ausgewählten Karte (NVIDIA, Intel oder CPU) drin.
-    const auto& d = global_opencl_device->info;
+    Rcpp::stop("💥 OpenCLeaR Backend-Fehler: Es ist kein OpenCL-Gerät aktiv! Bitte aktiviere zuerst ein Gerät mit 'ActivateDeviceWithID()'.");
+  }
+  // Wir greifen direkt auf die info-Struktur Ihres globalen Speicherankers zu!
+  // Da dieses Objekt im RAM mitsynchronisiert wird, stehen hier immer die
+  // Daten der exakt ausgewählten Karte (NVIDIA, Intel oder CPU) drin.
+  const auto& d = global_opencl_device->info;
 
-    
-    // Betriebssystem-String analog zu Ihrem Wrapper ermitteln
+
+  // Betriebssystem-String analog zu Ihrem Wrapper ermitteln
 #if defined(_WIN32)
-    const std::string os = "Windows";
+  const std::string os = "Windows";
 #elif defined(__linux__)
-    const std::string os = "Linux";
+  const std::string os = "Linux";
 #elif defined(__APPLE__)
-    const std::string os = "macOS";
+  const std::string os = "macOS";
 #else
-    const std::string os = "unknown";
+  const std::string os = "unknown";
 #endif
 
-    // Wir schnüren alle Werte zu einer wunderschönen, nativen R-Liste zusammen!
-    return List::create(
+  // Wir schnüren alle Werte zu einer wunderschönen, nativen R-Liste zusammen!
+  return List::create(
                       _["Index"]         = d.id, ///<<<< FIXME!!!!
-                      _["Platform_ID"]   = global_opencl_device->platform_id(), 
+                      _["Platform_ID"]   = global_opencl_device->platform_id(),
                       _["Device_ID"]     = global_opencl_device->device_id(),
                       _["Device_Address"] = (double)(uintptr_t)global_opencl_device,
                       _["Name"]           = d.name,
@@ -231,72 +227,72 @@ List GetActiveDeviceInfo() {
                       _["Max_Buffer_MB"]  = d.max_global_buffer,
                       _["Max_Constant_KB"]= d.max_constant_buffer,
                       _["FP64_Capable"]   = (d.is_fp64_capable >= 1)
-    );
+                      );
 }
 
 // [[Rcpp::export(name = ".is_device_bound_cpp", rng = FALSE)]]
 bool is_device_bound() {
-    // Liefert einfach nur TRUE oder FALSE, ohne jemals eine Warnung zu triggern!
-    return (global_opencl_device != nullptr);
+  // Liefert einfach nur TRUE oder FALSE, ohne jemals eine Warnung zu triggern!
+  return (global_opencl_device != nullptr);
 }
 
 // [[Rcpp::export(name = ".GetDeviceList_cpp", rng = FALSE)]]
 DataFrame GetDeviceList() {
   // 1. 🚀 DIE REINE WAHRHEIT: Wir rufen deine originale, bereinigte Wrapper-Funktion auf!
-    std::vector<Device_Info> devices = get_devices(false);
+  std::vector<Device_Info> devices = get_devices(false);
 
-    // Rcpp-Vektoren für die DataFrame-Spalten vorbereiten
-    IntegerVector device_ids;
+  // Rcpp-Vektoren für die DataFrame-Spalten vorbereiten
+  IntegerVector device_ids;
   IntegerVector hardware_platform_ids; // 🚀 NEU
   IntegerVector hardware_device_ids; // 🚀 NEU
-    CharacterVector device_names;
-    CharacterVector device_vendors;
-    NumericVector compute_units;
-    NumericVector clock_mhz;
-    NumericVector cores_count;
-    NumericVector tflops_perf;
-    NumericVector vram_mb;
-    LogicalVector fp64_capable;
+  CharacterVector device_names;
+  CharacterVector device_vendors;
+  NumericVector compute_units;
+  NumericVector clock_mhz;
+  NumericVector cores_count;
+  NumericVector tflops_perf;
+  NumericVector vram_mb;
+  LogicalVector fp64_capable;
 
   // 2. Wir loopen flach über den fertigen Vektor
-    for (size_t i = 0; i < devices.size(); ++i) {
-        const auto& d = devices[i];
+  for (size_t i = 0; i < devices.size(); ++i) {
+    const auto& d = devices[i];
 
     // Daten aus der fertig befüllten Struktur absaugen
-        device_ids.push_back(d.id);
+    device_ids.push_back(d.id);
     hardware_platform_ids.push_back(d.platform_idx); // 🎯 Holt den echten Plattform-Index
     hardware_device_ids.push_back(d.device_idx); // 🎯 Holt den echten Treiber-Device-Index
-        device_names.push_back(d.name);
-        device_vendors.push_back(d.vendor);
-        compute_units.push_back(d.compute_units);
-        clock_mhz.push_back(d.clock_frequency);
-        cores_count.push_back(d.cores);
-        tflops_perf.push_back(d.tflops);
-        vram_mb.push_back(d.memory);
-        fp64_capable.push_back(d.is_fp64_capable >= 1);
-    }
+    device_names.push_back(d.name);
+    device_vendors.push_back(d.vendor);
+    compute_units.push_back(d.compute_units);
+    clock_mhz.push_back(d.clock_frequency);
+    cores_count.push_back(d.cores);
+    tflops_perf.push_back(d.tflops);
+    vram_mb.push_back(d.memory);
+    fp64_capable.push_back(d.is_fp64_capable >= 1);
+  }
 
   // 3. Zum nativen R-DataFrame verschmelzen (mitsamt den neuen Treiberspalten!)
-    return DataFrame::create(
+  return DataFrame::create(
                            _["Index"]         = device_ids,
                            _["Platform_ID"]   = hardware_platform_ids, // 🚀 JETZT VORHANDEN!
                            _["Device_ID"]     = hardware_device_ids, // 🚀 JETZT VORHANDEN!
-        _["Name"]          = device_names,
-        _["Vendor"]        = device_vendors,
-        _["Compute_Units"] = compute_units,
-        _["Clock_MHz"]     = clock_mhz,
-        _["Cores"]         = cores_count,
-        _["TFLOPs"]        = tflops_perf,
-        _["VRAM_MB"]       = vram_mb,
-        _["FP64_Capable"]  = fp64_capable,
-        _["stringsAsFactors"] = false
-    );
+                           _["Name"]          = device_names,
+                           _["Vendor"]        = device_vendors,
+                           _["Compute_Units"] = compute_units,
+                           _["Clock_MHz"]     = clock_mhz,
+                           _["Cores"]         = cores_count,
+                           _["TFLOPs"]        = tflops_perf,
+                           _["VRAM_MB"]       = vram_mb,
+                           _["FP64_Capable"]  = fp64_capable,
+                           _["stringsAsFactors"] = false
+                           );
 }
 // 🚀 NEU: Ermöglicht R das blockfreie Auslesen des internen Kernel-Pfads
 // [[Rcpp::export(name = ".GetKernelsPath_cpp", rng = FALSE)]]
 std::string GetKernelsPath() {
-    // Wir holen uns den Pfad direkt und blockfrei aus der zentralen Instanz!
-    return getKernelsPathFromBackend();
+  // Wir holen uns den Pfad direkt und blockfrei aus der zentralen Instanz!
+  return getKernelsPathFromBackend();
 }
 
 //' Get kernel code as seen by OpenCL
@@ -304,10 +300,10 @@ std::string GetKernelsPath() {
 //' @export
 // [[Rcpp::export(name = "GetKernelCode", rng = FALSE)]]
 String GetKernelCode() {
-    // 🚀 1. Zeiger auf das aktive, wache Gerät aus dem Backend holen
-    Device* device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());
+  // 🚀 1. Zeiger auf das aktive, wache Gerät aus dem Backend holen
+  Device* device = const_cast<Device*>(&backend::getActiveDeviceFromBackend());
 
-    // 🚀 2. Die Methode direkt über das Objekt aufrufen (da sie ein Member von Device ist!)
-    std::string code = device->get_kernel_code();
-    return wrap(code);
+  // 🚀 2. Die Methode direkt über das Objekt aufrufen (da sie ein Member von Device ist!)
+  std::string code = device->get_kernel_code();
+  return wrap(code);
 }
