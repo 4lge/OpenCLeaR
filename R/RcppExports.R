@@ -52,7 +52,7 @@ SetKernelsPath <- function(kernelPath) {
 }
 
 #' Check if OpenCL device is ready.
-#' 
+#'
 #' @return logical, indicates state of device
 #' @export
 IsOpenCLReady <- function() {

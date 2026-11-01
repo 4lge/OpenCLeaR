@@ -898,7 +898,7 @@ static inline real dinvgamma(const real x, const real shape, const real rate) {
 // Nutzt deine bestehende gamma_cdf(x, shape, rate)
 static inline real pinvgamma(const real x, const real shape, const real rate) {
   if (x <= (real)0.0f || shape <= (real)0.0f || rate <= (real)0.0f) return (real)0.0f;
-  return (real)1.0f - pgamma((real)1.0f / x, shape, (real)1.0f / rate);
+  return (real)1.0f - pgamma((real)1.0f / x, shape, rate);
 }
 
 // Quantile (QF): qinvgamma(p; alpha, beta) = 1 / qgamma(1 - p; alpha, 1/beta)
@@ -906,7 +906,7 @@ static inline real pinvgamma(const real x, const real shape, const real rate) {
 static inline real qinvgamma(const real p, const real shape, const real rate) {
   if (shape <= (real)0.0f || rate <= (real)0.0f || p <= (real)0.0f) return (real)0.0f;
   if (p >= (real)1.0f) return INFINITY;
-  real qg = qgamma((real)1.0f - p, shape, (real)1.0f / rate);
+  real qg = qgamma((real)1.0f - p, shape, rate);
   if (qg <= (real)0.0f) return INFINITY;
   return (real)1.0f / qg;
 }

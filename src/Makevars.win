@@ -4,8 +4,9 @@
 # -Wno-unused-variable         -> Blendet die ungenutzte Variable 'r' in rchisqCL.cpp aus
 # -Wno-misleading-indentation  -> Löscht die Einrückungs-Warnungen aus der opencl.hpp
 # -Wno-missing-braces i        -> needed to get silently through OpenCL ICD
-PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include -I./backend/lib/OpenCL-Wrapper/src  -DBUILDING_STATIC_R_PACKAGE
-
+PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include -I./backend/lib/OpenCL-Wrapper/src  -DBUILDING_STATIC_R_PACKAGE \
+               -DOPENCLEAR_R_BUILD \
+               -DOPENCLEAR_NO_OUTPUT
 
 # -mstackrealign repariert das R-MinGW-Stack-Problem
 # -O2 statt -O3 verhindert zu aggressive Loop-Optimierungen, die die CPU-Runtime killen
