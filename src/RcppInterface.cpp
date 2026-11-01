@@ -13,8 +13,9 @@ using namespace Rcpp;
 
 // 🚀 DIE COOLE C-LEITUNG:
 // Deklariert die freie Funktion aus der init.cpp, damit Rcpp sie blind versteht!
-extern "C" std::string getKernelsPathFromBackend();
-
+namespace backend {
+  std::string getKernelsPathFromBackend();
+}
 
 //' Activate OpenCL devive with maximum FLOPS
 //'
@@ -292,7 +293,7 @@ DataFrame GetDeviceList() {
 // [[Rcpp::export(name = ".GetKernelsPath_cpp", rng = FALSE)]]
 std::string GetKernelsPath() {
   // Wir holen uns den Pfad direkt und blockfrei aus der zentralen Instanz!
-  return getKernelsPathFromBackend();
+  return backend::getKernelsPathFromBackend();
 }
 
 //' Get kernel code as seen by OpenCL

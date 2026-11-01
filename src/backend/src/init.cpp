@@ -22,7 +22,7 @@ namespace backend {
 
   // 🚀 DER UNZERSTÖRBARE GETTER-TUNNEL:
   // Diese freie Funktion exportiert das Symbol fehlerfrei über jede DLL-Grenze!
-  extern "C"  EXPORT std::string getKernelsPathFromBackend() {
+  EXPORT std::string getKernelsPathFromBackend() {
     return CLpp::instance().getKernelsPath();
   }
   extern "C" void activateDeviceWithMostFlops() {
@@ -75,7 +75,7 @@ namespace backend {
     // das fitte, wache Gerät mitsamt allen Flags der globalen Instanz zu!
     // Wir geben das wache Gerät per const-Referenz weiter. Das kostet 0 Taktzyklen
     // und verhindert jegliche verbotene Objekt-Duplizierung im RAM!
-    extern "C" EXPORT const Device& getActiveDeviceFromBackend() {
+    EXPORT const Device& getActiveDeviceFromBackend() {
       return CLpp::instance().getActiveDevice();
     }    
 

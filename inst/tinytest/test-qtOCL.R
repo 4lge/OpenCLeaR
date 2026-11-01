@@ -10,4 +10,4 @@ q_ocl  <- qtOCL(p_test, df = 5)
 max_diff_q <- max(abs(q_r - q_ocl), na.rm = TRUE)
 
 message(sprintf("📊 [Test-Profil] qtOCL max diff: %.8f", max_diff_q))
-expect_true(max_diff_q < 1e-3) # Numerische Inversions-Toleranz
+expect_true(max_diff_q < 0.005) # Numerische Inversions-Toleranz

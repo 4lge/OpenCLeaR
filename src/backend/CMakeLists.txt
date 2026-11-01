@@ -398,6 +398,7 @@ install(CODE "
   endforeach()
 ")
 
+
 # Bereinigung nach Abschluss aller Build- und Installationsschritte
 install(CODE "
   message(STATUS \"[OpenCLeaR] Starte finale Bereinigung für R CMD check...\")
@@ -405,7 +406,6 @@ install(CODE "
   # 1. Pfade definieren
   set(LOCAL_INSTALL_DIR \"\${CMAKE_CURRENT_BINARY_DIR}/local_install\")
   set(LIB_DIR \"\${CMAKE_CURRENT_SOURCE_DIR}/lib\")
-  set(BUILD_DIR \"\${CMAKE_CURRENT_BINARY_DIR}\")
 
   # 2. Temporären local_install Ordner entfernen
   if(IS_DIRECTORY \"\${LOCAL_INSTALL_DIR}\")
@@ -413,12 +413,13 @@ install(CODE "
     file(REMOVE_RECURSE \"\${LOCAL_INSTALL_DIR}\")
   endif()
 
-  # 3. KRIITISCH FÜR CRAN: Entferne alle .git-Verzeichnisse der Submodule im Quellcode-Ordner
+  # 3. KRITISCH FÜR CRAN: Entferne alle .git-Verzeichnisse ALLER Submodule im Quellcode-Ordner
   set(GIT_DIRS
     \"\${LIB_DIR}/CLErrorLookup/.git\"
     \"\${LIB_DIR}/OpenCL-CLHPP/.git\"
     \"\${LIB_DIR}/OpenCL-Headers/.git\"
     \"\${LIB_DIR}/OpenCL-Wrapper/.git\"
+    \"\${LIB_DIR}/OpenCL-ICD-Loader/.git\"
   )
 
   foreach(GIT_DIR \${GIT_DIRS})
@@ -428,10 +429,10 @@ install(CODE "
     endif()
   endforeach()
 
-  # 4. Optional: Ganzen lib-Ordner und build-Ordner im Quellbaum plätten, 
-  # falls CMake sie nach dem Linken nicht mehr braucht
+  # 4. Der CRAN-Garant: Lösche den gesamten lib-Ordner, sobald alles gelinkt ist
   if(IS_DIRECTORY \"\${LIB_DIR}\")
+    message(STATUS \"[OpenCLeaR] Entferne Drittanbieter-Quelltexte komplett aus dem Quellbaum...\")
     file(REMOVE_RECURSE \"\${LIB_DIR}\")
-    message(STATUS \"[OpenCLeaR] Drittanbieter-Quelltexte komplett bereinigt.\")
   endif()
 ")
+

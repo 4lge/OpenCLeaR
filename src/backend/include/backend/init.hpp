@@ -37,5 +37,5 @@ namespace backend {
   extern "C" EXPORT void initCL();
     // 🚀 NEU: Die Synchronisations-Brücke für Rcpp freischalten
   extern "C" EXPORT void sync_global_device();
-  extern "C" EXPORT const Device& getActiveDeviceFromBackend(); // for plugiin use
+  EXPORT const Device& getActiveDeviceFromBackend(); // for plugiin use
 }

@@ -27,7 +27,7 @@ if (getRversion() >= "2.15.1") {
 ##' einen parallelisierten Mersenne-Twister (MT19937) direkt im VRAM.
 ##'
 ##' @seealso \code{\link{GetActiveDeviceInfo}}
-##'
+##' @export
 qinvgammaOCL <- (function() {
   .qinvgamma_ocl_internal <- NULL
   function(p, shape, rate = 1, ...) {
