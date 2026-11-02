@@ -48,8 +48,8 @@ inlineCxxPlugin <- function(...) {
         settings$env$PKG_CXXFLAGS <- paste(settings$env$PKG_CXXFLAGS, " -mstackrealign ", sep="")
     }
 
-                                        # Add flags for output suppression to the CPPFLAGS to mute opencl.hpp
-                                        # and use Rcpp::Rcout for output control.
+    ## Add flags for output suppression to the CPPFLAGS to mute opencl.hpp
+    ## and use Rcpp::Rcout for output control.
     settings$env$PKG_CPPFLAGS <- paste(
         settings$env$PKG_CPPFLAGS,
         " -DPLUGIN=1 -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD -I",
@@ -57,8 +57,8 @@ inlineCxxPlugin <- function(...) {
         sep=""
     )
 
-                                        # Without this entry the Tinytest aborts when parsing opencl.hpp,
-                                        # because the compiler cannot find "Rcpp.h" in the temporary directory.
+    ## Without this entry the Tinytest aborts when parsing opencl.hpp,
+    ## because the compiler cannot find "Rcpp.h" in the temporary directory.
     settings$Depends <- unique(c(settings$Depends, "Rcpp"))
 
     return(settings)
@@ -90,8 +90,8 @@ inlineCxxPluginFloat <- function(...) {
     if (.Platform$OS.type == "windows") {
         settings$env$PKG_CXXFLAGS <- paste(settings$env$PKG_CXXFLAGS, " -mstackrealign ", sep="")
     }
-                                        # Add flags for output suppression to the CPPFLAGS to mute opencl.hpp
-                                        # and use Rcpp::Rcout for output control.
+    ## Add flags for output suppression to the CPPFLAGS to mute opencl.hpp
+    ## and use Rcpp::Rcout for output control.
     settings$env$PKG_CPPFLAGS <- paste(
         settings$env$PKG_CPPFLAGS,
         " -DFP64_MODE=0 -DPLUGIN=1 -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD -I",
@@ -99,8 +99,8 @@ inlineCxxPluginFloat <- function(...) {
         sep=""
     )
 
-                                        # Without this entry the Tinytest aborts when parsing opencl.hpp,
-                                        # because the compiler cannot find "Rcpp.h" in the temporary directory.
+    ## Without this entry the Tinytest aborts when parsing opencl.hpp,
+    ## because the compiler cannot find "Rcpp.h" in the temporary directory.
     settings$Depends <- unique(c(settings$Depends, "Rcpp"))
 
     return(settings)
@@ -132,8 +132,8 @@ inlineCxxPluginDouble <- function(...) {
     if (.Platform$OS.type == "windows") {
         settings$env$PKG_CXXFLAGS <- paste(settings$env$PKG_CXXFLAGS, " -mstackrealign ", sep="")
     }
-                                        # Add flags for output suppression to the CPPFLAGS to mute opencl.hpp
-                                        # and use Rcpp::Rcout for output control.
+    ## Add flags for output suppression to the CPPFLAGS to mute opencl.hpp
+    ## and use Rcpp::Rcout for output control.
     settings$env$PKG_CPPFLAGS <- paste(
         settings$env$PKG_CPPFLAGS,
         " -DFP64_MODE=1 -DPLUGIN=1 -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD -I",
@@ -141,8 +141,8 @@ inlineCxxPluginDouble <- function(...) {
         sep=""
     )
 
-                                        # Without this entry the Tinytest aborts when parsing opencl.hpp,
-                                        # because the compiler cannot find "Rcpp.h" in the temporary directory.
+    ## Without this entry the Tinytest aborts when parsing opencl.hpp,
+    ## because the compiler cannot find "Rcpp.h" in the temporary directory.
     settings$Depends <- unique(c(settings$Depends, "Rcpp"))
 
     return(settings)
@@ -158,22 +158,7 @@ inlineCxxPluginDouble <- function(...) {
 ##' @param debug Logical value. If \code{TRUE}, the complete with
 ##' @param math_lib Logical value. If \code{TRUE}, the mathematical library libkernel.cl is loaded.
 ##' @param force_float Logical value. If \code{TRUE}, execution is forced to FP32 eben on FP64 capable hardware.
-##' @param debug Logical value. If \code{TRUE}, the
-##'   the OpenCL kernel library concatenated with source code ofthe given OpenCL kernel
-##'   stored in the working directory  as 'debug_kernel.cl'.
 ##' @param ... additional arguments, passed to \code{inline::cxxfunction}.
-##' @details This function automates the process of generating a OpenCL function
-##' via the inline Plugin(s) attached to this library. You have to specify
-##'   1. A file (or in future vesions a string) containing the CL C code. You should use
-##'      \code{real} to get automatically \code{double} or \code{float}
-##'      according to your active OpenCL device.
-##'   2. A file (or in furture vesions a string) containing the Rcpp interface using the OpenCL
-##'      abstraction (Device, Memory, Kernel) delivered by OpenCL-Wrapper.
-##'      Again you should use \code{real} to get automatically
-##'      \code{double} or \code{float} according to your active OpenCL device.
-##'      You alread have access to a correctly prepared Device object with there
-##'      pointer \code{device*}.
-##'
 ##' @return A R function to access your CL kernel via your Rcpp interface.
 ##' @examples
 ##' \dontrun{
@@ -221,8 +206,7 @@ inlineCxxPluginDouble <- function(...) {
 ##'     gpu_x0.write_to_device(); gpu_y0.write_to_device();
 ##'     gpu_x.write_to_device(); gpu_y.write_to_device(); gpu_z.write_to_device();
 ##'
-##'     Kernel k(*device, n0, \"idw_kernel\", gpu_x0, gpu_y0, gpu_z0, gpu_x, gpu_y, gpu_z,
-##'              n0, n, as<real>(p));
+##'     Kernel k(*device, n0, \"idw_kernel\", gpu_x0, gpu_y0, gpu_z0, gpu_x, gpu_y, gpu_z, n0, n, as<real>(p));
 ##'     k.run();
 ##'     gpu_z0.read_from_device();
 ##'
@@ -231,8 +215,7 @@ inlineCxxPluginDouble <- function(...) {
 ##'"
 ##'
 ##' idw_gpu <- inlineCL(
-##'     signature = signature(r_x0="numeric", r_y0="numeric", r_x="numeric",
-##'                           r_y="numeric", r_z="numeric", p="numeric"),
+##'     signature = signature(r_x0="numeric", r_y0="numeric", r_x="numeric", r_y="numeric", r_z="numeric", p="numeric"),
 ##'     kernel_file = kernel_file,
 ##'     interface_file = interface_file
 ##' )
@@ -323,7 +306,7 @@ inlineCxxPluginDouble <- function(...) {
 ##' @export
 inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math_lib = TRUE, force_float = FALSE, ...) {
 
-                                        # Wir wecken das Backend auf, damit die echten Hardware-Infos im RAM stehen.
+    ## We wake up the backend so that the real hardware information is available
     tryCatch({
         OpenCLeaR::EnsureOpenclInitialized()
     }, error = function(e) {
@@ -368,40 +351,49 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         }
     }
     cpp_source <- paste(readLines(interface_path_final, warn = FALSE), collapse = "\n")
-
     ## =========================================================================
     ## FP32 / FP64 switch
     ## =========================================================================
     device_info <- OpenCLeaR::GetActiveDeviceInfo()
     is_fp64 <- FALSE
-
     ## Only when Float is NOT enforced we query the hardware for Double
     if (!isTRUE(force_float)) {
         if (isTRUE(getOption("OpenCLeaR.has_fp64"))) {
             is_fp64 <- TRUE
         }
     }
-
     ## Dynamic plugin selection based on the final FP64 state
     if (is_fp64) {
         chosen_plugin <- "OpenCLeaRDouble"
     } else {
         chosen_plugin <- "OpenCLeaRFloat"
     }
-
     ## =========================================================================
-    ## mathematical library injection (dynamic)
+    ## mathematical library injection (unified syntax: local vs. package repo)
     ## =========================================================================
     if (is.character(math_lib)) {
-        ## use local file
-        if (file.exists(math_lib)) {
-            ## We make the path absolute so that the C++ backend finds it from every folder
-            abs_math_path <- normalizePath(math_lib, winslash = "/")
-            math_lib_injection <- paste0(
-                "    device->set_math_library_path(\"", abs_math_path, "\");\n"
-            )
+        is_local_math <- startsWith(math_lib, "./") || startsWith(math_lib, ".\\")
+        if (is_local_math) {
+            ## use a locally stored math library
+            if (file.exists(math_lib)) {
+                abs_math_path <- normalizePath(math_lib, winslash = "/")
+                math_lib_injection <- paste0(
+                    "    device->set_math_library_path(\"", abs_math_path, "\");\n"
+                )
+            } else {
+                stop(paste0(" [OpenCLeaR] Specified local math library not found: ", math_lib))
+            }
         } else {
-            stop(paste0(" [OpenCLeaR] Specified local math library not found: ", math_lib))
+            ## use a math library from central package storage
+            math_lib_injection <- paste0(
+                "    Rcpp::Function sys_file(\"system.file\");\n",
+                "    std::string pkg_kernel_dir = Rcpp::as<std::string>(sys_file(\"kernel\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
+                "    std::string math_lib_file = pkg_kernel_dir + \"/\" +\"", math_lib,"\";\n",
+                "    if (!std::ifstream(math_lib_file).good()) {\n",
+                "        Rcpp::stop(\" [OpenCLeaR] Math library not found in package repository: \" + math_lib_file);\n",
+                "    }\n",
+                "    device->set_math_library_path(math_lib_file);\n"
+            )
         }
     } else if (isTRUE(math_lib)) {
         ## default: use libkernel.cl from installed package:
@@ -412,22 +404,20 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
             "    device->set_math_library_path(math_lib_file);\n"
         )
     } else {
-        ## no mathlib:
+        ## no math lib:
         math_lib_injection <- "    device->set_math_library_path(\"\");\n"
     }
-    
-    ##  build in correct order:
+
+    ## DIE ABSOLUTE REIHENFOLGEN-ABSICHERUNG:
     full_cl_code <- paste0(
         "    Rcpp::Function system_file(\"system.file\");\n",
         "    std::string compiler_dir = Rcpp::as<std::string>(system_file(\"bin\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
-
-        ## 🎯 DER FIX: Setze den Kernel-Pfad dynamisch!
+        ## Set the kernel path dynamically depending on local or global kernel.
         if (is_local_kernel) {
             "    std::string kernel_dir  = \".\";\n"
         } else {
             "    std::string kernel_dir  = Rcpp::as<std::string>(system_file(\"kernel\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n"
         },
-
         ## STEP 1: Commit path to device object BEFORE the JIT compiler pipeline starts!
         "    device->set_kernel_path(kernel_dir);\n",
         "    device->set_kernel_file(\"", kernel_file, "\");\n",
@@ -450,17 +440,15 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         },
         "    std::string compiler_folder = compiler_dir;\n",
         "    device->set_compiler_path(compiler_folder);\n",
-
         ## STEP 2: Only now call the compiler
         "    device->load_or_build_kernel();\n"
     )
-
     ## =========================================================================
     ## tunnel the device address into to shared object: No DLL locks on JIT run
     ## =========================================================================
     extended_signature <- c(signature, "Device_Address" = "numeric")
-
     modified_cpp_body <- paste0(
+        "    #include <fstream>\n",
         "    using namespace backend;\n",
         "    uintptr_t addr = (uintptr_t)Rcpp::as<double>(Device_Address);\n",
         "    if(addr == 0) { Rcpp::stop(\" Critical error: Device_Address is NULL!\"); }\n",
@@ -474,7 +462,6 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         full_cl_code,
         cpp_source
     )
-
     executable_r_func <- inline::cxxfunction(
                                      sig     = extended_signature,
                                      body    = modified_cpp_body,
@@ -482,7 +469,6 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
                                      package = "OpenCLeaR",
                                      ...
                                  )
-
     ## This clever switch gets the address under Windows directly from the XPtr
     final_wrapper <- function(...) {
         if (.Platform$OS.type == "windows") {
@@ -494,19 +480,14 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
             ## The numeric cast pulls the raw 64-bit address from the Rcpp::XPtr
             ## We get the double carrying the address here
             dev_addr <- OpenCLeaR::GetActiveDeviceInfo()$Device_Address
-
         } else {
-                                        # Linux/Mac uses the singleton state of the backend as usual
+            ## Linux/Mac uses the singleton state of the backend as usual
             dev_addr <- OpenCLeaR::GetActiveDeviceInfo()$Device_Address
         }
-
         executable_r_func(..., Device_Address = dev_addr)
     }
-
     return(final_wrapper)
 }
-
-
 ##' Creates a self-adapting GPGPU-interface function.
 ##' @param signature call signature
 ##' @param kernel_file OpenCL kernel file name,
@@ -623,20 +604,16 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
 ##'
 ##' @export
 oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE, force_float = FALSE, verbose = FALSE, debug = FALSE, cache = TRUE) {
-
     ## handle chached version
     kernel_base_name <- tools::file_path_sans_ext(basename(kernel_file))
-
     ##  hide state via lexical scoping here
     compiled_func    <- NULL
     last_device_id   <- NULL
     last_fp64_state  <- NULL
     last_force_float <- NULL
     last_cache_key   <- NULL
-
     ## the final function (will be saved to a cached object in the evaluate-in-place R wrapper later
     function(...) {
-
         ## 1. Determine & clean up OS and CPU architecture
         sys_info <- Sys.info()
         platform_prefix <- paste0(tolower(sys_info[["sysname"]]), "_", tolower(sys_info[["machine"]]))
@@ -647,7 +624,6 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
         ##  Protection against NULL / length 0 (prevents 'argument is of length zero')
         raw_vendor <- dev_info$Vendor
         raw_device <- dev_info$Name
-
         if (is.null(raw_vendor) || length(raw_vendor) == 0 || raw_vendor == "") {
             raw_vendor <- "unbound"
         }
@@ -676,14 +652,13 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
                             fp64_suffix,
                             prec_suffix,
                             "_ocl_internal")
-
         cache_env <- asNamespace("OpenCLeaR")$.OpenCLeaR_Env
 
         ## If already in global cache, we load it locally into the scope!
         if (cache && is.null(compiled_func) && exists(cache_key, envir = cache_env)) {
             global_func <- get(cache_key, envir = cache_env)
             if (is.function(global_func)) {
-                compiled_func <<- global_func
+                compiled_func    <<- global_func
                 last_cache_key   <<- cache_key
                 last_device_id   <<- dev_info$Index
                 last_fp64_state  <<- isTRUE(getOption("OpenCLeaR.has_fp64"))
@@ -694,7 +669,6 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
         ## 4. Determine local hardware status for the re-compile check
         current_id   <- dev_info$Index
         current_fp64 <- isTRUE(getOption("OpenCLeaR.has_fp64"))
-
         if (isTRUE(force_float)) {
             current_fp64 <- FALSE
         }
@@ -705,10 +679,8 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
             (current_id != last_device_id) ||
             (current_fp64 != last_fp64_state) ||
             (force_float != last_force_float)
-
         if (need_recompile) {
             cat(" [OpenCLeaR Runtime] hardware change or float/double mode change detected! recompile ...\n")
-
             compiled_func <<- OpenCLeaR::inlineCL(
                                              signature      = signature,
                                              kernel_file    = kernel_file,
@@ -718,7 +690,6 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
                                              verbose        = verbose,
                                              debug          = debug
                                          )
-
             last_cache_key   <<- cache_key
             last_device_id   <<- current_id
             last_fp64_state  <<- current_fp64
