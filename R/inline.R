@@ -604,82 +604,75 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
 ##'
 ##' @export
 oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE, force_float = FALSE, verbose = FALSE, debug = FALSE, cache = TRUE) {
-    ## handle chached version
+    ## handle cached version
     kernel_base_name <- tools::file_path_sans_ext(basename(kernel_file))
-    ##  hide state via lexical scoping here
+    
+    ## Hide local state via lexical scoping for fast hot-path checks
     compiled_func    <- NULL
     last_device_id   <- NULL
     last_fp64_state  <- NULL
     last_force_float <- NULL
     last_cache_key   <- NULL
-    ## the final function (will be saved to a cached object in the evaluate-in-place R wrapper later
+
+    ## The final wrapper function
     function(...) {
-        ## 1. Determine & clean up OS and CPU architecture
+        ## Get system and hardware info
         sys_info <- Sys.info()
         platform_prefix <- paste0(tolower(sys_info[["sysname"]]), "_", tolower(sys_info[["machine"]]))
-
-        ##  2. Read and clean active OpenCL hardware
         dev_info <- OpenCLeaR::GetActiveDeviceInfo()
 
-        ##  Protection against NULL / length 0 (prevents 'argument is of length zero')
         raw_vendor <- dev_info$Vendor
         raw_device <- dev_info$Name
-        if (is.null(raw_vendor) || length(raw_vendor) == 0 || raw_vendor == "") {
-            raw_vendor <- "unbound"
-        }
-        if (is.null(raw_device) || length(raw_device) == 0 || raw_device == "") {
-            raw_device <- "device"
-        }
+        if (is.null(raw_vendor) || length(raw_vendor) == 0 || raw_vendor == "") raw_vendor <- "unbound"
+        if (is.null(raw_device) || length(raw_device) == 0 || raw_device == "") raw_device <- "device"
 
-        ## Now the strings are guaranteed to be valid and we can safely transform them
         clean_vendor <- gsub("[^a-zA-Z0-9]", "_", tolower(raw_vendor))
         clean_device <- gsub("[^a-zA-Z0-9]", "_", tolower(raw_device))
-
-        ## Optional double underscore cleanup
         clean_vendor <- gsub("_+", "_", clean_vendor)
         clean_device <- gsub("_+", "_", clean_device)
 
-        ## 3. Determine precision suffixes
         fp64_suffix <- if(isTRUE(getOption("OpenCLeaR.has_fp64"))) "_fp64" else "_fp32"
         prec_suffix <- if (force_float) "_force_float" else "_no_force_float"
 
-        ## the unique multi-platform cache key:
+        ## Unique cache key for this specific device compilation
         cache_key <- paste0(".",
                             kernel_base_name, "_",
                             platform_prefix, "_",
                             clean_vendor, "_",
-                            clean_device,
+                            clean_device, "_dev",
+                            dev_info$Index,
                             fp64_suffix,
                             prec_suffix,
                             "_ocl_internal")
+        
         cache_env <- asNamespace("OpenCLeaR")$.OpenCLeaR_Env
 
-        ## If already in global cache, we load it locally into the scope!
-        if (cache && is.null(compiled_func) && exists(cache_key, envir = cache_env)) {
-            global_func <- get(cache_key, envir = cache_env)
-            if (is.function(global_func)) {
-                compiled_func    <<- global_func
-                last_cache_key   <<- cache_key
-                last_device_id   <<- dev_info$Index
-                last_fp64_state  <<- isTRUE(getOption("OpenCLeaR.has_fp64"))
-                last_force_float <<- force_float
-            }
-        }
-
-        ## 4. Determine local hardware status for the re-compile check
+        ## Check if a device or mode change happened
         current_id   <- dev_info$Index
         current_fp64 <- isTRUE(getOption("OpenCLeaR.has_fp64"))
-        if (isTRUE(force_float)) {
-            current_fp64 <- FALSE
-        }
+        if (isTRUE(force_float)) current_fp64 <- FALSE
 
-        ## 5. Has the device changed or is the local instance out of date?
-        need_recompile <- is.null(compiled_func) ||
+        need_state_update <- is.null(compiled_func) ||
             (cache_key != last_cache_key) ||
             (current_id != last_device_id) ||
             (current_fp64 != last_fp64_state) ||
             (force_float != last_force_float)
-        if (need_recompile) {
+
+        if (need_state_update) {
+            ## Check whether we already have something in cache for this hardware
+            if (cache && exists(cache_key, envir = cache_env, inherits = FALSE)) {
+                global_func <- get(cache_key, envir = cache_env)
+                if (is.function(global_func)) {
+                    compiled_func <<- global_func
+                    last_cache_key   <<- cache_key
+                    last_device_id   <<- current_id
+                    last_fp64_state  <<- current_fp64
+                    last_force_float <<- force_float
+                    return(compiled_func(...))
+                }
+            }
+
+            ## If absolutely nothing exists in the cache -> (Re)Compile
             cat(" [OpenCLeaR Runtime] hardware change or float/double mode change detected! recompile ...\n")
             compiled_func <<- OpenCLeaR::inlineCL(
                                              signature      = signature,
@@ -690,18 +683,19 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
                                              verbose        = verbose,
                                              debug          = debug
                                          )
+            
             last_cache_key   <<- cache_key
             last_device_id   <<- current_id
             last_fp64_state  <<- current_fp64
             last_force_float <<- force_float
 
-            ## 6. Save in global package environment for other wrappers/sessions
+            ## Save to global cache for future switches
             if (cache) {
                 assign(cache_key, compiled_func, envir = cache_env)
             }
         }
 
-        ## 7. Execute with the real arguments
+        ## Execute with the real arguments
         return(compiled_func(...))
     }
 }
