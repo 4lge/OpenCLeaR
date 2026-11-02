@@ -191,9 +191,9 @@ idw_gpu <- oclFunction(
 result <- idw_gpu(target_x, target_y, source_x, source_y, source_z, p = 2.0)
 ```
 
-### 4. Encapsulate the function in a R wrapper readz to be ised in zour library
+### 4. Encapsulate the function in a R wrapper ready to be used in your library
 
-After development of your function you may uses this cached IIFE function (Immediately Invoked Function Expression):
+After development of your function you may use this cached IIFE function (Immediately Invoked Function Expression):
 
 ```R
 if (getRversion() >= "2.15.1") {
