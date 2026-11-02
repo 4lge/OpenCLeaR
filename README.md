@@ -193,40 +193,46 @@ result <- idw_gpu(target_x, target_y, source_x, source_y, source_z, p = 2.0)
 
 ### 4. Encapsulate the function in a R wrapper readz to be ised in zour library
 
+After development of your function you may uses this cached IIFE function (Immediately Invoked Function Expression):
+
 ```R
+if (getRversion() >= "2.15.1") {
+    utils::globalVariables(".idw_ocl_internal")
+}
+
 ##' Inverse Distance Weighting (IDW) parallelized via OpenCL
 ##'
-##' @description
-##' High-performance parallelized spatial interpolation utilizing the active 
-##' OpenCL device backend.
-##'
-##' @param x0 Numeric vector of target x-coordinates.
-##' @param y0 Numeric vector of target y-coordinates.
-##' @param x Numeric vector of known source x-coordinates.
-##' @param y Numeric vector of known source y-coordinates.
-##' @param z Numeric vector of known source values.
-##' @param p Numeric value specifying the power parameter (distance weight).
-##' @param force_float Logical value. If \code{TRUE}, execution is forced to FP32.
-##'
-##' @return A numeric vector containing the interpolated values at the target locations.
+##' @name idwOCL
+##' @param x0    vector of target x-coordinates.
+##' @param y0    vector of target y-coordinates.
+##' @param x     vector of known source x-coordinates.
+##' @param y     vector of known source y-coordinates.
+##' @param z     vector of known source values.
+##' @param p     power parameter (distance weight).
+##' @param ...   arguments passed through to \code{\link{oclFunction}}
+##' @return A numeric vector of interpolated values.
 ##' @export
-idwOCL <- function(x0, y0, x, y, z, p = 2.0, force_float = FALSE) {
-    
-    OpenCLeaR::oclFunction(
-        signature = inline::signature(
-            r_x0 = "numeric", 
-            r_y0 = "numeric", 
-            r_x  = "numeric",
-            r_y  = "numeric", 
-            r_z  = "numeric", 
-            p    = "numeric"
+idwOCL <- (function() {
+  .idw_ocl_internal <- NULL
+  function(x0, y0, x, y, z, p = 2.0, ...) {
+    if (is.null(.idw_ocl_internal)) {
+      .idw_ocl_internal <<- OpenCLeaR::oclFunction(
+        signature = methods::signature(
+          r_x0 = "numeric", 
+          r_y0 = "numeric", 
+          r_x  = "numeric", 
+          r_y  = "numeric", 
+          r_z  = "numeric", 
+          p    = "numeric"
         ),
-        kernel_file    = "idw_kernel.cl",
-        interface_file = "idw_rcpp.cpp",
-        force_float    = force_float
-    )(x0, y0, x, y, z, p)
-    
-}
+        kernel_file = "idw_kernel.cl", 
+        interface_file = "idw_rcpp.cpp", 
+        ...
+      )
+    }
+    return(.idw_ocl_internal(x0, y0, x, y, z, p))
+  }
+})()
 ```
 
 ## 📚 Resources
