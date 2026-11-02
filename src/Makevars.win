@@ -1,30 +1,19 @@
-# 🚀 DER WINDOWS-LOG-SÄUBERER:
-# -Wno-strict-aliasing         -> Schaltet die Type-Punning / Bit-Cast Warnungen ab
-# -Wno-sign-compare            -> Ignoriert Vorzeichen-Vergleiche (int vs size_t)
-# -Wno-unused-variable         -> Blendet die ungenutzte Variable 'r' in rchisqCL.cpp aus
-# -Wno-misleading-indentation  -> Löscht die Einrückungs-Warnungen aus der opencl.hpp
-# -Wno-missing-braces i        -> needed to get silently through OpenCL ICD
+# add local include paths
 PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include -I./backend/lib/OpenCL-Wrapper/src  -DBUILDING_STATIC_R_PACKAGE \
                -DOPENCLEAR_R_BUILD \
-               -DOPENCLEAR_NO_OUTPUT
+               -DOPENCLEAR_NO_OUTPUT # supress stc::cout/cerr use 
 
-# -mstackrealign repariert das R-MinGW-Stack-Problem
-# -O2 statt -O3 verhindert zu aggressive Loop-Optimierungen, die die CPU-Runtime killen
+# -mstackrealign fixes the R-MinGW stack issue
+# -O2 instead of -O3 prevents overly aggressive loop optimizations that kill the CPU runtime
 PKG_CXXFLAGS = -mstackrealign -O2
 
-# 🚀 STATISCHES REINLINKEN: Wir verlinken die statische libBACKEND.a
-# und zwingen den Linker, die Symbole fest in die Haupt-DLL einzubetten.
-# Unter Windows nutzen wir -l:BACKEND.a, damit der MinGW-ld die Datei direkt findet.
+# STATIC LINKING: We link the static libBACKEND.a
+# and force the linker to hard-embed the symbols into the main DLL.
+# On Windows we use -l:BACKEND.a so that MinGW-ld finds the file directly.
 PKG_LIBS = -Lbackend/build -l:BACKEND.a -Lbackend/build/local_install/lib -lOpenCL
 
 SHLIB_LDFLAGS = $(SHLIB_CXXLDFLAGS) -g
 
-# ==============================================================================
-# 🚀 DYNAMISCHE GENERIERUNG DER KERNEL-LIBS BEIM PAKETBAU
-# ==============================================================================
-
-# Das prebuild-Target wird gestartet, BEVOR Rcpp oder das CMake-Backend anspringen!
-.PHONY: all prebuild
 
 # Unter Windows müssen wir jetzt KEINE BACKEND.dll mehr in die libs-Ordner kopieren,
 # da sie physisch in der Haupt-DLL verschwunden ist! Nur noch die OpenCL.dll mitgeben:
@@ -38,7 +27,9 @@ all: $(SHLIB)
 	@cp -f backend/BACKEND.a "$(R_PACKAGE_DIR)/libs/BACKEND.a" 2>/dev/null || cp -f BACKEND.a "$(R_PACKAGE_DIR)/libs/BACKEND.a" 2>/dev/null || true
 
 
+# not yet used (exfiltrate kernel mathlib cl code from nmathopencl package)
 prebuild:
-	@echo "⏳ [OpenCLeaR Build] Generiere nmath.cl via R-Skript...\n"
+	@echo "[OpenCLeaR Build] Generate nmath.cl via R-Skript...\n"
 	@"$(R_HOME)/bin/Rscript" --vanilla ../tools/convert_nmath.R
 
+.PHONY: all prebuild

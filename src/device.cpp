@@ -1,11 +1,10 @@
 #include <Rcpp.h>
-
-#include "device.hpp" // Enthält die Definition deines TransientDevice-Structs
-#include "opencl.hpp" // Enthält deine modifizierte Device-Klasse
-#include "backend/init.hpp" // 🚀 Macht global_opencl_device und Device sichtbar!
+#include "device.hpp" // Contains the definition of your TransientDevice struct
+#include "opencl.hpp" // Includes the modified Device class
+#include "backend/init.hpp" //  Makes global_opencl_device and device visible!
 
  
-// Falls der Header nicht ausreicht, deklarieren wir es hier explizit als extern:
+// If the header is not enough, we explicitly declare it as external here:
 extern "C" Device* global_opencl_device;
 
 using namespace Rcpp;
@@ -19,17 +18,15 @@ using namespace Rcpp;
 //' @param kernel_path path to kernel store
 // [[Rcpp::export(name = ".create_transient_device_cpp")]]
 SEXP create_transient_device_cpp(int index, int platform_id, int device_id, std::string kernel_path) {
-    // Ruft den Konstruktor deines Structs auf (der clCreateContext etc. ausführt)
+  // Calls the Device constructor (which runs clCreateContext etc.)
   TransientDevice* t_dev = new TransientDevice(index, platform_id, device_id, kernel_path);
 
-    // 🚀 DER GENIALE SOMMER-SYNC:
-    // Wir weisen dem Backend das echte, intern erzeugte Wrapper-Geraet zu!
+    // We assign the real, internally generated wrapper device to the backend!
     global_opencl_device = t_dev->wrapper_device;
     
-    // Verpackt den nackten C++ Zeiger in ein Rcpp XPtr-Objekt.
-    // 'true' sorgt dafür, dass Rcpp den Destruktor ~TransientDevice() automatisch
-    // aufruft, falls der Pointer in R jemals gelöscht oder überschrieben wird.
-    // 🚀 BOMBENFEST: 'false' verbietet Rcpp das aggressive, automatische Zerstören des OpenCL-Kontexts!
+    // Wraps the bare C++ pointer into an Rcpp XPtr object.
+    // 'false' prohibits Rcpp from aggressively destroying the
+    // OpenCL context by calling  ~TransientDevice() destructor automatically!
     Rcpp::XPtr<TransientDevice> ptr(t_dev, false);
  
     return ptr;

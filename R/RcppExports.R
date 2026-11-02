@@ -20,7 +20,7 @@ ActivateDeviceWithMostMemory <- function() {
 
 #' Activate OpenCL devive by Index
 #' @param idx index of device, all devices will be shown on load ofthe
-#'     library.
+#'     library. counts start from 0.
 #' @export
 ActivateDeviceWithIndex_Native <- function(idx) {
     invisible(.Call(`_OpenCLeaR_ActivateDeviceWithIndex_Native`, idx))
@@ -59,8 +59,8 @@ IsOpenCLReady <- function() {
     .Call(`_OpenCLeaR_IsOpenCLReady`)
 }
 
-#' Schaltet die detaillierte OpenCL-Diagnose und Hardware-Tabellen im Terminal ein oder aus
-#' @param state bool, TRUE zum Einschalten, FALSE zum Stummschalten
+#' Toggles detailed OpenCL diagnostics and hardware tables in the terminal
+#' @param state bool, TRUE to turn on, FALSE to mute
 #' @export
 ToggleOpenCLPrint <- function(state) {
     invisible(.Call(`_OpenCLeaR_ToggleOpenCLPrint`, state))

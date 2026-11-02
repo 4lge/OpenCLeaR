@@ -1,75 +1,75 @@
-#' Holt die detaillierten Hardware-Informationen des aktiven OpenCL-Geräts
-#'
-#' @return Ein Objekt der Klasse \code{OpenCLDeviceInfo} mitsamt wunderschöner S3-Ausgabe.
+##' Gets detailed hardware information of the active OpenCL device
+##'
+##' @return An object of class \code{OpenCLDeviceInfo} with beautiful S3 output.
 #' @export
 GetActiveDeviceInfo <- function() {
-  # 1. Ruft die interne, versteckte Rcpp-Funktion blockfrei ab
+  ## 1. Gets the internal hidden Rcpp function in a non-blocking manner
   info <- .GetActiveDeviceInfo_cpp()
   
-  # 2. Die S3-Klasse aufprägen
+  ## 2. add S3 class
   class(info) <- "OpenCLDeviceInfo"
   return(info)
 }
-#' Listet alle im System verfuegbaren OpenCL-Geraete auf
-#'
-#' @return Ein Objekt der Klasse \code{OpenCLDeviceList} mitsamt kompakter S3-Ausgabe.
-#' @export
+
+##' Lists all OpenCL devices available in the system
+##'
+##' @return An object of class \code{OpenCLDeviceList} including compact S3 output.
+##' @export
 GetDeviceList <- function() {
-  # 1. Ruft die interne, versteckte Rcpp-Funktion blockfrei ab
+  ## 1. Gets the internal hidden Rcpp function in a non-blocking manner
   df <- .GetDeviceList_cpp()
   
-  # 2. Die S3-Klasse aufprägen (der DataFrame bleibt im Kern erhalten!)
+  ## 2. add S3 class (the DataFrame remains at the core!)
   class(df) <- c("OpenCLDeviceList", "data.frame")
   return(df)
 }
 
-#' Holt den aktuell im C++-Backend gesetzten Kernel-Pfad
-#' @return Ein String mit dem Pfad
-#' @export
+##' Gets the kernel path currently set in the C++ backend
+##' @return A string with the path
+##' @export
 GetKernelsPath <- function() {
-  # Nutzt den sicheren Tunnel zur neuen internen C++-Funktion
+  ## Uses the secure tunnel to the internal C++ function
   return(.GetKernelsPath_cpp())
 }
 
-#' S3 Print-Methode für OpenCL-Geräteinformationen
-#' @method print OpenCLDeviceInfo
-#' @export
+##' S3 Print method for OpenCL device information
+##' @method print OpenCLDeviceInfo
+##' @export
 print.OpenCLDeviceInfo <- function(x, ...) {
-  # 🚀 SCHUTZWALL GEGEN LEERE INITIALISIERUNG (Lazy-Loading-Schutz):
+  ## protecte against uninitialsed state (lazy loading protection):
   if (x$Name == "" || x$Compute_Units == 0) {
-    cat("|----------------.------------------------------------------------------------|\n")
-    cat("| Hinweis        | Es ist aktuell noch kein OpenCL-Geraet im RAM aktiviert.    |\n")
-    cat("|                | Bitte rufen Sie zuerst 'ActivateDeviceWithIndex(0)' auf!   |\n")
-    cat("|----------------'------------------------------------------------------------|\n")
+    cat("|----------------,----------------------------------------------------------------|\n")
+    cat("|  Note          | There is currently no OpenCL device activated.                 |\n")
+    cat("|                | Please call 'ActivateDevice(<index>)' first!                   |\n")
+    cat("|----------------'----------------------------------------------------------------|\n")
     return(invisible(x))
   }
 
-  # Hilfsfunktion für linksbündige Ausrichtung (simuliert C++ alignl)
+  ## Auxiliary function for left-alignment (simulates C++ alignl)
   align_l <- function(text, width = 45) {
-    # 🚀 DER REINIGUNGS-FILTER: Entfernt Tabs und unsichtbare Treiber-Geisterzeichen!
+    ## the cleaning filter: Removes tabs and invisible driver ghosts!
     clean_txt <- trimws(as.character(text))
     clean_txt <- gsub("[^[:print:]]", "", clean_txt)
     
     if (nchar(clean_txt) >= width) return(substring(clean_txt, 1, width))
     paste0(clean_txt, paste(rep(" ", width - nchar(clean_txt)), collapse = ""))
   }
-
-  # 🚀 DER REINE, NATIVE R-DRUCK: Genau eine Zeile pro Gerät!
+  ## Exactly one line per device!
   cat("|----------------.------------------------------------------------------------|\n")
-  cat("| Device Index   | Geraete-Name                                  | FP64       |\n")
+  cat("| Device Index   | Device Name                                   | FP64       |\n")
   cat("|----------------+-----------------------------------------------+------------|\n")
   
   for (i in 1:nrow(x)) {
     idx_str   <- paste0(x$Index[i], " ")
-    idx_pad   <- paste0(idx_str, paste(rep(" ", 14 - nchar(idx_str)), collapse = ""))
+    idx_pad   <- paste0(idx_str, paste(rep(" ", 15 - nchar(idx_str)), collapse = ""))
     name_pad <- align_l(x$Name[i], 45)
-    fp64_str <- if (x$FP64_Capable[i]) "JA  " else "NEIN"
+    fp64_str <- if (x$FP64_Capable[i]) "yes " else "no  "
     
-    cat(paste0("| Idx ", idx_pad, "| ", name_pad, " | ", fp64_str, "       |\n"))
+    cat(paste0("|     ", idx_pad, "| ", name_pad, " | ", fp64_str, "       |\n"))
   }
   cat("|----------------'------------------------------------------------------------|\n")
   
-  invisible(x) # R-Standard: Gibt das Objekt unsichtbar zurück
+  invisible(x) # Returns the object invisible
 }
 
 ##' S3 print method for the OpenCL device list
@@ -79,11 +79,11 @@ print.OpenCLDeviceInfo <- function(x, ...) {
 ##' @export
 print.OpenCLDeviceList <- function(x, ...) {
   if (nrow(x) == 0) {
-    cat("Keine OpenCL-Geraete im System gefunden.\n")
+    cat("No OpenCL devices found in the system.\n")
     return(invisible(x))
   }
 
-  # Hilfsfunktion für linksbündige Ausrichtung (simuliert C++ alignl)
+  ## Auxiliary function for left-alignment (simulates C++ alignl)
   align_l <- function(text, width = 45) {
     txt <- as.character(text)
     if (nchar(txt) >= width) return(substring(txt, 1, width))
@@ -91,26 +91,25 @@ print.OpenCLDeviceList <- function(x, ...) {
   }
 
   cat("|----------------.------------------------------------------------------------|\n")
-  cat("| Device Index   | Geraete-Name                                  | FP64       |\n")
+  cat("| Device Index   | Device Name                                   | FP64       |\n")
   cat("|----------------+-----------------------------------------------+------------|\n")
 
   for (i in 1:nrow(x)) {
-    # 🚀 DIE DYNAMISCHE STRIP-LOGIK:
-    # Das ID-Feld hat eine feste Trennwand-Breite von 10 Zeichen ("| ID X    ")
+    ## The ID field has a fixed divider width of 10 characters ("|ID X    ")
     raw_idx <- as.character(x$Index[i])
 
-    # Wir berechnen das exakte Padding für die Leerzeichen hinter der Ziffer:
-    # 10 Zeichen Gesamtbreite - 3 Zeichen für "ID " - Länge der Ziffer
+    ## We calculate the exact padding for the spaces after the number:
+    ## 10 characters total width - 3 characters for "ID" - length of the digit
     padding_length <- 10 - 3 - nchar(raw_idx)
 
-    # Sicherheitsnetz, falls die ID wider Erwarten riesig wird
+    ## Safety net in case the ID becomes huge contrary to expectations
     if (padding_length < 1) padding_length <- 1
 
-    # Perfekt zentrierter ID-String ohne Tabellen-Verschiebung!
-    idx_field <- paste0("Idx ", raw_idx, paste(rep(" ", padding_length), collapse = ""))
+    ## Perfectly centered ID string without table shifting!
+    idx_field <- paste0("    ", raw_idx, paste(rep(" ", padding_length), collapse = ""))
 
     name_pad <- align_l(x$Name[i], 45)
-    fp64_str <- if (x$FP64_Capable[i]) "JA  " else "NEIN"
+    fp64_str <- if (x$FP64_Capable[i]) "yes " else "no  "
 
     cat(paste0("| ", idx_field, "| ", name_pad, " | ", fp64_str, "       |\n"))
   }

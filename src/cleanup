@@ -1,5 +1,5 @@
 #!/bin/sh
-echo "🧹 [OpenCLeaR] Starte kompromisslose Post-Build-Bereinigung..."
+echo "[OpenCLeaR] Start post-build cleanup..."
 rm -rf backend/build/
 rm -rf backend/lib/
 rm -rf backend/CMakeFiles/
