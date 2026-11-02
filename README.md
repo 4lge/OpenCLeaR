@@ -3,17 +3,17 @@
 A **R package** that simplifies writing parallel algorithms in OpenCL accessible from R.
 It makes use of **CMake**, **Rcpp** and **OpenCL-Wrapper** (at least a fork of it) to ease 
 platform-independent compilation and linkage to **OpenCL**. The whole package is a fork of the
-**rccp-cmake-template** package described 
-(here)[https://medium.com/@mail_17803/building-hardware-accelerated-r-packages-with-rcpp-and-cmake-a-practical-template-114d13b08a97]
-and available at (GitHUB)[https://github.com/jmaerte/cmake-rcpp-template].
+**rcpp-cmake-template** package described 
+[here](https://medium.com/@mail_17803/building-hardware-accelerated-r-packages-with-rcpp-and-cmake-a-practical-template-114d13b08a97)
+and available at [GitHUB](https://github.com/jmaerte/cmake-rcpp-template).
 
 
 ---
 
 ## ✨ Highlights
 
-- ✅ Platform-independent configuration and linkage with **CMake**, this is inherited from **rcpp-cmake-template** package as upstream dependdency. 
-- ✅ Easy access tk OpenCL vie C++ interface taken from (a fork of) **OpenCL-Wrapper**.
+- ✅ Platform-independent configuration and linkage with **CMake**, this is inherited from **rcpp-cmake-template** package as upstream dependency. 
+- ✅ Easy access to OpenCL vie C++ interface taken from (a fork of) **OpenCL-Wrapper**.
 - ✅ Functionality accessible via **inline** package using the provided plugin.
 - ✅ Simple Rcpp integration to access the OpenCL backend.
 - ✅ OpenCL kernels have access to a kernel library providing some alternatives to R/Rcpp functions. (currently restricted to a collection of r|d|p<dsitrib> functions like rnorm, dnorm, pnorm etc)
@@ -49,7 +49,7 @@ OpenCLeaR
 |			└──	# Some external library headers.
 |	
 ├──	R
-|	└──	# Caller scripts for the Rcpp functions and other R functions
+|	└──	# Caller scripts for the Rcpp functions and other R functions, especially oclFunctions.
 |
 ├──	man
 |	└──	# Documentation goes here
@@ -57,48 +57,177 @@ OpenCLeaR
 └──	inst
 	| 	# The library features the possibility to load external
 	└──	# resources from this folder.
-			├──	kernel
-    	| 	# OpenCL kernels for oclFunctions
-      └── interface
-    	  	# Rcpp interface bodies for oclFunctions
+        ├── kernel
+        |   # OpenCL kernels for oclFunctions
+        └── interface
+            # Rcpp interface bodies for oclFunctions
 
 ```
 
 📝 **Note:** Public headers (`backend/include`) define C/C++ interfaces compatible with `Rcpp`; they should not include external library headers as `Rcpp` does not link against them. Private headers (`backend/src/internal`) manage actual implementation details, allowing clean abstraction.
 
 ## ⚙️ Backend with CMake
-The `src/backend` directory is a standalone **CMake** project. It builds a shared library that is automatically linked to the R package.
-
-* Extend linkage easily in `CMakeLists.txt` for OpenCL, OpenGL, etc.
+The `src/backend` directory is a standalone **CMake** project. It builds a shared library (a static library under Windows) that is automatically linked to the R package.
 
 * CMake handles all platform-dependent paths and setup.
 
 ## 📂 The `inst` Folder
 
-The `inst/` directory contains runtime resources (e.g., `.cl` kernels and `.cpp` interfaces). During installation, files from `src/backend/kernels` are copied into `inst/kernels` using the `configure` and `configure.win` scripts.
-
-``````r
-# Accessed in R via:
-system.file("kernels", package = "OpenCLeaR")
-``````
+The `inst/` directory contains runtime resources, `.cl` kernels at `inst/kernel` and `.cpp` interfaces at `inst/interface`. During installation, these files from her installed at the `kernel` and `interface` directory of the installed library and can be accessed in R via:
 
 
-An **inline** call could look like this:
-`````
-source(paste(system.file("inst/examples", package = "OpenCLeaR"),"rnormCLinline.R",sep="/"))
-`````
+```{}
+system.file("kernel", package = "OpenCLeaR")
+system.file("interface", package = "OpenCLeaR")
+```
 
 
+A simple example can be run from here:
+```{}
+source(paste(system.file("examples", package = "OpenCLeaR"),"idw.R",sep="/"))
+```
 
-NAMESPACE genration is automated vie Makefile:
+
+## ⚙️ Package administration
+
+Development task like NAMESPACE generation are automated via a Makefile:
 ```{}
 touch NAMESPACE.in
 make NAMESPACE
+
+make RdFiles
+
+make src/RcppExports.cpp
+
+...
 ```
 
-## 🧪 Example Use Case
 
-TBW
+## 🧪 Example Use Case: Inverse Distance Weighting (IDW)
+
+The core strength of **OpenCLeaR** is `oclFunction()`. It automates compiling an OpenCL C kernel alongside an Rcpp wrapper. It creates a self-adapting, JIT-compiled function that manages hardware precision shifts (FP32/FP64) internally and utilizes an optimized global RAM cache.
+
+### 1. The OpenCL Kernel (`inst/kernel/idw_kernel.cl`)
+This kernel executes on the GPU. The architecture-dependent placeholder `real` is dynamically defined as `float` or `double` at runtime depending on your active hardware capabilities.
+
+```c
+__kernel void idw_kernel(__global const real* x0, __global const real* y0, __global real* z0,
+                         __global const real* x,  __global const real* y,  __global const real* z,
+                         const int n0, const int n, const real p) {
+    int i = get_global_id(0);
+    if (i >= n0) return;
+
+    real wsum = 0.0, num = 0.0;
+    for (int j = 0; j < n; j++) {
+        real d = sqrt((x0[i]-x[j])*(x0[i]-x[j]) + (y0[i]-y[j])*(y0[i]-y[j]));
+        if (d < 1e-9) { z0[i] = z[j]; return; }
+        real w = 1.0 / pow(d, p);
+        wsum += w; 
+        num += w * z[j];
+    }
+    z0[i] = num / wsum;
+}
+```
+
+### 2. The Rcpp Interface (`inst/interface/idw_rcpp.cpp`)
+This C++ snippet manages memory allocation on the OpenCL device. Data is mapped efficiently using memory abstraction layers and handles data exchange safely without DLL locks.
+
+```cpp
+NumericVector x0(r_x0);
+NumericVector y0(r_y0);
+NumericVector x(r_x);
+NumericVector y(r_y);
+NumericVector z(r_z);
+
+int n0 = x0.size();
+int n = x.size();
+NumericVector r_z0(n0);
+
+// Allocate device memory utilizing the active device pointer
+Memory<real> gpu_x0(*device, n0);
+Memory<real> gpu_y0(*device, n0);
+Memory<real> gpu_z0(*device, n0);
+Memory<real> gpu_x(*device, n);
+Memory<real> gpu_y(*device, n);
+Memory<real> gpu_z(*device, n);
+
+// High-performance element-wise buffer filling
+for(int i=0; i<n0; ++i) { gpu_x0[i] = x0[i]; gpu_y0[i] = y0[i]; }
+for(int j=0; j<n; ++j)  { gpu_x[j] = x[j]; gpu_y[j] = y[j]; gpu_z[j] = z[j]; }
+
+// Push buffers to the OpenCL device
+gpu_x0.write_to_device(); gpu_y0.write_to_device();
+gpu_x.write_to_device();  gpu_y.write_to_device(); gpu_z.write_to_device();
+
+// Enqueue and execute the JIT-compiled kernel
+Kernel k(*device, n0, "idw_kernel", gpu_x0, gpu_y0, gpu_z0, gpu_x, gpu_y, gpu_z, n0, n, as<real>(p));
+k.run();
+
+// Read result matrix back to host RAM
+gpu_z0.read_from_device();
+for(int i=0; i<n0; ++i) r_z0[i] = gpu_z0[i];
+
+return r_z0;
+```
+
+### 3. Generating and Executing the Cached R Interface
+In R, you stitch both files together using `oclFunction()`. The call pattern utilizes an **Evaluate-in-Place** pipeline via a double closure `()(...)`:
+
+```R
+library(OpenCLeaR)
+
+# 1. Activate your target OpenCL backend hardware (e.g., GPU)
+ActivateDevice(0)
+
+# 2. Construct the hardware-adaptive JIT wrapper function
+idw_gpu <- oclFunction(
+    signature = signature(r_x0="numeric", r_y0="numeric", r_x="numeric",
+                          r_y="numeric", r_z="numeric", p="numeric"),
+    kernel_file    = "idw_kernel.cl",
+    interface_file = "idw_rcpp.cpp"
+)
+
+# 3. Execute the function. Sub-sequent hardware switches are handled automatically.
+result <- idw_gpu(target_x, target_y, source_x, source_y, source_z, p = 2.0)
+```
+
+### 4. Encapsulate the function in a R wrapper readz to be ised in zour library
+
+```R
+##' Inverse Distance Weighting (IDW) parallelized via OpenCL
+##'
+##' @description
+##' High-performance parallelized spatial interpolation utilizing the active 
+##' OpenCL device backend.
+##'
+##' @param x0 Numeric vector of target x-coordinates.
+##' @param y0 Numeric vector of target y-coordinates.
+##' @param x Numeric vector of known source x-coordinates.
+##' @param y Numeric vector of known source y-coordinates.
+##' @param z Numeric vector of known source values.
+##' @param p Numeric value specifying the power parameter (distance weight).
+##' @param force_float Logical value. If \code{TRUE}, execution is forced to FP32.
+##'
+##' @return A numeric vector containing the interpolated values at the target locations.
+##' @export
+idwOCL <- function(x0, y0, x, y, z, p = 2.0, force_float = FALSE) {
+    
+    OpenCLeaR::oclFunction(
+        signature = inline::signature(
+            r_x0 = "numeric", 
+            r_y0 = "numeric", 
+            r_x  = "numeric",
+            r_y  = "numeric", 
+            r_z  = "numeric", 
+            p    = "numeric"
+        ),
+        kernel_file    = "idw_kernel.cl",
+        interface_file = "idw_rcpp.cpp",
+        force_float    = force_float
+    )(x0, y0, x, y, z, p)
+    
+}
+```
 
 ## 📚 Resources
 
@@ -108,7 +237,7 @@ TBW
 
 ## 🛠️ Getting Started
 
-TBW
+Look into the provided vignettes ...
 
 ## 🧑‍💻 Contributions
 
@@ -116,6 +245,6 @@ Contributions, suggestions, and issues are welcome! Feel free to open a pull req
 
 ## 📄 License
 
-MIT License. See `LICENSE` for details.
+MIT License. See `LICENSE` and `LICENSE.note` for details.
 
 
