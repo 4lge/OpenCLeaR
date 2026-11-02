@@ -206,7 +206,8 @@ inlineCxxPluginDouble <- function(...) {
 ##'     gpu_x0.write_to_device(); gpu_y0.write_to_device();
 ##'     gpu_x.write_to_device(); gpu_y.write_to_device(); gpu_z.write_to_device();
 ##'
-##'     Kernel k(*device, n0, \"idw_kernel\", gpu_x0, gpu_y0, gpu_z0, gpu_x, gpu_y, gpu_z, n0, n, as<real>(p));
+##'     Kernel k(*device, n0, \"idw_kernel\", gpu_x0, gpu_y0, gpu_z0, 
+##'              gpu_x, gpu_y, gpu_z, n0, n, as<real>(p));
 ##'     k.run();
 ##'     gpu_z0.read_from_device();
 ##'
@@ -215,7 +216,8 @@ inlineCxxPluginDouble <- function(...) {
 ##'"
 ##'
 ##' idw_gpu <- inlineCL(
-##'     signature = signature(r_x0="numeric", r_y0="numeric", r_x="numeric", r_y="numeric", r_z="numeric", p="numeric"),
+##'     signature = signature(r_x0="numeric", r_y0="numeric", 
+##'                           r_x="numeric", r_y="numeric", r_z="numeric", p="numeric"),
 ##'     kernel_file = kernel_file,
 ##'     interface_file = interface_file
 ##' )

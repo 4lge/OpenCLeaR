@@ -1,7 +1,7 @@
 Package: OpenCLeaR
 Type: Package
 Title: Easy Access to OpenCL using C++, CMake and Rcpp
-Version: 0.7.2
+Version: 0.7.3
 Authors@R: c(person("Albrecht", "Gebhardt", role = c("aut", "cre", "cph"),
                     email = "albrecht.gebhardt@aau.at"),
              person("Julian", "Märte", role = c("cph", "ctb"),
@@ -13,7 +13,7 @@ Description: OpenCL Easy Accessible from R:
   This package aims to provide easy access to OpenCL coding
   using a C++ abstraction layer (via a modified OpenCL-Wrapper based on
   <https://github.com/ProjectPhysX/OpenCL-Wrapper>) to interact with
-  low level OpenCl functions.
+  low level OpenCL functions.
   Configuration is done automatically via CMake (thanks to
   <https://github.com/jmaerte/cmake-rcpp-template>).
 LinkingTo: Rcpp

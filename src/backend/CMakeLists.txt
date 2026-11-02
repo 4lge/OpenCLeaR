@@ -381,6 +381,7 @@ install(CODE "
     \"\${CMAKE_CURRENT_BINARY_DIR}/local_install/include/cl_error_lookup.hpp\"
     # Falls die externen Test-Dateien im Quellcode auch korrigiert werden sollen:
     \"\${CMAKE_CURRENT_SOURCE_DIR}/src/backend/lib/CLErrorLookup/CLErrorLookup/include/cl_error_lookup.hpp\"
+    \"\${CMAKE_CURRENT_SOURCE_DIR}/src/backend/build/local_install/include/cl_error_lookup.hpp\"
     \"\${CMAKE_CURRENT_SOURCE_DIR}/src/backend/lib/OpenCL-CLHPP/tests/test_versions.cpp\"
   )
 
