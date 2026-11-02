@@ -16,7 +16,9 @@ qbetaOCL <- (function() {
     if (is.null(.qbeta_ocl_internal)) {
       .qbeta_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = methods::signature(p = "numeric", shape1 = "numeric", shape2 = "numeric"),
-        kernel_file = "qbeta.cl", interface_file = "qbeta.cpp", ...
+        kernel_file = "qbeta.cl", 
+        interface_file = "qbeta.cpp", 
+        ...
       )
     }
     return(.qbeta_ocl_internal(p, shape1, shape2))

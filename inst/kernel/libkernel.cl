@@ -1,6 +1,6 @@
 // -*- c -*-
 
-// 🛡️ define severeal constants regarding float/double differences
+// 🛡️ define seveeal constants regarding float/double differences
 #if defined(cl_khr_fp64) || defined(cl_amd_fp64)
 #define GPGPU_EPSILON 1e-16
 #define GPGPU_SAFE_MAX 1e-300
@@ -134,6 +134,7 @@ static inline real rinvgamma_internal(const real shape, const real rate, __priva
 
 
 // --- Beta Distribution ---
+static inline real core_incomplete_beta(real x, real a, real b); 
 static inline real dbeta(real x, real shape1, real shape2);
 static inline real pbeta(real q, real shape1, real shape2);
 static inline real qbeta(real p, real shape1, real shape2);
@@ -925,66 +926,82 @@ static inline real rinvgamma_internal(const real shape, const real rate, __priva
 // BETA DISTRIBUTION & STUDENT-T DISTRIBUTION (Stabilized via Continued Fractions)
 // =========================================================================
 
-// Regularized Incomplete Beta Function I_x(a, b) via Lentz's Continued Fraction Method
+// Regularized Incomplete Beta Function I_x(a, b) – REKURSIONSFREI FÜR GPU
 static inline real core_incomplete_beta(real x, real a, real b) {
-    if (x <= (real)0.0f) return (real)0.0f;
-    if (x >= (real)1.0f) return (real)1.0f;
-    if (isnan(x) || isnan(a) || isnan(b)) return (real)NAN;
-
-    real log_beta_const = lgamma(a + b) - (lgamma(a) + lgamma(b));
-    real front = exp(log_beta_const + a * log(x) + b * log((real)1.0f - x));
-
-    if (x > (a + (real)1.0f) / (a + b + (real)2.0f)) {
-        return (real)1.0f - core_incomplete_beta((real)1.0f - x, b, a);
-    }
-
-    real qab = a + b;
-    real qap = a + (real)1.0f;
-    real qam = a - (real)1.0f;
-    real c = (real)1.0f;
-    real d = (real)1.0f - qab * x / qap;
-    if (fabs(d) < (real)1e-30f) d = (real)1e-30f;
+  if (x <= (real)0.0f) return (real)0.0f;
+  if (x >= (real)1.0f) return (real)1.0f;
+  if (isnan(x) || isnan(a) || isnan(b)) return (real)NAN;
+  
+  int symmetric_flip = 0;
+  real curr_x = x;
+  real curr_a = a;
+  real curr_b = b;
+  
+  if (x > (a + (real)1.0f) / (a + b + (real)2.0f)) {
+    symmetric_flip = 1;
+    curr_x = (real)1.0f - x;
+    curr_a = b;
+    curr_b = a;
+  }
+  
+  real log_beta_const = lgamma(curr_a + curr_b) - (lgamma(curr_a) + lgamma(curr_b));
+  real front = exp(log_beta_const + curr_a * log(curr_x) + curr_b * log((real)1.0f - curr_x));
+  
+  real safe_bound = (real)GPGPU_SAFE_MAX;
+  if (safe_bound < (real)1e-7f) safe_bound = (real)1e-7f; 
+  
+  real qab = curr_a + curr_b;
+  real qap = curr_a + (real)1.0f;
+  real qam = curr_a - (real)1.0f;
+  real c = (real)1.0f;
+  
+  real d = (real)1.0f - qab * curr_x / qap;
+  if (fabs(d) < safe_bound) d = (d >= 0.0f) ? safe_bound : -safe_bound;
+  d = (real)1.0f / d;
+  real f = d;
+  
+  for (int m = 1; m <= 60; ++m) {
+    real m_real = (real)m;
+    real m2 = (real)2.0f * m_real;
+    
+    real aa = m_real * (curr_b - m_real) * curr_x / ((qam + m2) * (curr_a + m2));
+    if (isnan(aa) || isinf(aa)) return (real)0.0f;
+    
+    d = (real)1.0f + aa * d;
+    if (fabs(d) < safe_bound) d = (d >= 0.0f) ? safe_bound : -safe_bound;
+    
+    c = (real)1.0f + aa / (fabs(c) < safe_bound ? safe_bound : c);
+    if (fabs(c) < safe_bound) c = (c >= 0.0f) ? safe_bound : -safe_bound;
+    
     d = (real)1.0f / d;
-    real f = d;
-
-    // 🛡️ Harter Schutz gegen GPU-Freeze: m MUSS terminieren
-    for (int m = 1; m <= 100; ++m) {
-        real m_real = (real)m;
-        real m2 = (real)2.0f * m_real;
-        
-        real aa = m_real * (b - m_real) * x / ((qam + m2) * (a + m2));
-        
-        // Verhindere NaN/Inf Explosionen in der Kette
-        if (isnan(aa) || isinf(aa)) return (real)0.0f;
-
-        d = (real)1.0f + aa * d;
-        if (fabs(d) < (real)1e-30f) d = (real)1e-30f;
-        c = (real)1.0f + aa / c;
-        if (fabs(c) < (real)1e-30f) c = (real)1e-30f;
-        d = (real)1.0f / d;
-        real delta = d * c;
-        f *= delta;
-
-        aa = -(a + m_real) * (qab + m_real) * x / ((a + m2) * (qap + m2));
-        if (isnan(aa) || isinf(aa)) return (real)0.0f;
-
-        d = (real)1.0f + aa * d;
-        if (fabs(d) < (real)1e-30f) d = (real)1e-30f;
-        c = (real)1.0f + aa / c;
-        if (fabs(c) < (real)1e-30f) c = (real)1e-30f;
-        d = (real)1.0f / d;
-        delta = d * c;
-        f *= delta;
-
-        if (fabs(delta - (real)1.0f) < (real)1e-7f) {
-            break;
-        }
+    real delta = d * c;
+    f *= delta;
+    
+    aa = -(curr_a + m_real) * (qab + m_real) * curr_x / ((curr_a + m2) * (qap + m2));
+    if (isnan(aa) || isinf(aa)) return (real)0.0f;
+    
+    d = (real)1.0f + aa * d;
+    if (fabs(d) < safe_bound) d = (d >= 0.0f) ? safe_bound : -safe_bound;
+    
+    c = (real)1.0f + aa / (fabs(c) < safe_bound ? safe_bound : c);
+    if (fabs(c) < safe_bound) c = (c >= 0.0f) ? safe_bound : -safe_bound;
+    
+    d = (real)1.0f / d;
+    delta = d * c;
+    f *= delta;
+    
+    if (fabs(delta - (real)1.0f) < (real)GPGPU_EPSILON) {
+      break;
     }
-
-    real result = front * f / a;
-    if (isnan(result) || isinf(result)) return (real)0.0f;
-    return result;
+  }
+  
+  real result = front * f / curr_a;
+  if (isnan(result) || isinf(result)) return (real)0.0f;
+  
+  if (symmetric_flip) return (real)1.0f - result;
+  return result;
 }
+
 
 // Probability Density Function (PDF)
 static inline real dbeta(real x, real shape1, real shape2) {
@@ -1010,18 +1027,53 @@ static inline real qbeta(real p, real shape1, real shape2) {
   
   real a = shape1;
   real b = shape2;
-  real mean = a / (a + b);
-  real guess = mean;
   
-  for (int i = 0; i < 15; ++i) {
-    real error = pbeta(guess, a, b) - p;
+  // 1. Stabiler Startwert (Mean)
+  real guess = a / (a + b);
+  
+  // 2. Strikte Schranken für die Absicherung (Bisektion-Klammer)
+  real lower = 0.0f;
+  real upper = 1.0f;
+  
+  for (int i = 0; i < 35; ++i) {
+    real current_p = pbeta(guess, a, b);
+    real error = current_p - p;
+    
+    // Konvergenz-Kriterium für FP32 Single Precision
     if (fabs(error) < (real)1e-5f) break;
+    
+    // Schranken basierend auf dem Vorzeichen des Fehlers verengen
+    if (error > 0.0f) {
+      upper = guess;
+    } else {
+      lower = guess;
+    }
+    
+    // 🎯 DER FIX: Nutze direkt deine eigene, hochpräzise dbeta-Funktion!
+    // Das verhindert jeden Skalierungs-Mismatch mit pbeta.
     real deriv = dbeta(guess, a, b);
-    if (deriv == (real)0.0f) break;
-    guess -= error / deriv;
-    if (guess <= (real)0.0f) guess = (real)1e-5f;
-    if (guess >= (real)1.0f) guess = (real)0.99999f;
+    
+    // 3. Numerischer Filter gegen instabile Newton-Schritte
+    if (deriv < (real)1e-6f || !isfinite(deriv)) {
+      // Ableitung zu flach -> Erzwinge sicheren Bisektion-Schritt
+      guess = (lower + upper) * (real)0.5f;
+    } else {
+      real step = error / deriv;
+      real next_guess = guess - step;
+      
+      // Überprüfen, ob der Newton-Schritt aus der aktuellen Klammer ausbricht
+      if (next_guess <= lower || next_guess >= upper || !isfinite(next_guess)) {
+        guess = (lower + upper) * (real)0.5f;
+      } else {
+        guess = next_guess;
+      }
+    }
+    
+    // Maschinengenauigkeit-Schutz für den nächsten Durchlauf
+    if (guess <= (real)0.0f) guess = (real)1e-6f;
+    if (guess >= (real)1.0f) guess = (real)0.99995f;
   }
+  
   return guess;
 }
 
