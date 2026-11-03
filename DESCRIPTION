@@ -16,15 +16,17 @@ Description: OpenCL Easy Accessible from R:
   low level OpenCL functions.
   Configuration is done automatically via CMake (thanks to
   <https://github.com/jmaerte/cmake-rcpp-template>).
+URL: https://github.com/4lge/OpenCLeaR
+BugReports: URL: https://github.com/4lge/OpenCLeaR/issues
 LinkingTo: Rcpp
 Imports: Rcpp, inline, methods
 SystemRequirements: OpenCL, CMake
 Encoding: UTF-8
 License: MIT + file LICENSE
 Config/roxygen2/version: 8.0.0
-Suggests: knitr (>= 1.50), markdown, opencltools, tinytest, nmathopencl
+Suggests: knitr (>= 1.50), rmarkdown, opencltools, tinytest, nmathopencl
 Config/testthat/edition: 3
-VignetteBuilder: knitr
+VignetteBuilder: knitr, rmarkdown
 RoxygenNote: 7.3.3
 NeedsCompilation: yes
 Packaged: 2026-10-13 10:50:43 UTC; agebhard
