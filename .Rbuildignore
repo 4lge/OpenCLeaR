@@ -29,3 +29,5 @@
 #
 ^inst/bin/ocl_compiler.*$
 ^\.github/.*$
+^doc$
+^Meta$
