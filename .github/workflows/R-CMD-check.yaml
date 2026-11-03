@@ -62,3 +62,9 @@ jobs:
           args: 'c("--no-manual", "--as-cran")'
           error-on: '"error"'
 
+      - name: Show tinytest Output Log
+        if: always()  # Läuft garantiert immer, egal ob der Check erfolgreich war oder fehlgeschlagen ist!
+        run: |
+          echo "=== SEARCHING FOR TINYTEST LOGS ==="
+          # Sucht die tinytest.Rout im generierten Check-Verzeichnis und gibt sie aus
+          find ${{ github.workspace }}/check -name "tinytest.Rout" -exec echo "--- File: {} ---" \; -exec cat {} \; || true

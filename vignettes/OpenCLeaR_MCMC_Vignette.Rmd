@@ -1,15 +1,15 @@
 ---
-title: "OpenCLeaR 0.6.2: GPGPU-Accelerated MCMC Sampling"
-subtitle: "Vignette 1: From Serial R Code to GPGPU Warp Speed"
+title: "OpenCLeaR: GPGPU-Accelerated MCMC Sampling"
+subtitle: "Vignette 1: From Serial R Code to GPGPU Speed"
 author: "AG"
 date: "2026-10-11"
-format: 
-  html:
-    toc: true
-    toc-depth: 3
-    theme: cosmo
-    highlight-style: github
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{OpenCLeaR Overview}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
+    
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
