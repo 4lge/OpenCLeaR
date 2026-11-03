@@ -28,3 +28,4 @@
 
 #
 ^inst/bin/ocl_compiler.*$
+^\.github/.*$
