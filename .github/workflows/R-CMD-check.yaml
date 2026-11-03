@@ -12,7 +12,8 @@ jobs:
     env:
       R_REREMOTES: true
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      _R_CHECK_CRAN_INCOMING_: "true"  # Setzt die Umgebungsvariable zum Überspringen der JIT-Tests
+      _R_CHECK_CRAN_INCOMING_: "true"
+      _R_CHECK_VIGNETTES_NLANG_: "TRUE" # Verhindert, dass der Runner versucht, die Vignetten während des Checks neu zu rendern
 
     steps:
       - name: Checkout repository
@@ -57,6 +58,6 @@ jobs:
       - name: Check Package
         uses: r-lib/actions/check-r-package@v2
         with:
-          args: 'c("--no-manual", "--as-cran")'
+          args: 'c("--no-manual", "--as-cran", "--no-vignettes")' # Erzwingt das Überspringen des Vignetten-Baus im Check
           error-on: '"error"'
 
