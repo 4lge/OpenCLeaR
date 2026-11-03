@@ -38,6 +38,15 @@ jobs:
             any::rmarkdown
             any::ggplot2
             any::gridExtra
+            any::roxygen2
+
+      - name: Generate NAMESPACE and Rd Documentation via Makefile
+        run: |
+          # Generiert den NAMESPACE, die .Rd Dateien und RcppExports
+          touch NAMESPACE.in
+          make NAMESPACE
+          make RdFiles
+          make src/RcppExports.cpp
 
       - name: Check Package
         uses: r-lib/actions/check-r-package@v2
