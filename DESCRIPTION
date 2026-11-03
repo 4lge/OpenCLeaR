@@ -17,7 +17,7 @@ Description: OpenCL Easy Accessible from R:
   Configuration is done automatically via CMake (thanks to
   <https://github.com/jmaerte/cmake-rcpp-template>).
 URL: https://github.com/4lge/OpenCLeaR
-BugReports: URL: https://github.com/4lge/OpenCLeaR/issues
+BugReports: https://github.com/4lge/OpenCLeaR/issues
 LinkingTo: Rcpp
 Imports: Rcpp, inline, methods
 SystemRequirements: OpenCL, CMake
