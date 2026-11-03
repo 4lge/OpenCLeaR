@@ -35,6 +35,9 @@ jobs:
             any::rcmdcheck
             any::tinytest
             any::Rcpp
+	    any::rmarkdown
+	    any::ggplot2
+	    any::gridExtra
 
       - name: Check Package
         uses: r-lib/actions/check-r-package@v2
