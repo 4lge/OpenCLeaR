@@ -42,11 +42,19 @@ jobs:
 
       - name: Generate NAMESPACE and Rd Documentation via Makefile
         run: |
-          # Generiert den NAMESPACE, die .Rd Dateien und RcppExports
+          # 1. Dokumentation und Exporte aufbauen
           touch NAMESPACE.in
           make NAMESPACE
           make RdFiles
           make src/RcppExports.cpp
+          
+          # 2. Den lokalen CMake-Cache radikal wegräumen, damit R CMD build jungfräulich startet
+          # Falls 'make dist-clean' in deinem Makefile definiert ist:
+          make dist-clean || true
+          
+          # Zur absoluten Sicherheit löschen wir auch manuell das build-Verzeichnis
+          rm -rf src/backend/build/
+          rm -f src/backend/CMakeCache.txt
 
       - name: Check Package
         uses: r-lib/actions/check-r-package@v2
