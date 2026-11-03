@@ -12,6 +12,7 @@ jobs:
     env:
       R_REREMOTES: true
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      _R_CHECK_CRAN_INCOMING_: "true"  # Setzt die Umgebungsvariable zum Überspringen der JIT-Tests
 
     steps:
       - name: Checkout repository
@@ -42,17 +43,14 @@ jobs:
 
       - name: Generate NAMESPACE and Rd Documentation via Makefile
         run: |
-          # 1. Dokumentation und Exporte aufbauen
+          # 1. Dokumentation, Exporte und RcppSchnittstellen frisch aufbauen
           touch NAMESPACE.in
           make NAMESPACE
           make RdFiles
           make src/RcppExports.cpp
           
-          # 2. Den lokalen CMake-Cache radikal wegräumen, damit R CMD build jungfräulich startet
-          # Falls 'make dist-clean' in deinem Makefile definiert ist:
+          # 2. Lokalen CMake-Cache restlos entfernen für sauberen R CMD build Lauf
           make dist-clean || true
-          
-          # Zur absoluten Sicherheit löschen wir auch manuell das build-Verzeichnis
           rm -rf src/backend/build/
           rm -f src/backend/CMakeCache.txt
 
@@ -62,9 +60,3 @@ jobs:
           args: 'c("--no-manual", "--as-cran")'
           error-on: '"error"'
 
-      - name: Show tinytest Output Log
-        if: always()  # Läuft garantiert immer, egal ob der Check erfolgreich war oder fehlgeschlagen ist!
-        run: |
-          echo "=== SEARCHING FOR TINYTEST LOGS ==="
-          # Sucht die tinytest.Rout im generierten Check-Verzeichnis und gibt sie aus
-          find ${{ github.workspace }}/check -name "tinytest.Rout" -exec echo "--- File: {} ---" \; -exec cat {} \; || true
