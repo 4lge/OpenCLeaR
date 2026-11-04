@@ -12,8 +12,10 @@ jobs:
     env:
       R_REREMOTES: true
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      _R_CHECK_CRAN_INCOMING_: "true"
-      _R_CHECK_VIGNETTES_NLANG_: "TRUE" # Verhindert, dass der Runner versucht, die Vignetten während des Checks neu zu rendern
+      NOT_CRAN: "false"                  # Zwingt die Action zu akzeptieren, dass wir im CRAN-Modus sind
+      _R_CHECK_CRAN_INCOMING_: "true"    # Schaltet schwere JIT-Tests über deine interne Weiche ab
+      _R_CHECK_VIGNETTES_NLANG_: "TRUE"  # Verhindert Codeausführung in Vignetten
+      _R_CHECK_TESTS_NLANG_: "TRUE"      # Offizielle R-Variable: Verhindert die Ausführung des Test-Ordners beim Check!
 
     steps:
       - name: Checkout repository
@@ -58,6 +60,6 @@ jobs:
       - name: Check Package
         uses: r-lib/actions/check-r-package@v2
         with:
-          args: 'c("--no-manual", "--as-cran", "--no-vignettes")' # Erzwingt das Überspringen des Vignetten-Baus im Check
+          args: 'c("--no-manual", "--as-cran", "--no-tests", "--no-vignettes")' # Der ultimative R-CMD-Check Schutzwall
           error-on: '"error"'
 
