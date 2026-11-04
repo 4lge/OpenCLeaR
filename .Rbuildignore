@@ -31,3 +31,6 @@
 ^\.github/.*$
 ^doc$
 ^Meta$
+^vignettes/.*\.Rmd$
+^vignettes/.*\.qmd$
+

@@ -49,8 +49,14 @@ RdFiles: src/RcppExports.cpp dist-clean
 	LD_LIBRARY_PATH="$(PWD)/src:$(PWD)/inst/lib:$(PWD)/src/backend/build:$(LD_LIBRARY_PATH)" Rscript -e "roxygen2::roxygenise(package.dir = '.', roclets='rd')"
 
 
-vignettes/OpenCLeaR-Overview.md: vignettes/OpenCLeaR-Overview.Rmd
-		cd vignettes; Rscript -e "rmarkdown::render(\"OpenCLeaR-Overview.Rmd\", output_format = \"md_document\")"
+vignettes/OpenCLeaR_MCMC_Vignette.html: vignettes/OpenCLeaR_MCMC_Vignette.Rmd
+		cd vignettes; Rscript -e "rmarkdown::render(\"OpenCLeaR_MCMC_Vignette.Rmd\", output_format = \"md_document\")"
+
+vignettes:
+	Rscript -e "tools::buildVignettes(dir = '.', clean = FALSE)"
+	# Kopiert die Vignetten zur Sicherheit nach inst/doc, falls R es nicht automatisch tut
+	mkdir -p inst/doc
+	cp vignettes/*.html vignettes/*.R inst/doc/ || true
 
 source: dist-clean
 	(cd ..; R CMD build OpenCLeaR)
