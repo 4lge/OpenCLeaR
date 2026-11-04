@@ -1,4 +1,4 @@
-.PHONY: RdFiles source
+.PHONY: RdFiles source vignettes
 
 all:
 
@@ -7,6 +7,11 @@ clean:
 	rm -f src/backend/src/*.so src/backend/src/*.o src/backend/src/*~
 	rm -rf src/backend/lib 
 	rm -f inst/bin/ocl*
+	# Lokale Artefakte in vignettes/ löschen
+	rm -rf vignettes/.cl_cache
+	rm -f vignettes/*.html vignettes/*.R
+	# Installierte Dokumente aufräumen
+	rm -rf inst/doc
 
 dist-clean: clean
 	find . -name \*SFConflict\* -delete
@@ -49,17 +54,22 @@ RdFiles: src/RcppExports.cpp dist-clean
 	LD_LIBRARY_PATH="$(PWD)/src:$(PWD)/inst/lib:$(PWD)/src/backend/build:$(LD_LIBRARY_PATH)" Rscript -e "roxygen2::roxygenise(package.dir = '.', roclets='rd')"
 
 
-vignettes/OpenCLeaR_MCMC_Vignette.html: vignettes/OpenCLeaR_MCMC_Vignette.Rmd
-		cd vignettes; Rscript -e "rmarkdown::render(\"OpenCLeaR_MCMC_Vignette.Rmd\", output_format = \"md_document\")"
-
-vignettes:
-	Rscript -e "tools::buildVignettes(dir = '.', clean = FALSE)"
-	# Kopiert die Vignetten zur Sicherheit nach inst/doc, falls R es nicht automatisch tut
+vignettes: vignettes/OpenCLeaR_MCMC_Vignette.Rmd
+	# Verzeichnisse anlegen
 	mkdir -p inst/doc
-	cp vignettes/*.html vignettes/*.R inst/doc/ || true
+	# Direkt nach inst/doc rendern, damit R den Index dort findet
+	Rscript -e "rmarkdown::render('vignettes/OpenCLeaR_MCMC_Vignette.Rmd', output_dir='inst/doc')"
+	# Den R-Code extrahieren und nach inst/doc legen
+	Rscript -e "knitr::purl('vignettes/OpenCLeaR_MCMC_Vignette.Rmd', output='inst/doc/OpenCLeaR_MCMC_Vignette.R')"
+	# WICHTIG: Erzeugt die zwingend erforderliche .html.asis Datei für R's Vignette-Engine
+	echo "%\VignetteIndexEntry{OpenCLeaR: GPGPU-Accelerated MCMC Sampling}" > inst/doc/OpenCLeaR_MCMC_Vignette.html.asis
+	echo "%\VignetteEngine{knitr::rmarkdown}" >> inst/doc/OpenCLeaR_MCMC_Vignette.html.asis
+	echo "%\VignetteEncoding{UTF-8}" >> inst/doc/OpenCLeaR_MCMC_Vignette.html.asis
 
 source: dist-clean
-	(cd ..; R CMD build OpenCLeaR)
+	# Baut das Quellpaket (.tar.gz) direkt über devtools im übergeordneten Verzeichnis (..)
+	# vignettes=TRUE sorgt dafür, dass devtools die Vignetten sauber baut und den Index generiert.
+	Rscript -e "devtools::build(pkg = '.', path = '..', vignettes = TRUE)"
 
 cleanchars:
 	perl -i -pe 's/[^\x00-\x7F]//g' R/OpenCLeaR-package.R R/debug.R R/nmath.R

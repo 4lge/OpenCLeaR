@@ -1,6 +1,6 @@
 Package: OpenCLeaR
 Type: Package
-Title: Easy Access to OpenCL using C++, CMake and Rcpp
+Title: OpenCL Easy Accessible from R
 Version: 0.7.3
 Authors@R: c(person("Albrecht", "Gebhardt", role = c("aut", "cre", "cph"),
                     email = "albrecht.gebhardt@aau.at"),
@@ -9,13 +9,17 @@ Authors@R: c(person("Albrecht", "Gebhardt", role = c("aut", "cre", "cph"),
              person("Moritz", "Lehmann", role = c("cph", "ctb"),
                      email = "moritz.lehmann@uni-bayreuth.de"))
 Maintainer: Albrecht Gebhardt <albrecht.gebhardt@aau.at>
-Description: OpenCL Easy Accessible from R:
-  This package aims to provide easy access to OpenCL coding
-  using a C++ abstraction layer (via a modified OpenCL-Wrapper based on
-  <https://github.com/ProjectPhysX/OpenCL-Wrapper>) to interact with
-  low level OpenCL functions.
-  Configuration is done automatically via CMake (thanks to
-  <https://github.com/jmaerte/cmake-rcpp-template>).
+Description: Provides an easy-to-use interface to OpenCL GPGPU 
+    (General-Purpose Computing on Graphics Processing Units) 
+    acceleration using a unified C++ abstraction layer via 'Rcpp'. 
+    Enables developers to write, compile, and execute hardware-adaptive 
+    inline OpenCL C kernels seamlessly from within the R environment. 
+    Manages low-level memory transfer, device mapping, and execution 
+    queues automatically. Configuration and cross-platform compilation 
+    are handled via an integrated 'CMake' infrastructure. The core 
+    architecture provides a Just-In-Time (JIT) compilation framework 
+    with precision fallbacks and an efficient evaluation-in-place function 
+    caching system to eliminate compile-on-invocation overheads.
 URL: https://github.com/4lge/OpenCLeaR
 BugReports: https://github.com/4lge/OpenCLeaR/issues
 LinkingTo: Rcpp
