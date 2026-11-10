@@ -54,10 +54,10 @@ namespace backend {
     ~CLpp();
 
     
-    CLpp(bool dummy_mode); // Neuer Konstruktor für den sicheren Modus
-    bool is_initialized = false; // Flag für den Status
+    CLpp(bool dummy_mode); // New constructor for safe mode
+    bool is_initialized = false; // Flag for status
 
-    bool setupDevices(); // Lagert die Initialisierung aus
+    bool setupDevices(); // Outsources initialization
 
     // Device activeDevice;
     

@@ -24,18 +24,37 @@ library(gridExtra)
 
 ## Introduction
 
-This vignette demonstrates how the `OpenCLeaR` package accelerates computationally intensive statistical methods like the **Metropolis-Hastings (MH) Sampler** using Graphics Processing Units (GPGPU). We compare performance across five evolutionary stages on an XPS 17 system:
+This vignette demonstrates how the `OpenCLeaR` package accelerates
+computationally intensive statistical methods like the
+**Metropolis-Hastings (MH) Sampler** using Graphics Processing Units
+(GPGPU). We compare performance across five evolutionary stages:
 1. Pure serial R code
 2. Subprocess parallelization (`mclapply`)
 3. Native serial C++ kernel (`Rcpp`)
 4. Multi-threaded C++ (`RcppParallel` / Intel TBB)
 5. GPGPU acceleration via OpenCL (`OpenCLeaR`)
 
+The system in use is a 2024 DELL XPS 17 system:
+
+```{sh}
+clinfo -l
+```
+
+```{r devices}
+GetDeviceList()
+```
+
+```{sh}
+neofetch --stdout
+```
+
 ---
 
 ## 1. Mathematical Problem & Data Generation
 
-We fit a simple normal distribution model $y \sim N(\mu, \sigma)$ with uninformative priors via MCMC. First, we generate our synthetic observational data:
+We fit a simple normal distribution model $y \sim N(\mu, \sigma)$ with
+uninformative priors via MCMC. First, we generate our synthetic
+observational data:
 
 ```{r data_generation}
 # Define simulation configurations
@@ -52,6 +71,10 @@ sigma_empirical <- sd(raw_data)
 rng_state <- get(".Random.seed", envir = .GlobalEnv)
 seed_base <- as.integer(rng_state[2])
 ```
+
+
+In the following sections we will generate 1000 chains of 1000
+iterations each resulting in 1000000 simulation steps.
 
 ---
 
@@ -264,29 +287,32 @@ run_mh_r_subprocesses <- function(samples_per_chain, num_chains, raw_data, mu_in
 ```
 ## 3. The GPGPU Engine (OpenCLeaR)
 
-Activate OpenCL device
-```{r start_opencl}
-# Bind Device 0 (NVIDIA GPU) in double precision mode as standard
-ActivateDeviceWithIndex(0)
-# Output runtime profile info
-GetActiveDeviceInfo()
-```
 
 Register the OpenCL kernel object via `oclFunction`.
 
 ```{r engine_opencl}
-parallel_MH_sampler <- oclFunction(
-    signature = signature(
-        n_samples   = "integer",
-        n_chains    = "integer",
-        data_vector = "numeric",
-        mu_init     = "numeric",
-        sigma_init  = "numeric"
-    ),
-    kernel_file     = "mh_sampler.cl",
-    interface_file  = "mh_sampler.cpp",
-    force_float = FALSE
-)
+if (getRversion() >= "2.15.1") {
+  utils::globalVariables(".parallel_mh_sampler_internal")
+}
+parallel_MH_sampler <- (function() {
+    .parallel_mh_sampler_internal <- NULL
+    function(n_samples, n_chains, data_vector, mu_init, sigme_init) {
+        if (is.null(.parallel_mh_sampler_internal)) {
+            .parallel_mh_sampler_internal <<- oclFunction(
+                signature = methods::signature(
+                                         n_samples   = "integer",
+                                         n_chains    = "integer",
+                                         data_vector = "numeric",
+                                         mu_init     = "numeric",
+                                         sigma_init  = "numeric"
+                                     ),
+                kernel_file     = "mh_sampler.cl",
+                interface_file  = "mh_sampler.cpp",
+            )
+        }
+        return(.parallel_mh_sampler_internal(n_samples, n_chains, data_vector, mu_init, sigme_init))
+    }
+})()
 ```
 
 Kernel source definitions compiled dynamically from package structure:
@@ -302,18 +328,29 @@ Rcpp bridging interface definitions:
 
 And create a similar funcrion where the GPU is forced to use float instead of double:
 ```{r engine_opencl float}
-parallel_MH_sampler_float <- oclFunction(
-    signature = signature(
-        n_samples   = "integer",
-        n_chains    = "integer",
-        data_vector = "numeric",
-        mu_init     = "numeric",
-        sigma_init  = "numeric"
-    ),
-    kernel_file     = "mh_sampler.cl",
-    interface_file  = "mh_sampler.cpp",
-    force_float = TRUE
-)
+if (getRversion() >= "2.15.1") {
+  utils::globalVariables(".parallel_mh_sampler_float_internal")
+}
+parallel_MH_sampler_float <- (function() {
+    .parallel_mh_sampler_float_internal <- NULL
+    function(n_samples, n_chains, data_vector, mu_init, sigme_init) {
+        if (is.null(.parallel_mh_sampler_float_internal)) {
+            .parallel_mh_sampler_float_internal <<- oclFunction(
+                signature = methods::signature(
+                                         n_samples   = "integer",
+                                         n_chains    = "integer",
+                                         data_vector = "numeric",
+                                         mu_init     = "numeric",
+                                         sigma_init  = "numeric"
+                                     ),
+                kernel_file     = "mh_sampler.cl",
+                interface_file  = "mh_sampler.cpp",
+                force_float = TRUE
+            )
+        }
+        return(.parallel_mh_sampler_float_internal(n_samples, n_chains, data_vector, mu_init, sigme_init))
+    }
+})()
 ```
 
 ---
@@ -327,8 +364,17 @@ To eliminate any JIT compilation or cache allocation latencies, all routines und
 invisible(run_mh_pure_r(2L, 10L, raw_data, mu_empirical, sigma_empirical, seed_base))
 invisible(run_mh_r_subprocesses(2L, 10L, raw_data, mu_empirical, sigma_empirical, seed_base))
 invisible(run_mh_rcpp_parallel(20L, 10L, raw_data, mu_empirical, sigma_empirical, seed_base))
-invisible(parallel_MH_sampler(as.integer(10000), as.integer(10000), raw_data, mu_empirical, sigma_empirical))
-invisible(parallel_MH_sampler_float(as.integer(10000), as.integer(10000), raw_data, mu_empirical, sigma_empirical))
+ActivateDevice(0)
+invisible(parallel_MH_sampler(as.integer(100), as.integer(100), raw_data, mu_empirical, sigma_empirical))
+invisible(parallel_MH_sampler_float(as.integer(100), as.integer(100), raw_data, mu_empirical, sigma_empirical))
+ActivateDevice(1)
+invisible(parallel_MH_sampler(as.integer(100), as.integer(100), raw_data, mu_empirical, sigma_empirical))
+ActivateDevice(2)
+invisible(parallel_MH_sampler(as.integer(100), as.integer(100), raw_data, mu_empirical, sigma_empirical))
+invisible(parallel_MH_sampler_float(as.integer(100), as.integer(100), raw_data, mu_empirical, sigma_empirical))
+#ActivateDevice(3)
+#invisible(parallel_MH_sampler(as.integer(100), as.integer(100), raw_data, mu_empirical, sigma_empirical))
+#invisible(parallel_MH_sampler_float(as.integer(100), as.integer(100), raw_data, mu_empirical, sigma_empirical))
 ```
 
 ### 4.1. Serial R Loop
@@ -367,7 +413,14 @@ time_tbb    <- as.numeric(difftime(Sys.time(), timer_start, units = "secs"))
 
 Default behaviuor, NVidia GPU uses 'double'
 
-```{r openclear}
+
+```{r device 0}
+ActivateDevice(0)
+GetActiveDeviceInfo()
+```
+
+
+```{r openclear nvidia}
 timer_start <- Sys.time()
 output_gpu  <- parallel_MH_sampler(as.integer(total_samples), as.integer(num_chains), raw_data, mu_empirical, sigma_empirical)
 time_gpu    <- as.numeric(difftime(Sys.time(), timer_start, units = "secs"))
@@ -375,10 +428,64 @@ time_gpu    <- as.numeric(difftime(Sys.time(), timer_start, units = "secs"))
 
 Now we force the NVidia GPU into 'float' mode
 
-```{r openclear float}
+```{r openclear nvidia float}
 timer_start <- Sys.time()
 output_gpu_float  <- parallel_MH_sampler_float(as.integer(total_samples), as.integer(num_chains), raw_data, mu_empirical, sigma_empirical)
 time_gpu_float    <- as.numeric(difftime(Sys.time(), timer_start, units = "secs"))
+```
+
+Switch device to next index, Intel Xe GPU uses 'float'
+
+```{r device 1}
+ActivateDevice(1)
+GetActiveDeviceInfo()
+```
+
+```{r openclear intel Xe}
+timer_start <- Sys.time()
+output_intel_gpu  <- parallel_MH_sampler(as.integer(total_samples), as.integer(num_chains), raw_data, mu_empirical, sigma_empirical)
+time_intel_gpu    <- as.numeric(difftime(Sys.time(), timer_start, units = "secs"))
+```
+
+Switch device to next index, Intel Core i9 CPU using the POCL driver
+
+```{r device 2}
+ActivateDevice(2)
+GetActiveDeviceInfo()
+```
+
+```{r openclear Intel CPU}
+timer_start <- Sys.time()
+output_cpu  <- parallel_MH_sampler(as.integer(total_samples), as.integer(num_chains), raw_data, mu_empirical, sigma_empirical)
+time_cpu    <- as.numeric(difftime(Sys.time(), timer_start, units = "secs"))
+```
+
+Now we force also the  CPU into 'float' mode
+
+```{r openclear Intel CPU float}
+timer_start <- Sys.time()
+output_cpu_float  <- parallel_MH_sampler_float(as.integer(total_samples), as.integer(num_chains), raw_data, mu_empirical, sigma_empirical)
+time_cpu_float    <- as.numeric(difftime(Sys.time(), timer_start, units = "secs"))
+```
+Switch device to last index, Intel Core i9 CPU using the Intel oneapi driver, currently not working
+
+```{r device 3}
+#ActivateDevice(3)
+#GetActiveDeviceInfo()
+```
+
+```{r openclear Intel CPU oneapi}
+#timer_start <- Sys.time()
+#output_intel_cpu  <- parallel_MH_sampler(as.integer(total_samples), as.integer(num_chains), raw_data, mu_empirical, sigma_empirical)
+#time_intel_cpu    <- as.numeric(difftime(Sys.time(), timer_start, units = "secs"))
+```
+
+Now we force also the  CPU into 'float' mode
+
+```{r openclear Intel CPU oneapi float}
+#timer_start <- Sys.time()
+#output_intel_cpu_float  <- parallel_MH_sampler_float(as.integer(total_samples), as.integer(num_chains), raw_data, mu_empirical, sigma_empirical)
+#time_intel_cpu_float    <- as.numeric(difftime(Sys.time(), timer_start, units = "secs"))
 ```
 
 ---
@@ -400,16 +507,26 @@ performance_matrix <- data.frame(
     "🟠 Native C++ Kernel (1 Thread)", 
     "🟡 RcppParallel TBB (CPU Threads)", 
     "🚀 OpenCLeaR: NVIDIA GPU (Dev 0) double",
-    "🚀 OpenCLeaR: NVIDIA GPU (Dev 0) float"
+    "🚀 OpenCLeaR: NVIDIA GPU (Dev 0) float",
+    "🚀 OpenCLeaR: Intel GPU (Dev 1) float",
+    "🚀 OpenCLeaR: Intel CPU (Dev 2) POCL double",
+    "🚀 OpenCLeaR: Intel CPU (Dev 2) POCL float"#,
+#    "🚀 OpenCLeaR: Intel CPU (Dev 2) oneapi double",
+#    "🚀 OpenCLeaR: Intel CPU (Dev 2) oneapi float"
   ),
-  Precision = c("Double", "Double", "Double", "Double", "Double", "Float"),
+  Precision = c("Double", "Double", "Double", "Double", "Double", "Float", "Float", "Double", "Float"), #, "Double", "Float"),
   Runtime = c(
     sprintf("%.4fs", time_pure_r), 
     sprintf("%.4fs", time_mcl), 
     sprintf("%.4fs", time_serial), 
     sprintf("%.4fs", time_tbb), 
     sprintf("%.4fs", time_gpu),
-    sprintf("%.4fs", time_gpu_float)
+    sprintf("%.4fs", time_gpu_float),
+    sprintf("%.4fs", time_intel_gpu),
+    sprintf("%.4fs", time_cpu),
+    sprintf("%.4fs", time_cpu_float)#,
+#    sprintf("%.4fs", time_intel_cpu),
+#    sprintf("%.4fs", time_intel_cpu_float)
   ),
   Speedup = c(
     "1.00x (Baseline)", 
@@ -417,7 +534,12 @@ performance_matrix <- data.frame(
     sprintf("%.2fx", time_pure_r / time_serial), 
     sprintf("%.2fx", time_pure_r / time_tbb), 
     sprintf("%.2fx", time_pure_r / time_gpu),
-    sprintf("%.2fx", time_pure_r / time_gpu_float)
+    sprintf("%.2fx", time_pure_r / time_gpu_float),
+    sprintf("%.2fx", time_pure_r / time_intel_gpu),
+    sprintf("%.2fx", time_pure_r / time_cpu),
+    sprintf("%.2fx", time_pure_r / time_cpu_float)#,
+#    sprintf("%.2fx", time_pure_r / time_intel_cpu),
+#    sprintf("%.2fx", time_pure_r / time_intel_cpu_float)
   ),
   `Mu_Hat` = c(
     get_mu_hat(output_r),
@@ -425,7 +547,12 @@ performance_matrix <- data.frame(
     get_mu_hat(output_spp),
     get_mu_hat(output_tbb),
     get_mu_hat(output_gpu),
-    get_mu_hat(output_gpu_float)
+    get_mu_hat(output_gpu_float),
+    get_mu_hat(output_intel_gpu),
+    get_mu_hat(output_cpu),
+    get_mu_hat(output_cpu_float)#,
+#    get_mu_hat(output_intel_cpu),
+#    get_mu_hat(output_inytel_cpu_float)
   ),
   `Sigma_Hat` = c(
     get_sigma_hat(output_r),
@@ -433,7 +560,12 @@ performance_matrix <- data.frame(
     get_sigma_hat(output_spp),
     get_sigma_hat(output_tbb),
     get_sigma_hat(output_gpu),
-    get_sigma_hat(output_gpu_float)
+    get_sigma_hat(output_gpu_float),
+    get_sigma_hat(output_intel_gpu),
+    get_sigma_hat(output_cpu),
+    get_sigma_hat(output_cpu_float)#,
+#    get_sigma_hat(output_intel_cpu),
+#    get_sigma_hat(output_intel_cpu_float)
   ),
   check.names = FALSE
 )
@@ -446,11 +578,16 @@ knitr::kable(performance_matrix,
 
 ## 5. Convergence Diagnostics & Visualizations
 
-GPGPU speedups are only scientifically relevant if numeric integrity is preserved perfectly. We extract the sampled data vectors from the graphic card memory and generate posterior density distributions and convergence traceplots.
+GPGPU speedups are only scientifically relevant if numeric integrity
+is preserved perfectly. We extract the sampled data vectors from the
+graphic card memory and generate posterior density distributions and
+convergence traceplots.
 
 ### 5.1. Posterior Density Identifications
 
-We evaluate the sampled posterior landscapes of parameter \(\mu\) (Target: ~`r round(mu_empirical, 2)`) and parameter \(\sigma\) (Target: ~`r round(sigma_empirical, 2)`) against empirical baselines.
+We evaluate the sampled posterior landscapes of parameter \(\mu\)
+(Target: ~`r round(mu_empirical, 2)`) and parameter \(\sigma\)
+(Target: ~`r round(sigma_empirical, 2)`) against empirical baselines.
 
 ```{r plotting_density, fig.width=10, fig.height=4}
 visualization_df <- data.frame(
@@ -504,8 +641,37 @@ ggplot(traceplot_df, aes(x = Iteration, y = Mu_Value, color = Chain)) +
   theme(legend.position = "bottom")
 ```
 
+## Kernel binaries
+
+These are the OpenCL kernel binaries generated above
+```{sh}
+find .cl_cache/
+```
+
+You may simply cleanup via
+```{r binary cleanup}
+CleanCLCache()
+```
+
 ## Conclusion
 
-As documented by this vignette, the GPGPU processing engine of `OpenCLeaR` massively outclasses classic CPU-bound routines when running in 'float' mode. Despite running tens of thousands of independent chains concurrently across parallel thread architectures, density outputs and trace histories confirm flawless mathematical convergence and strict numeric alignment with targeted empirical values. The runtime architecture is fully optimized for productive simulation pipelines directly from R. Note that this is a mobile consumer GPU lacking the features of high performance server GPUs. On such systems it could outperform the other hardware even in 'double' mode. 
+As documented by this vignette, the GPGPU processing engine of
+`OpenCLeaR` massively outclasses classic CPU-bound routines at least
+when running in 'float' mode. Despite running tens of thousands of
+independent chains concurrently across parallel thread architectures,
+density outputs and trace histories confirm flawless mathematical
+convergence and strict numeric alignment with targeted empirical
+values. The runtime architecture is fully optimized for productive
+simulation pipelines directly from R. 
 
+Note that here we use mobile consumer GPUs lacking the features of
+high performance server GPUs. On such systems maybe it could
+outperform the CPU hardware even in 'double' mode. Moreover the
+portable OpenCL driver (POCL) approach as used for the CPU seems to
+get no advances even over the simple `mclapply` method. But
+nevertheless it enables otherwise OpenCL device free computers beeing
+used as a convenient developer platform for this type of software
+which later can run on much more powerful systems without change.  For
+some reasons intels oneapi driver only recognises the CPU from time to
+time, so this test is disabled for now.
 

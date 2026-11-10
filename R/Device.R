@@ -99,8 +99,8 @@ print.OpenCLDeviceList <- function(x, ...) {
     raw_idx <- as.character(x$Index[i])
 
     ## We calculate the exact padding for the spaces after the number:
-    ## 10 characters total width - 3 characters for "ID" - length of the digit
-    padding_length <- 10 - 3 - nchar(raw_idx)
+    ## 11 characters total width - length of the digit
+    padding_length <- 11 - nchar(raw_idx) 
 
     ## Safety net in case the ID becomes huge contrary to expectations
     if (padding_length < 1) padding_length <- 1

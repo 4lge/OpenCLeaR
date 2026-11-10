@@ -1,4 +1,6 @@
-#' nmath-Verteilungen fr OpenCL-CL nachladen
+##' Import nmath library for OpenCL
+##'
+##' Still experimental and untested!
 #' @param target_dir target path, if NULL (default) 
 #'    file.path(system.file(package = "OpenCLeaR"), "kernel") is used.
 #' @export
@@ -6,18 +8,18 @@ ImportNmathKernels <- function(target_dir = NULL) {
   if (!requireNamespace("opencltools", quietly = TRUE)) {
     stop(paste0(
       " OpenCLeaR Hinweis:\n",
-      "Das Paket 'opencltools' ist auf diesem System nicht installiert.\n",
-      "Der nmath-Kernel-Import ist nicht verfgbar.\n",
-      "Bitte installiere zuerst 'opencltools', falls deine Hardware dies untersttzt."
+      "The 'opencltools' package is not installed on this system.\n",
+      "nmath kernel import is not available.\n",
+      "Please install 'opencltools' first if your hardware supports it."
     ), call. = FALSE)
   }
   
-  cat(" Rufe nmath-Bibliothek ab und rekalibriere Typen fr die GPU...\n")
+  cat(" Get nmath library and recalibrate types for GPU...\n")
   
-  # Code fliegend ber die installierte Bibliothek laden
+  # Load code on the fly via the installed library
   c_code <- opencltools::load_kernel_library("nmath")
   
-  # Dein unfehlbarer, Base-R-gereinigter Regex-Tunnel
+  # R mathlib functions cleaned by regex for OpenCL inline use
   clean_code <- gsub("/\\*.*?\\*/|//.*?(?=\\n|\\r|$)", "", c_code, perl = TRUE)
   
   c_code_inline <- gsub(
@@ -32,13 +34,12 @@ ImportNmathKernels <- function(target_dir = NULL) {
   c_code_inline <- gsub("\r", "", c_code_inline)
   
   if(is.null(target_dir)){
-  #  DER ENTSCHEIDENDE PFAD-GRIFF:
-  # Wir schreiben direkt in den AKTUELL INSTALLIERTEN Paket-Ordner im R-System!
+  # We write directly to the CURRENTLY INSTALLED package folder in the R system!
   installed_kernel_dir <- system.file("kernel", package = "OpenCLeaR")
   
-  # Falls das Verzeichnis im installierten Zustand noch fehlt, fliegend anlegen
+  # If the directory is still missing when installed, create it on the fly
   if (installed_kernel_dir == "") {
-    # Fallback-Ermittlung des installierten Bibliothekspfads
+    # Fallback determination of the installed library path
     installed_kernel_dir <- file.path(system.file(package = "OpenCLeaR"), "kernel")
     dir.create(installed_kernel_dir, recursive = TRUE, showWarnings = FALSE)
   }
@@ -49,6 +50,6 @@ ImportNmathKernels <- function(target_dir = NULL) {
 }
   writeLines(c_code_inline, target_file)
   
-  cat(" [OpenCLeaR Runtime] nmath.cl erfolgreich im System-Pfad verankert:\n", target_file, "\n")
+  cat(" [OpenCLeaR Runtime] nmath.cl successfully saved here:\n", target_file, "\n")
   return(TRUE)
 }

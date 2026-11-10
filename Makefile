@@ -10,8 +10,6 @@ clean:
 	# Lokale Artefakte in vignettes/ löschen
 	rm -rf vignettes/.cl_cache
 	rm -f vignettes/*.html vignettes/*.R
-	# Installierte Dokumente aufräumen
-	rm -rf inst/doc
 
 dist-clean: clean
 	find . -name \*SFConflict\* -delete
@@ -38,6 +36,8 @@ dist-clean: clean
   src/backend/lib/ \
 	vignettes/OpenCLeaR-Overview.md \
 	vignettes/OpenCLeaR-Overview.log
+	# Installierte Dokumente aufräumen
+	#rm -rf inst/doc
 
 
 NAMESPACE: NAMESPACE.in src/RcppExports.cpp
@@ -66,10 +66,13 @@ vignettes: vignettes/OpenCLeaR_MCMC_Vignette.Rmd
 	echo "%\VignetteEngine{knitr::rmarkdown}" >> inst/doc/OpenCLeaR_MCMC_Vignette.html.asis
 	echo "%\VignetteEncoding{UTF-8}" >> inst/doc/OpenCLeaR_MCMC_Vignette.html.asis
 
-source: dist-clean
+source: 
 	# Baut das Quellpaket (.tar.gz) direkt über devtools im übergeordneten Verzeichnis (..)
 	# vignettes=TRUE sorgt dafür, dass devtools die Vignetten sauber baut und den Index generiert.
-	Rscript -e "devtools::build(pkg = '.', path = '..', vignettes = TRUE)"
+	if [ -f /opt/intel/oneapi/setvars.sh ]; then \
+		. /opt/intel/oneapi/setvars.sh; \
+	fi; \
+	Rscript -e "devtools::build(pkg = '.', path = '..', vignettes = FALSE)"
 
 cleanchars:
 	perl -i -pe 's/[^\x00-\x7F]//g' R/OpenCLeaR-package.R R/debug.R R/nmath.R

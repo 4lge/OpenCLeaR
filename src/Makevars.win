@@ -15,8 +15,9 @@ PKG_LIBS = -Lbackend/build -l:BACKEND.a -Lbackend/build/local_install/lib -lOpen
 SHLIB_LDFLAGS = $(SHLIB_CXXLDFLAGS) -g
 
 
-# Unter Windows müssen wir jetzt KEINE BACKEND.dll mehr in die libs-Ordner kopieren,
-# da sie physisch in der Haupt-DLL verschwunden ist! Nur noch die OpenCL.dll mitgeben:
+# Under Windows we no longer have to copy BACKEND.dll into the libs folder,
+# since it has physically disappeared in the main DLL as we are statically loinking BACKEND!
+# Just include the OpenCL.dll:
 all: $(SHLIB)
 	@mkdir -p "$(R_PACKAGE_DIR)/libs"
 	@FOUND_OPENCL=$$(find backend/build/ -name "OpenCL.dll" | head -n 1); \

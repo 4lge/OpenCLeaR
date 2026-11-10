@@ -4,7 +4,7 @@ PROJECT(BACKEND CXX)
 # Get the Rcpp minGW/gcc compilers in order to achieve highest degree of uniformity while users only have to install Rtools.
 include(cmake/find_toolchain.cmake)
 # ==============================================================================
-# 🍏 DER ABSOLUTE VINTAGE-MAC OCL-OVERRIDE FÜR CMAKE
+#  some overrides for vintage mac OpenCL usage 
 # ==============================================================================
 if(APPLE)
     execute_process(COMMAND uname -r OUTPUT_VARIABLE DETECTED_DARWIN_VERSION)
@@ -14,13 +14,12 @@ if(APPLE)
     if(DARWIN_MAJOR LESS_EQUAL 16)
         set(VINTAGE_STD "-std=c++14")
         if(DARWIN_MAJOR LESS_EQUAL 15)
-            set(VINTAGE_STD "-std=c++11") # Für den 2008er iMac
+            set(VINTAGE_STD "-std=c++11") # For OSX 10.11
         endif()
         
-        message(STATUS "🍏 [OpenCLeaR] Override vererbtes R-Flag! Zwinge Compiler auf: ${VINTAGE_STD}")
+        message(STATUS " [OpenCLeaR] Override inherited R flags! Force compiler to use: ${VINTAGE_STD}")
         
-        # 🔥 DAS IST DER MAGISCHE SCHALTER: 
-        # Zwingt die Compile-Optionen hart ins File und überschreibt R's gnu++17!
+        # Forces the compile options into the workflow and overwrites R's gnu++17!
         add_compile_options(${VINTAGE_STD})
     endif()
 endif()
@@ -81,32 +80,31 @@ include_directories(
   ${OpenCL_INCLUDE_DIRS}
 )
 
-# --- OpenCL Suche mit intelligenter Windows-System-Prüfung ---
+# --- OpenCL search with intelligent Windows system check ---
 
 if(WIN32)
-  # 🚀 WINDOWS-AUTARKIE-TURBO:
-  # Wir verbieten CMake die lokale NVIDIA-Suche komplett, damit das Paket
-  # autark wird und auf dem CRAN-Win-Builder fehlerfrei kompiliert!
+  # We completely prohibit CMake from searching local OpenCL so that the package
+  # is self-sufficient and compiles error-free on the CRAN-Win-Builder!
   set(OpenCL_FOUND FALSE)
 
-  # Wir überschreiben die Include-Pfade auf den lokalen Headers-Ordner
+  # We overwrite the include paths to the local Headers folder
   set(OpenCL_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/lib/OpenCL-Headers)
 else()
-  # Für Linux und macOS bleibt die bewährte Standardsuche aktiv
+  # The standard search remains active for Linux and macOS
   FIND_PACKAGE(OpenCL)
 endif()
 
 
-# --- Globale Plattform-Weiche ---
+# --- Global Platform Switch ---
 if(OpenCL_FOUND)
-  message(STATUS "System OpenCL wird verwendet: ${OpenCL_LIBRARIES}")
+  message(STATUS "System OpenCL is in use: ${OpenCL_LIBRARIES}")
 elseif(NOT OpenCL_FOUND)
-  message(STATUS "Windows Sandbox/Docker oder treiberloses Linux erkannt. Baue lokalen OpenCL-ICD-Loader...")
+  message(STATUS "System without OpenCL detected. Building local OpenCL ICD loader...")
 
-  # Speicherort für den lokalen Loader definieren
+  # Define location for the local loader
   set(OPENCL_LOADER_DIR ${CMAKE_SOURCE_DIR}/lib/OpenCL-ICD-Loader)
 
-  # OpenCL-ICD-Loader als ExternalProject hinzufügen
+  # Add OpenCL ICD loader as ExternalProject
   ExternalProject_Add(OpenCL_ICD_Loader
       GIT_REPOSITORY https://github.com/KhronosGroup/OpenCL-ICD-Loader.git
       GIT_TAG v2024.10.24 
@@ -125,7 +123,7 @@ elseif(NOT OpenCL_FOUND)
         -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/local_install
   )
 
-  # Zielpfade für die lokal gebaute Bibliothek definieren
+  # Define target paths for the locally built library
   set(OpenCL_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/lib/OpenCL-Headers)
   
   if(WIN32)
@@ -135,7 +133,7 @@ elseif(NOT OpenCL_FOUND)
     set(OpenCL_LIBRARIES "${CMAKE_CURRENT_BINARY_DIR}/OpenCL_ICD_Loader-prefix/src/OpenCL_ICD_Loader-build/libOpenCL.so")
   endif()
 
-  # Erstelle ein künstliches Target, damit target_link_libraries nicht fehlschlägt
+  # Create an artificial target so target_link_libraries doesn't fail
   add_library(OpenCL_Local SHARED IMPORTED GLOBAL)
   
   if(WIN32)
@@ -159,21 +157,20 @@ endif()
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 file(GLOB_RECURSE KERNELS "kernel/*.cpp")
 
-# Pfad zum mitgelieferten OpenCL Error definieren
+# Define the path to the supplied OpenCL error
 set(CLERROR_SRC "${EXTERNAL_LIB_LOCATION}/CLErrorLookup/CLErrorLookup/src")
 
-# 🚀 DIE CONFIGURATION-RETTUNG (Generated-Flags):
-# Zwingt CMake, die fehlenden Dateien beim ersten "cmake ." Lauf zu akzeptieren,
-# da sie erst während des darauffolgenden Git-Clones physisch entstehen!
+# Forces CMake to fill in the missing files on the first "cmake ." Run to accept
+# because they are only physically created during the subsequent Git clone!
 set_source_files_properties(
     "${CLERROR_SRC}/cl_error_lookup.cpp"
     "${CLERROR_SRC}/get_error_info.cpp"
     PROPERTIES GENERATED TRUE
 )
 
-# 🚀 STATISCHE WEICHE FÜR WINDOWS:
+#  static switch for windows:
 if(WIN32)
-  # Unter Windows bauen wir das Backend als statisches Archiv (.a)
+  # On Windows we build the backend as a static archive (.a)
   ADD_LIBRARY(BACKEND STATIC
       ${SOURCES}
       ${KERNELS}
@@ -181,7 +178,7 @@ if(WIN32)
       "${CLERROR_SRC}/get_error_info.cpp"
   )
 else()
-  # Auf Linux bleibt es für den Dell-Server beim bewährten SHARED (.so)
+  # On Linux and macOS remains with the tried and tested shared library (.so/.dylib)
   ADD_LIBRARY(BACKEND SHARED
       ${SOURCES}
       ${KERNELS}
@@ -190,15 +187,15 @@ else()
   )  
 endif()
 
-# Zwingt GNU Make, das Git-Repo fertig zu laden, BEVOR das Backend kompiliert!
+# Forces GNU Make to finish loading the Git repo BEFORE the backend compiles!
 add_dependencies(BACKEND CLErrorLookup)
 
 if(WIN32)
   # for DLL_VAR to work in init.hpp:
   target_compile_definitions(BACKEND PRIVATE BUILDING_BACKEND_DLL)
 endif()
-# ZWINGENDE ABHÄNGIGKEITEN FÜR ALLE SYSTEME:
-# Das Backend darf erst bauen, wenn alle Git-Submodule vollständig auf der Festplatte liegen!
+# mandatory dependencies for all systems:
+# The backend may only be built when all Git submodules are completely on the hard drive!
 add_dependencies(BACKEND OpenCL_Headers OpenCL_CLHPP OpenCL_Wrapper CLErrorLookup)
 
 # If local OpenCL in use, depend on it
@@ -221,24 +218,23 @@ target_include_directories(BACKEND
 # ------------------------------------------------------------------------------
 # Linkage against your binaries
 # ==============================================================================
-# 🚀 DER UNZERSTÖRBARRE WINDOWS-PORTABILITÄTS-CORE:
-# Unter Windows bauen wir den Khronos-ICD-Loader IMMER nativ mit,
-# damit das R-Paket auf JEDEM Windows-PC (Nvidia, AMD, Intel) out-of-the-box linkt!
+# We ALWAYS build the Khronos ICD loader natively under Windows,
+# so that the R package links out-of-the-box on EVERY Windows PC (Nvidia, AMD, Intel)!
 # ==============================================================================
 if(WIN32)
   # 🚀 PERFEKTE WINDOWS-LINKAGE:
-  # Wir verlinken das Backend direkt mit Ihrem künstlichen Target "OpenCL_Local".
-  # Dieses hält bereits die korrekten Pfade zur libOpenCL.dll.a im Build-Ordner!
+  # We link the backend directly to our artificial target "OpenCL_Local".
+  # This already keeps the correct paths to libOpenCL.dll.a in the build folder!
    target_link_libraries(BACKEND
     PRIVATE
       OpenCL_Local
   )
 
-  # Das Backend wartet, bis der ICD-Loader die DLLs erzeugt hat
+  # The backend waits until the ICD loader has created the DLLs
   add_dependencies(BACKEND OpenCL_Local)
 
 else()
-  # 🐧 Linux und macOS nutzen weiterhin die standardmäßige, flexible System-Erkennung
+  #  Linux and macOS continue to use the standard, flexible system detection
   if(OpenCL_FOUND)
     target_link_libraries(BACKEND
       PRIVATE
@@ -252,12 +248,12 @@ else()
     )
   endif()
 
-  # Standard-Abhängigkeiten für Linux/Mac
+  # Default dependencies for Linux/Mac
   add_dependencies(BACKEND OpenCL_Headers OpenCL_CLHPP)
 endif()
 
 # ==============================================================================
-# 🚀 SCHRITT 5: BACKEND FÜR UNIX-SYSTEME STUMMSCHALTEN (CRAN-SAFE)
+#  step 5: mute backend cout output for unix systems (cran-safe)
 # ==============================================================================
 if(NOT WIN32)
   target_compile_definitions(BACKEND PRIVATE OPENCLEAR_NO_OUTPUT)
@@ -282,56 +278,52 @@ endif()
 
 
 if(WIN32)
-  # Zwingt den GCC/MinGW-Compiler unter Rtools zu absolut striktem
-  # 64-Bit-Stack-Alignment, passend zur System32 OpenCL.dll
+  # Forces the GCC/MinGW compiler under Rtools to use absolutely strict
+  # 64-bit stack alignment, matching System32 OpenCL.dll
   add_compile_options(-mstackrealign)
   add_definitions(-DCL_TARGET_OPENCL_VERSION=300)
 endif()
 
-# Ganz unten in Ihrer src/backend/CMakeLists.txt:
-# 🚀 AUTOMATISCHER HEADER-EXPORT NACH DEM BUILD:
+#  automatic header export after build:
 add_custom_command(TARGET BACKEND POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/backend"
     COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/include/backend/CLpp.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/"
     COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/include/backend/export.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/"
     COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/include/backend/init.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include/"
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install/include" "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/include"
-    COMMENT "📦 Kopiere Header in den inst/include Ordner für Rcpp..."
+    COMMENT " Copy headers to inst/include folder for Rcpp..."
 )
-# ==============================================================================
-# 🎯 AUTOMATISCHER STANDALONE-COMPILER BUILD (ocl_compiler)
-# ==============================================================================
 
 # ==============================================================================
-# 🎯 AUTOMATISCHER STANDALONE-COMPILER BUILD (ocl_compiler)
+# build automatic standalone compiler build (ocl_compiler)
 # ==============================================================================
 
-# 1. Pfad zur Compiler-Quelle deklarieren
+# 1. Declare path to compiler source
 set(COMPILER_SOURCE_PATH "${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/ocl_compiler.cpp")
 set_source_files_properties(${COMPILER_SOURCE_PATH} PROPERTIES GENERATED TRUE)
 
-# 2. Das Executable-Target deklarieren
+#2. Declare the executable target
 ADD_EXECUTABLE(ocl_compiler ${COMPILER_SOURCE_PATH})
 
-# 2a. 🚀 DER UNZERSTÖRBARE HEADER-SILENCER FÜR POCL & ALT-SYSTEME:
-# Zwingt die cl2.hpp dazu, auf Version 1.2 zu verharren und Geister-Flags wie -cl-std=CL3.0 zu blockieren!
+# 2a. fix for older pocl systems:
+# force cl2.hpp to stay at version 1.2 and block ghost flags like -cl-std=cl3.0!
 TARGET_COMPILE_DEFINITIONS(ocl_compiler PRIVATE 
 #    CL_HPP_TARGET_OPENCL_VERSION=120
 #    CL_HPP_MINIMUM_OPENCL_VERSION=120
 )
-# 3. Basis-Abhängigkeit (Der Quellcode muss aus Git da sein)
+# 3. Base dependency (The source code must be there from Git)
 ADD_DEPENDENCIES(ocl_compiler OpenCL_Headers OpenCL_CLHPP OpenCL_Wrapper)
 
-# 4. 🎯 DIE DYNAMISCHE WEICHE FÜR TREIBERLOSE SYSTEME:
+# 4. the dynamic switch for driverless systems:
 if(NOT OpenCL_FOUND)
-    message(STATUS "🔗 [CMake JIT] Kopple ocl_compiler an lokalen ICD-Loader-Build...")
+    message(STATUS " [CMake JIT] cain ocl_compiler build to local ICD-Loader build...")
     
-    # Zwinge den Compiler zu warten, bis Headers und Loader fertig im Build-Ordner liegen
+    # Force the compiler to wait until headers and loaders are ready in the build folder
     if(TARGET OpenCL_ICD_Loader)
         add_dependencies(ocl_compiler OpenCL_Headers OpenCL_CLHPP OpenCL_ICD_Loader)
     endif()
 
-    # Ergänze die Include-Pfade spezifisch um den lokalen Installationsordner
+    # Add the include paths specifically to the local installation folder
     target_include_directories(ocl_compiler PRIVATE
         ${CMAKE_CURRENT_BINARY_DIR}/local_install/include
         ${CMAKE_CURRENT_BINARY_DIR}/src/OpenCL-Headers
@@ -339,21 +331,21 @@ if(NOT OpenCL_FOUND)
     )
 endif()
 
-# 5. Allgemeine Include-Pfade verlinken (für alle Systeme gültig)
+# 5. Link general include paths (valid for all systems)
 TARGET_INCLUDE_DIRECTORIES(ocl_compiler PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${OpenCL_INCLUDE_DIRS}
     ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
     ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/src
-    # 🚀 FIX: Wir tunneln den Compiler direkt auf den lokalen JIT-Installations-Ordner!
-    # Da dieser Pfad innerhalb des Build-Verzeichnisses liegt, wertet CMake ihn dynamisch aus.
+    #  FIX: We tunnel the compiler directly to the local JIT installation folder!
+    # Since this path is within the build directory, CMake evaluates it dynamically.
     ${CMAKE_CURRENT_BINARY_DIR}/local_install/include
-    # Als eiserne Fallbacks für lokale Builds:
+    # As fallbacks for local builds:
     ${CMAKE_SOURCE_DIR}/lib/OpenCL-Headers
     ${CMAKE_SOURCE_DIR}/lib/OpenCL-CLHPP/include
 )
 
-# 6. Linker-Verzeichnis und Bibliotheken verknüpfen
+# 6. Link linker directory and libraries
 target_link_directories(ocl_compiler PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/lib)
 
 IF(WIN32)
@@ -367,19 +359,19 @@ ELSE()
   endif()
 ENDIF()
 
-# 7. 🚀 AUTOMATISCHER POST-BUILD-EXPORT NACH inst/bin/
+# 7.  automatic post-build export to inst/bin/
 ADD_CUSTOM_COMMAND(TARGET ocl_compiler POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/bin"
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:ocl_compiler> "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/bin/"
     COMMENT "📦 Kompiliere ocl_compiler mit R-Toolchain und kopiere nach inst/bin/"
 )
 
-# Fix für "not terminated with a newline" Warnungen aus R CMD check
+# Fix "not terminated with a newline" warnings in R CMD check
 install(CODE "
   set(FILES_TO_FIX
     \"\${CMAKE_CURRENT_SOURCE_DIR}/inst/include/cl_error_lookup.hpp\"
     \"\${CMAKE_CURRENT_BINARY_DIR}/local_install/include/cl_error_lookup.hpp\"
-    # Falls die externen Test-Dateien im Quellcode auch korrigiert werden sollen:
+    # If the external test files in the source code should also be corrected:
     \"\${CMAKE_CURRENT_SOURCE_DIR}/src/backend/lib/CLErrorLookup/CLErrorLookup/include/cl_error_lookup.hpp\"
     \"\${CMAKE_CURRENT_SOURCE_DIR}/src/backend/build/local_install/include/cl_error_lookup.hpp\"
     \"\${CMAKE_CURRENT_SOURCE_DIR}/src/backend/lib/OpenCL-CLHPP/tests/test_versions.cpp\"
@@ -387,12 +379,12 @@ install(CODE "
 
   foreach(FILE_PATH \${FILES_TO_FIX})
     if(EXISTS \"\${FILE_PATH}\")
-      # Datei einlesen
+      # Read file
       file(READ \"\${FILE_PATH}\" FILE_CONTENT)
       
-      # Wenn die Datei nicht mit einem Newline endet, eines anhängen
+      # If the file does not end with a newline, append one
       if(NOT \"\${FILE_CONTENT}\" MATCHES \"\\n$\")
-        message(STATUS \"[OpenCLeaR] Füge fehlendes Newline an: \${FILE_PATH}\")
+        message(STATUS \"[OpenCLeaR] Append missing newline: \${FILE_PATH}\")
         file(APPEND \"\${FILE_PATH}\" \"\\n\")
       endif()
     endif()
@@ -400,21 +392,21 @@ install(CODE "
 ")
 
 
-# Bereinigung nach Abschluss aller Build- und Installationsschritte
+# Cleanup after completing all build and installation steps
 install(CODE "
-  message(STATUS \"[OpenCLeaR] Starte finale Bereinigung für R CMD check...\")
+  message(STATUS \"[OpenCLeaR] Starting final cleanup for R CMD check...\")
 
-  # 1. Pfade definieren
+  # 1. Define paths
   set(LOCAL_INSTALL_DIR \"\${CMAKE_CURRENT_BINARY_DIR}/local_install\")
   set(LIB_DIR \"\${CMAKE_CURRENT_SOURCE_DIR}/lib\")
 
-  # 2. Temporären local_install Ordner entfernen
+  # 2. Remove temporary local_install folder
   if(IS_DIRECTORY \"\${LOCAL_INSTALL_DIR}\")
-    message(STATUS \"[OpenCLeaR] Entferne temporären Ordner: \${LOCAL_INSTALL_DIR}\")
+    message(STATUS \"[OpenCLeaR] Remove temporary folder: \${LOCAL_INSTALL_DIR}\")
     file(REMOVE_RECURSE \"\${LOCAL_INSTALL_DIR}\")
   endif()
 
-  # 3. KRITISCH FÜR CRAN: Entferne alle .git-Verzeichnisse ALLER Submodule im Quellcode-Ordner
+  # 3. CRITICAL FOR CRAN: Remove all .git directories of ALL submodules in the source code folder
   set(GIT_DIRS
     \"\${LIB_DIR}/CLErrorLookup/.git\"
     \"\${LIB_DIR}/OpenCL-CLHPP/.git\"
@@ -425,12 +417,12 @@ install(CODE "
 
   foreach(GIT_DIR \${GIT_DIRS})
     if(IS_DIRECTORY \"\${GIT_DIR}\")
-      message(STATUS \"[OpenCLeaR] Entferne Git-Rückstand: \${GIT_DIR}\")
+      message(STATUS \"[OpenCLeaR] Remove Git backlog: \${GIT_DIR}\")
       file(REMOVE_RECURSE \"\${GIT_DIR}\")
     endif()
   endforeach()
 
-  # 4. Der CRAN-Garant: Lösche den gesamten lib-Ordner, sobald alles gelinkt ist
+  # 4. Delete the entire lib folder once everything is linked
   if(IS_DIRECTORY \"\${LIB_DIR}\")
     message(STATUS \"[OpenCLeaR] Entferne Drittanbieter-Quelltexte komplett aus dem Quellbaum...\")
     file(REMOVE_RECURSE \"\${LIB_DIR}\")

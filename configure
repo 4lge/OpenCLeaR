@@ -30,13 +30,10 @@ cmake .. -DCMAKE_BUILD_TYPE=Release || {
 	exit 1
 }
 
-# =========================================================================
-# 🎯 REPARATUR VOR DEM BUILD (Eliminiert die allerletzte Newline-NOTE)
-# =========================================================================
 TARGET_HEADER="src/backend/lib/CLErrorLookup/CLErrorLookup/include/cl_error_lookup.hpp"
 if [ -f "../../$TARGET_HEADER" ]; then
     if [ "$(tail -c1 "../../$TARGET_HEADER" | wc -l)" -eq 0 ]; then
-        echo "📝 [configure] Füge fehlendes Newline an Quell-Header an..."
+        echo " [configure] Append missing newline to source header..."
         echo "" >> "../../$TARGET_HEADER"
     fi
 fi
@@ -60,14 +57,11 @@ fi
 
 echo "** SUCCESSFULLY BUILT OPENCL BACKEND CODE! **"
 
-# Zurück ins Hauptverzeichnis des Pakets wechseln
+# Go back to the main directory of the package
 cd ../../..
 
-# =========================================================================
-# 🎯 AUTOMATISCHER TRANSFER IN DIE RECHTE ORDNEREBENE
-# =========================================================================
-# Wir kopieren die gebauten Bibliotheken JETZT schon direkt in den src-Ordner,
-# damit der R-Compiler sie beim Linken sofort lokal vorfindet.
+# We copy the built libraries NOW directly into the src folder,
+# so that the R compiler immediately finds them locally when linking.
 mkdir -p src/
 
 if [ -f "libBACKEND.so" ]; then
@@ -78,12 +72,12 @@ if [ -f "libBACKEND.dylib" ]; then
 fi
 
 # =========================================================================
-# 🐧🍏 Plattformspezifische src/Makevars direkt und verlustfrei generieren
+#  Generate platform-specific src/Makevars 
 # =========================================================================
 UNAME=$(uname)
 
 if [ "${UNAME}" = "Darwin" ]; then
-    # 🍏 macOS Version: Suchpfad erweitert auf ../lib/ relativ zu libs/OpenCLeaR.so
+    #  macOS version: Search path expanded to ../lib/ relative to libs/OpenCLeaR.so
     cat << 'EOF' > src/Makevars
 PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD
 PKG_LIBS = -Wl,-rpath,@loader_path/../lib/ -Wl,-rpath,@loader_path/ -L. -lBACKEND
@@ -91,16 +85,16 @@ PKG_LIBS = -Wl,-rpath,@loader_path/../lib/ -Wl,-rpath,@loader_path/ -L. -lBACKEN
 .PHONY: all prebuild
 
 all: $(SHLIB)
-	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das CRAN-konforme inst/lib Verzeichnis (macOS)..."
+	@echo " [OpenCLeaR] Copy binaries to the CRAN-compliant inst/lib directory (macOS)..."
 	@mkdir -p $(R_PACKAGE_DIR)/lib/
 	@if [ -f libBACKEND.dylib ]; then cp libBACKEND.dylib $(R_PACKAGE_DIR)/lib/; fi
 	@if [ -f backend/build/local_install/lib/libOpenCL.dylib ]; then cp backend/build/local_install/lib/libOpenCL.dylib $(R_PACKAGE_DIR)/lib/; fi
-	@echo "🧹 [OpenCLeaR] Entferne libBACKEND.dylib aus src/, um Duplikate in libs/ zu verhindern..."
+	@echo " [OpenCLeaR] Remove libBACKEND.dylib from src/ to prevent duplicates in libs/..."
 	@rm -f libBACKEND.so libBACKEND.dylib
 EOF
 
 else
-    # 🐧 Linux Version: Suchpfad erweitert auf $ORIGIN/../lib
+    #  Linux version: Search path expanded to $ORIGIN/../lib
 cat << 'EOF' > src/Makevars
 PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD 
 PKG_LIBS = -Wl,-rpath,'$$ORIGIN/../lib:$$ORIGIN' -Wl,--enable-new-dtags -L. -lBACKEND
@@ -108,36 +102,33 @@ PKG_LIBS = -Wl,-rpath,'$$ORIGIN/../lib:$$ORIGIN' -Wl,--enable-new-dtags -L. -lBA
 .PHONY: all prebuild
 
 all: $(SHLIB)
-	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das CRAN-konforme inst/lib Verzeichnis..."
+	@echo " [OpenCLeaR] Copy binaries to the CRAN-compliant inst/lib directory..."
 	@mkdir -p $(R_PACKAGE_DIR)/lib/
 	@if [ -f libBACKEND.so ]; then cp libBACKEND.so $(R_PACKAGE_DIR)/lib/; fi
 	@if [ -f backend/build/local_install/lib/libOpenCL.so ]; then cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/lib/; fi
-	@echo "🧹 [OpenCLeaR] Entferne libBACKEND.so aus src/, um Duplikate in libs/ zu verhindern..."
+	@echo " [OpenCLeaR] Remove libBACKEND.so from src/ to prevent duplicates in libs/..."
 	@rm -f libBACKEND.so libBACKEND.dylib
 EOF
 fi
 
-# =========================================================================
-# 🎯 NACHLAGE-REINIGUNG DIREKT IM CONFIGURATOR (CRAN-GARANTIE)
-# =========================================================================
-# Da wir hier garantiert im aktiven Build-Verzeichnis von R CMD build stehen,
-# löschen wir die Git-Reste und Makefiles plattformunabhängig per Shell:
+# Since we are guaranteed to be in the active build directory of R CMD build,
+# we delete the Git leftovers and Makefiles using the shell, regardless of the platform:
 
-echo "🧹 [configure] Säubere Git-Rückstände und CMake-Artefakte..."
+echo " [configure] Clean Git residue and CMake artifacts..."
 rm -rf src/backend/lib/CLErrorLookup/.git
 rm -rf src/backend/lib/OpenCL-CLHPP/.git
 rm -rf src/backend/lib/OpenCL-Headers/.git
 rm -rf src/backend/lib/OpenCL-Wrapper/.git
 
-# Lösche die temporären GNU-Makefiles, die das Check-System bemängelt
-#rm -rf src/backend/build/  << das ist zu viel!
+# Delete the temporary GNU Makefiles that the check system complains about
+#rm -rf src/backend/build/ << that's too much!
 rm -f  src/backend/build/Makefile
 rm -f  src/backend/lib/OpenCL-CLHPP/external/CMock/vendor/unity/extras/fixture/test/Makefile
 rm -f  src/backend/lib/OpenCL-CLHPP/external/CMock/vendor/unity/extras/memory/test/Makefile
 rm -f  src/backend/lib/OpenCL-CLHPP/external/CMock/vendor/unity/test/Makefile
 
 
-echo "📝 [configure] Repariere fehlende Newlines in Headern und C-Files..."
+echo " [configure] Fix missing newlines in headers and C files..."
 
 for FILE in \
     "src/backend/lib/CLErrorLookup/CLErrorLookup/include/cl_error_lookup.hpp" \
@@ -146,7 +137,7 @@ for FILE in \
     "src/backend/lib/OpenCL-CLHPP/tests/test_versions.cpp" \
     "inst/include/cl_error_lookup.hpp"    ; do
     if [ -f "$FILE" ]; then
-        # Prüfen, ob das letzte Zeichen ein Newline ist
+        # Check if the last character is a newline
         if [ "$(tail -c1 "$FILE" | wc -l)" -eq 0 ]; then
             echo "   -> Füge Newline an: $FILE"
             echo "" >> "$FILE"
@@ -155,6 +146,6 @@ for FILE in \
 done
 
 
-echo "✅ [OpenCLeaR Linux/macOS-Build] Alle Fremddateien treewide für R-devel korrigiert."
+echo " [OpenCLeaR Linux/macOS build] Fixed all third-party files treewide for R CMD check"
 
 exit 0

@@ -30,7 +30,6 @@ License: MIT + file LICENSE
 Config/roxygen2/version: 8.0.0
 Suggests: knitr (>= 1.50), rmarkdown, opencltools, tinytest, nmathopencl, ggplot2, gridExtra, RcppParallel
 Config/testthat/edition: 3
-VignetteBuilder: knitr, rmarkdown
 RoxygenNote: 7.3.3
 NeedsCompilation: yes
 Packaged: 2026-10-13 10:50:43 UTC; agebhard

@@ -8,17 +8,17 @@
 #endif
 #include "opencl.hpp"
 
-// 🚀 DIE DYNAMISCHE WINDOWS-WEICHE:
+// the dynamic windows switch:
 #if defined(WIN32) || defined(_WIN32)
   #ifdef BUILDING_BACKEND_DLL
     #define DLL_VAR __declspec(dllexport)
   #elif defined(BUILDING_STATIC_R_PACKAGE)
-    #define DLL_VAR // Statischer Einbau direkt in OpenCLeaR.dll: Kein Import/Export nötig!
+    #define DLL_VAR // Static installation directly in OpenCLeaR.dll: No import/export necessary!
   #else
     #define DLL_VAR __declspec(dllimport)
   #endif
 #else
-  #define DLL_VAR // Linux und Mac ignorieren das komplett
+  #define DLL_VAR // Linux and Mac ignore this completely
 #endif
 
 // global singleton class:
@@ -35,7 +35,7 @@ namespace backend {
   extern "C" EXPORT void activateDeviceWithIndex(int idx);
   extern "C" EXPORT void setKernelsPath(const std::string& path);
   extern "C" EXPORT void initCL();
-    // 🚀 NEU: Die Synchronisations-Brücke für Rcpp freischalten
+    // synchronization bridge for Rcpp
   extern "C" EXPORT void sync_global_device();
   EXPORT const Device& getActiveDeviceFromBackend(); // for plugiin use
 }

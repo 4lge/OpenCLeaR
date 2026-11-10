@@ -50,13 +50,13 @@ cd "../../.."
 
 #echo "** SUCCESSFULLY COPIED KERNELS! **"
 
-echo "** COPYING INCLUDES! **"
+#echo "** COPYING INCLUDES! **"
 
 mkdir -p inst/include
 ## FIXME: ???
-cp src/backend/kernel/*.cl inst/include/ 2>/dev/null
+#cp src/backend/kernel/*.cl inst/include/ 2>/dev/null
 
-echo "** SUCCESSFULLY COPIED INCLUDES! **"
+#echo "** SUCCESSFULLY COPIED INCLUDES! **"
 
 
 exit 0

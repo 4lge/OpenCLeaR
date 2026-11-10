@@ -4,7 +4,7 @@ PKG_LIBS = -Wl,-rpath,'$$ORIGIN/../lib:$$ORIGIN' -Wl,--enable-new-dtags -L. -lBA
 .PHONY: all prebuild
 
 all: $(SHLIB)
-	@echo "⏳ [OpenCLeaR] Kopiere Binaries in das CRAN-konforme inst/lib Verzeichnis..."
+	@echo " [OpenCLeaR] Copy binaries to the CRAN-compliant inst/lib directory..."
 	@mkdir -p $(R_PACKAGE_DIR)/lib/
 	@if [ -f libBACKEND.so ]; then cp libBACKEND.so $(R_PACKAGE_DIR)/lib/; fi
 	@if [ -f backend/build/local_install/lib/libOpenCL.so ]; then cp backend/build/local_install/lib/libOpenCL.so $(R_PACKAGE_DIR)/lib/; fi
