@@ -1,30 +1,24 @@
-# if (requireNamespace("RcppArmadillo")) {
-# 	
-#     fx <- cxxfunction(signature(x = "integer", y = "numeric"),
-#                       "int dim = as<int>(x);
-# 		       arma::mat z = as<double>(y) * arma::eye<arma::mat>(dim, dim);
-# 		       return wrap(arma::accu(z));",
-#                       plugin = "RcppArmadillo",
-#                       verbose=TRUE)
-#     fx(2L, 5)
-# }
 
-    
-   rnormCLinline <- inline::cxxfunction(signature(n = "integer", mean = "numeric", sd = "numeric"),
-    "using namespace backend;
-        // 🚀 DIE ABSOLUTE FINALE ZEIGER-RETTUNG:
-        //  Wir holen die Adresse der Referenz und wandeln sie per const_cast in den benötigten Schreib-Zeiger!
+
+rnormCLinline <- inline::cxxfunction(signature(n = "integer", mean = "numeric", sd = "numeric"),
+     "using namespace backend;
+     // We get the address of the device reference and convert it using const_cast den benötigten Schreib-Zeiger!
      Device* device = const_cast<Device*>(&getActiveDeviceFromBackend());
 
-     
-     device->load_kernel(CLpp::instance().getKernelsPath() ,\"rnorm.cl\");
-     device->compile_kernel();
+      Rcpp::Function sys_file(\"system.file\");
+      std::string pkg_kernel_dir = Rcpp::as<std::string>(sys_file(\"kernel\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));
+                                           
 
+            device->set_kernel_path(pkg_kernel_dir);
+            device->set_kernel_file(\"rnorm.cl\");
+                                        device->set_kernel_name(\"rnorm.cl\");
+                                        device->initialize_binary_cache_path();
+                                         device->set_math_library_path(pkg_kernel_dir  + \"libkernel.cl\");
      std::cout << \"compile code :\\n\" << device->get_compiled_code() << \"\\n ---- \\n\" << std::endl;
 
      std::cout << \"kernel code :\\n\" << device->get_kernel_code() << \"\\n ---- \\n\" << std::endl;
 
-    
+
      // copy data from host memory to device memory
      Memory<int>    Seed(*device, 1);
      Memory<double> OutputD;
@@ -32,7 +26,7 @@
      int N=as<int>(n);
      NumericVector output(N);
 
-     Environment e = Environment::global_env();  
+     Environment e = Environment::global_env();
      std::vector<int> seed = e[\".Random.seed\"];
      Seed[0]=seed[seed[1]+1];
      Seed.write_to_device();
@@ -55,19 +49,21 @@
     SEXP r=f(1);
 
     // run kernel on the device
-    norm_rng.run(); 
+    norm_rng.run();
 
     // copy data from device memory to host memory
-    if(device->info.is_fp64_capable){ 
-      OutputD.read_from_device(); 
+    if(device->info.is_fp64_capable){
+      OutputD.read_from_device();
       for(auto i=0; i<OutputD.length(); i++)
-	    output[i] = OutputD[i];
+        output[i] = OutputD[i];
     } else {
       OutputF.read_from_device();
       for(auto i=0; i<OutputF.length(); i++)
-	    output[i] = (double)OutputF[i];
+        output[i] = (double)OutputF[i];
     }
     return wrap(output);
 ",
-    plugin = "OpenCLeaR",
-    verbose=TRUE)
+plugin = "OpenCLeaR",
+verbose=TRUE)
+
+rnormCLinline(42,0,1)

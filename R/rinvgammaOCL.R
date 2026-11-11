@@ -2,27 +2,27 @@ if (getRversion() >= "2.15.1") {
     utils::globalVariables(".rinvgamma_ocl_internal")
 }
 
-##' Zufallszahlen der Inverse-Gamma-Verteilung via OpenCL
+##' Random numbers of the inverse gamma distribution via OpenCL
 ##'
-##' @title Inverse-Gamma-Verteilung (OpenCL-beschleunigt)
+##' @title Inverse gamma distribution (OpenCL accelerated)
 ##'
 ##' @description
-##' Diese Funktion generiert Zufallszahlen (\code{rinvgammaOCL})
-##' für die Inverse-Gamma-Verteilung auf dem aktiven GPGPU-Device.
+##' This function generates random numbers (\code{rinvgammaOCL})
+##' for the inverse gamma distribution on the active GPGPU device.
 ##'
-##' @param n Anzahl der zu generierenden Zufallszahlen.
-##' @param shape Formparameter (Shape, alpha > 0).
-##' @param rate Skalenparameter via Rate (Beta, alpha > 0). Alternativ kann
-##'   oft auch \code{scale} spezifiziert werden (\code{rate = 1/scale}).
-##' @param ...    arguments passed through to \code{\link{oclFunction}}
+##' @param n Number of random numbers to generate.
+##' @param shape shape parameter (shape, alpha > 0).
+##' @param rate Scale parameter via rate (Beta, alpha > 0). Alternatively can
+##' often also \code{scale} can be specified (\code{rate = 1/scale}).
+##' @param ... arguments passed through to \code{\link{oclFunction}}
 ##' @return
-##' \code{rinvgammaOCL} liefert einen numerischen Vektor der Länge \code{n}.
+##' \code{rinvgammaOCL} returns a numerical vector of length \code{n}.
 ##'
 ##' @details
-##' Die Berechnungen werden auf die OpenCL Hardware ausgelagert. Im
-##' Hintergrund nutzt der Compiler die im stabilen Log-Raum implementierten
-##' C-Funktionen der GPGPU-Library. Die Zufallszahlen-Generierung erfolgt über
-##' einen parallelisierten Mersenne-Twister (MT19937) direkt im VRAM.
+##' The calculations are outsourced to the OpenCL hardware. In
+##' Background, the compiler uses those implemented in the stable log space
+##' C functions of the GPGPU library. The random number generation is done via
+##' a parallelized Mersenne twister (MT19937) directly in the VRAM.
 ##'
 ##' @seealso \code{\link{GetActiveDeviceInfo}}
 ##'

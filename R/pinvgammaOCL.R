@@ -1,29 +1,28 @@
 if (getRversion() >= "2.15.1") {
     utils::globalVariables(".pinvgamma_ocl_internal")
 }
-
-##' Verteilung der Inverse-Gamma-Verteilung via OpenCL
+##' Distribution of the inverse gamma distribution via OpenCL
 ##'
-##' @title Inverse-Gamma-Verteilung (OpenCL-beschleunigt)
+##' @title Inverse gamma distribution (OpenCL accelerated)
 ##'
 ##' @description
-##' Diese Funktion berechnt die kumulierte Verteilungsfunktion
-##' für die Inverse-Gamma-Verteilung auf dem aktiven GPGPU-Device.
+##' This function calculates the cumulative distribution function
+##' for the inverse gamma distribution on the active GPGPU device.
 ##'
-##' @param q Vektor von Quantilen (Eingabe-Grenzwerte).
-##' @param shape Formparameter (Shape, alpha > 0).
-##' @param rate Skalenparameter via Rate (Beta, alpha > 0). Alternativ kann
-##'   oft auch \code{scale} spezifiziert werden (\code{rate = 1/scale}).
-##' @param ...    arguments passed through to \code{\link{oclFunction}}
+##' @param q Vector of quantiles (input limits).
+##' @param shape shape parameter (shape, alpha > 0).
+##' @param rate Scale parameter via rate (Beta, alpha > 0). Alternatively can
+##' often also \code{scale} can be specified (\code{rate = 1/scale}).
+##' @param ... arguments passed through to \code{\link{oclFunction}}
 ##' @return
-##' \code{pinvgammaOCL}  gibt einen
-##' numerischen Vektor der gleichen Länge wie die Eingabe zurück.
+##' \code{pinvgammaOCL} returns one
+##' returns a numeric vector of the same length as the input.
 ##'
 ##' @details
-##' Die Berechnungen werden auf die OpenCL Hardware ausgelagert. Im
-##' Hintergrund nutzt der Compiler die im stabilen Log-Raum implementierten
-##' C-Funktionen der GPGPU-Library. Die Zufallszahlen-Generierung erfolgt über
-##' einen parallelisierten Mersenne-Twister (MT19937) direkt im VRAM.
+##' The calculations are outsourced to the OpenCL hardware. In
+##' Background, the compiler uses those implemented in the stable log space
+##' C functions of the GPGPU library. The random number generation is done via
+##' a parallelized Mersenne twister (MT19937) directly in the VRAM.
 ##'
 ##' @seealso \code{\link{GetActiveDeviceInfo}}
 ##'

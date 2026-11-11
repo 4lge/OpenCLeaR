@@ -42,6 +42,7 @@ namespace backend {
   }
 
   void CLpp::info() {
+    // not used
     //  std::cout << "name: " << this->activeDevice.info.name << std::endl;
     //  std::cout << "fp64: " << this->activeDevice.info.is_fp64_capable << std::endl;
   }

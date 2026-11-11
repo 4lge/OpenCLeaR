@@ -36,8 +36,6 @@ dist-clean: clean
   src/backend/lib/ \
 	vignettes/OpenCLeaR-Overview.md \
 	vignettes/OpenCLeaR-Overview.log
-	# Installierte Dokumente aufräumen
-	#rm -rf inst/doc
 
 
 NAMESPACE: NAMESPACE.in src/RcppExports.cpp
@@ -46,29 +44,33 @@ NAMESPACE: NAMESPACE.in src/RcppExports.cpp
 	LD_LIBRARY_PATH="$(PWD)/src:$(PWD)/inst/lib:$(PWD)/src/backend/build:$(LD_LIBRARY_PATH)" Rscript -e "pkgload::load_all('.'); if (file.exists('NAMESPACE')) file.remove('NAMESPACE'); roxygen2::roxygenise(package.dir = '.',roclets='namespace')"
 
 src/RcppExports.cpp: src/*.cpp 
-	@echo "🔄 Starte Rcpp::compileAttributes()..."
+	@echo " Starting Rcpp::compileAttributes()..."
 	Rscript -e "Rcpp::compileAttributes()"
 
 RdFiles: src/RcppExports.cpp dist-clean
 	@echo "Generate Rd documentation via Roxygen2 with temporary LD_LIBRARY_PATH..."
 	LD_LIBRARY_PATH="$(PWD)/src:$(PWD)/inst/lib:$(PWD)/src/backend/build:$(LD_LIBRARY_PATH)" Rscript -e "roxygen2::roxygenise(package.dir = '.', roclets='rd')"
 
-
-vignettes: vignettes/OpenCLeaR_MCMC_Vignette.Rmd
-	# Verzeichnisse anlegen
+vignettes: $(wildcard vignettes/*.Rmd)
+	# Create directories
 	mkdir -p inst/doc
-	# Direkt nach inst/doc rendern, damit R den Index dort findet
-	Rscript -e "rmarkdown::render('vignettes/OpenCLeaR_MCMC_Vignette.Rmd', output_dir='inst/doc')"
-	# Den R-Code extrahieren und nach inst/doc legen
-	Rscript -e "knitr::purl('vignettes/OpenCLeaR_MCMC_Vignette.Rmd', output='inst/doc/OpenCLeaR_MCMC_Vignette.R')"
-	# WICHTIG: Erzeugt die zwingend erforderliche .html.asis Datei für R's Vignette-Engine
-	echo "%\VignetteIndexEntry{OpenCLeaR: GPGPU-Accelerated MCMC Sampling}" > inst/doc/OpenCLeaR_MCMC_Vignette.html.asis
-	echo "%\VignetteEngine{knitr::rmarkdown}" >> inst/doc/OpenCLeaR_MCMC_Vignette.html.asis
-	echo "%\VignetteEncoding{UTF-8}" >> inst/doc/OpenCLeaR_MCMC_Vignette.html.asis
+	# Process all Rmd files in a loop
+	@for rmd in vignettes/*.Rmd; do \
+		[ -e "$$rmd" ] || continue; \
+		base=$$(basename "$$rmd" .Rmd); \
+		echo " Processing vignette: $$base..."; \
+		Rscript -e "rmarkdown::render('$$rmd', output_dir='inst/doc')"; \
+		Rscript -e "knitr::purl('$$rmd', output=file.path('inst/doc', paste0('$$base', '.R')))"; \
+		title=$$(grep -m 1 "^title:" "$$rmd" | sed -E 's/^title:[[:space:]]*["'\'']?(.*)["'\'']?/\1/' || echo "$$base"); \
+		[ -z "$$title" ] && title="$$base"; \
+		echo "%\VignetteIndexEntry{$$title}" > inst/doc/$$base.html.asis; \
+		echo "%\VignetteEngine{knitr::rmarkdown}" >> inst/doc/$$base.html.asis; \
+		echo "%\VignetteEncoding{UTF-8}" >> inst/doc/$$base.html.asis; \
+	done
 
 source: 
-	# Baut das Quellpaket (.tar.gz) direkt über devtools im übergeordneten Verzeichnis (..)
-	# vignettes=TRUE sorgt dafür, dass devtools die Vignetten sauber baut und den Index generiert.
+	# Builds the source package (.tar.gz) directly via devtools in the parent directory (..)
+	# vignettes=TRUE ensures that devtools builds the vignettes cleanly and generates the index.
 	if [ -f /opt/intel/oneapi/setvars.sh ]; then \
 		. /opt/intel/oneapi/setvars.sh; \
 	fi; \

@@ -3,7 +3,7 @@
 // private version of header
 
 #include "opencl.hpp" // OpenCL Wrapper stuff
-#include "backend/export.hpp" // Sicherstellen, dass EXPORT bekannt ist
+#include "backend/export.hpp" // Make sure EXPORT is known
 
 // fake function for OpenCL-Wrapper:
 static std::string global_math_library_code = ""; 
@@ -21,7 +21,7 @@ inline std::string get_opencl_c_code() { return global_math_library_code; }
 
 namespace backend {
 
-  // Außerhalb der Klasse im backend-Namespace:
+  // Outside the class in the backend namespace:
   struct Target_Device_Location {
     int platform_idx = 0;
     int device_idx = 0;
@@ -74,7 +74,7 @@ namespace backend {
     
     bool isInitialized() const { return is_initialized; }
 
-    bool setupDevices(); // Lagert die Initialisierung aus
+    bool setupDevices(); // Outsources initialization
 
   private:
     // Initializer runs the typical init code for your external library
@@ -83,8 +83,8 @@ namespace backend {
     ~CLpp();
 
     
-    CLpp(bool dummy_mode); // Neuer Konstruktor für den sicheren Modus
-    bool is_initialized = false; // Flag für den Status
+    CLpp(bool dummy_mode); // New constructor for safe mode
+    bool is_initialized = false; // Flag for status
 
 
     Device activeDevice;
@@ -95,20 +95,6 @@ namespace backend {
 
     std::string kernel_path;
 
-    // CL constants:
-    /*
-    std::vector<cl::Platform> platforms;
-    std::vector<cl::Device> devices;    
-    cl::Device best_device;
-    cl::Platform best_platform;
-    cl::Device active_device;
-    cl::Platform active_platform;
-    cl::Context context;
-    cl::CommandQueue queue;
-
-    // attached resource path
-    std::string kernel_path;
-    */
     // thread safety
     mutable std::mutex mutex;
   };
