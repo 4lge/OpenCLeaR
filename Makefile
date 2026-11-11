@@ -10,6 +10,7 @@ clean:
 	# Lokale Artefakte in vignettes/ löschen
 	rm -rf vignettes/.cl_cache
 	rm -f vignettes/*.html vignettes/*.R
+	find . -name .cl_cache -exec rm -rf {} \; -print
 
 dist-clean: clean
 	find . -name \*SFConflict\* -delete

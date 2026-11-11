@@ -1,4 +1,4 @@
-# Wir teilen R mit, dass diese internen JIT-Objekte fliegend erzeugt werden!
+# We tell R that these internal JIT objects will be created on the fly!
 if (getRversion() >= "2.15.1") {
   utils::globalVariables(".rpois_ocl_internal")
 }
@@ -13,20 +13,15 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 rpoisOCL <- (function() {
   
-    ## Diese Variable bleibt über Lexical Scoping innerhalb der Closure geschützt
-    .rpois_ocl_internal <- NULL
-    
-    function(n, lambda, ...) {
-   
-    ## Lazy Evaluation: Nur beim allerersten Aufruf kompilieren
+    .rpois_ocl_internal <- NULL  
+    function(n, lambda, ...) {   
     if (is.null(.rpois_ocl_internal)) {
         .rpois_ocl_internal <<- OpenCLeaR::oclFunction(
-                                               signature      = methods::signature(n = "integer",
-                                                                                   lambda = "numeric"),
-                                               kernel_file    = "rpois.cl",
-                                               interface_file = "rpois.cpp",
-                                               ...
-                                           )
+          signature      = methods::signature(n = "integer", lambda = "numeric"),
+            kernel_file    = "rpois.cl",
+            interface_file = "rpois.cpp",
+            ...
+       )
     }
         return(.rpois_ocl_internal(as.integer(n), lambda))
     }

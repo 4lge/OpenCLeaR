@@ -7,7 +7,7 @@
 ImportNmathKernels <- function(target_dir = NULL) {
   if (!requireNamespace("opencltools", quietly = TRUE)) {
     stop(paste0(
-      " OpenCLeaR Hinweis:\n",
+      " OpenCLeaR note:\n",
       "The 'opencltools' package is not installed on this system.\n",
       "nmath kernel import is not available.\n",
       "Please install 'opencltools' first if your hardware supports it."

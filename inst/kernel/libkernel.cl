@@ -1,6 +1,6 @@
 // -*- c -*-
 
-// 🛡️ define seveeal constants regarding float/double differences
+//  define seveeal constants regarding float/double differences
 #if defined(cl_khr_fp64) || defined(cl_amd_fp64)
 #define GPGPU_EPSILON 1e-16
 #define GPGPU_SAFE_MAX 1e-300
@@ -21,10 +21,8 @@
 #endif
 #endif
 #if defined(cl_khr_fp64) || defined(cl_amd_fp64)
-  // Wenn wir im Double-Modus sind
   #define REAL_MIN DBL_MIN
 #else
-  // Wenn wir im erzwungenen Float-Modus (-f) sind
   #define REAL_MIN FLT_MIN
 #endif
 // oerloads for int arguments to functions working on real  arguments
@@ -35,8 +33,9 @@ __attribute__((overloadable)) static inline real exp(int x)    { return exp((rea
 __attribute__((overloadable)) static inline real sin(int x)    { return sin((real)x); }
 __attribute__((overloadable)) static inline real cos(int x)    { return cos((real)x); }
 __attribute__((overloadable)) static inline real tan(int x)    { return tan((real)x); }
-// TO BE CONTINUED ...
+// LIST NEEDS TO BE CONTINUED ...
 
+// RNG initialization and seed setting
 #define INIT_MT(seed) \
   uint mt[624]; \
   int idx = 624; \
@@ -219,12 +218,11 @@ static inline real pnorm(real x, real mean, real sd) {
   if (sd <= (real)0.0f) return (real)0.0f;
   real z = (x - mean) / sd;
   
-  // Nutze die im OpenCL-C-Standard eingebaute, hochpräzise erfc-Funktion.
-  // Das eliminiert jegliche Polynom-Ungenauigkeiten und ist rasend schnell!
+  // Use the high-precision erfc function built into the OpenCL-C standard.
   return (real)0.5f * erfc(-z / sqrt((real)2.0f));
 }
 
-// Quantile
+// Normal Quantile
 static inline real qnorm(real p, real mu, real sigma) {
   if (sigma <= (real)0.0f) return (real)0.0f;
   if (p <= (real)0.0f) return -INFINITY;
@@ -233,7 +231,7 @@ static inline real qnorm(real p, real mu, real sigma) {
   real q, r, t;
 
   if (p > (real)0.025f && p < (real)0.975f) {
-    // 1. ZENTRALE REGION (Mitte läuft perfekt flach)
+    // 1. central region (flat behaviour)
     q = p - (real)0.5f;
     r = q * q;
     t = q * ((((((((real)-2.5490809287301226727e3f * r + 
@@ -252,7 +250,7 @@ static inline real qnorm(real p, real mu, real sigma) {
           (real)6.8718700749205790830e2f) * r + 
          (real)4.2313330701600911252e1f) * r - (real)1.0f);
   } else {
-    // 2. RAND-REGION (Exakt abgestimmt auf den R-Core)
+    // 2. border region
     r = (p <= (real)0.025f) ? p : ((real)1.0f - p);
     t = sqrt(-(real)log(r)); 
     
@@ -277,7 +275,7 @@ static inline real qnorm(real p, real mu, real sigma) {
 
   real x = mu + q * sigma;
 
-  // 3. Entfesselte Newton-Raphson Schleife (Profitiert jetzt voll vom erfc-Fix!)
+  // 3. Newton-Raphson Loop (benefits from erfc use!)
   for (int i = 0; i < 8; ++i) {
     real pdf = dnorm(x, mu, sigma);
     if (isnan(pdf) || isinf(pdf) || pdf <= (real)GPGPU_SAFE_MAX) break;
@@ -295,12 +293,13 @@ static inline real rnorm_internal(__private real mu, __private real sigma,
   // Since 'mt' and 'idx' are already pointers, we pass them DIRECTLY!
   real u1 = mt_rand_01(&idx[0], mt);
   real u2 = mt_rand_01(&idx[0], mt);
+  // symmetrically mix both branches based on thread id. 
   if(get_global_id(0) % 2 == 1)
     return mu + sigma * sqrt((real)-2.0f * log(u1)) *
            cos((real)2.0f * (real)M_PI * u2);
   else
     return mu + sigma * sqrt((real)-2.0f * log(u1)) *
-           sin((real)2.0f * (real)M_PI * u2); // Tip: Second branch usually uses 'sin' for Box-Muller
+           sin((real)2.0f * (real)M_PI * u2); 
 }
 #define rnorm(mu, sigma) rnorm_internal((mu), (sigma), &idx, mt)
 
@@ -341,25 +340,25 @@ static inline real runif_internal(real min, real max, __private int* idx, __priv
 // POISSON DISTRIBUTION (Poisson distribution)
 // =========================================================================
 
-// Wahrscheinlichkeitsfunktion (PMF / Dichte)
+// Probability function (PDF)
 static inline real dpois(real x, real lambda) {
   if (lambda < (real)0.0f || x < (real)0.0f) return (real)0.0f;
-  // Hinweis: Nutzt intern deine math.cl-Hilfsfunktionen (z.B. lgamma oder exp/pow)
-  // Für diskrete Werte sollte x eine Ganzzahl sein.
+  // Note: Internally uses our math.cl helper functions (e.g. lgamma or exp/pow)
+  // For discrete values, x should be an integer.
   real k = floor(x);
   if (k != x) return (real)0.0f;
   
-  // Alternative über Log-Skala zur Vermeidung von Overflows: exp(-lambda + k*log(lambda) - lgamma(k + 1))
+  // Alternative use via log scale to avoid overflows: exp(-lambda + k*log(lambda) - lgamma(k + 1))
   return exp(-lambda + k * log(lambda) - lgamma(k + (real)1.0f));
 }
 
-// Verteilungsfunktion (CDF)
+// Distribution function (CDF)
 static inline real ppois(real q, real lambda) {
   if (lambda < (real)0.0f) return (real)0.0f;
   if (q < (real)0.0f) return (real)0.0f;
   
-  // Nutze die unvollständige Gammafunktion (regularized gamma Q oder P) falls vorhanden,
-  // oder eine klassische iterative Schleife für kleine/mittlere Lambdas:
+  // Use the incomplete gamma function (regularized gamma Q or P) if available,
+  // or a classic iterative loop for small/medium lambdas:
   real k = floor(q);
   real sum = (real)0.0f;
   for (int i = 0; i <= (int)k; ++i) {
@@ -368,7 +367,7 @@ static inline real ppois(real q, real lambda) {
   return sum;
 }
 
-// Quantilfunktion (Inverse CDF)
+// Quantile function (Inverse CDF)
 static inline int qpois(real p, real lambda) {
   if (p < (real)0.0f || p > (real)1.0f || lambda < (real)0.0f) return -1;
   if (p == (real)0.0f) return 0;
@@ -376,7 +375,7 @@ static inline int qpois(real p, real lambda) {
   real term = exp(-lambda);
   real sum = term;
   int k = 0;
-  real epsilon = (real)1e-7f; // Schützt vor GPU-Rundungsrauschen
+  real epsilon =  GPGPU_EPSILON; 
 
   while (k < 100000) {
     if (sum >= (p - epsilon)) {
@@ -389,7 +388,7 @@ static inline int qpois(real p, real lambda) {
   return k;
 }
 
-// Interne RNG-Funktion (Knuth-Methode für kleine Lambda, Inversion für große Lambda)
+// Internal RNG function (Knuth method for small lambda, inversion for large lambda)
 static inline int rpois_internal(real lambda, __private int* idx, __private uint* mt) {
   if (lambda < (real)0.0f) return (real)NAN;
   
@@ -406,14 +405,14 @@ static inline int rpois_internal(real lambda, __private int* idx, __private uint
   return k - 1;
 }
 
-// 🎯 Das Makro versteckt wieder die MT-Variablen
+// The macro hides the MT variables again
 #define rpois(lambda) rpois_internal((lambda), &idx, mt)
 
 // =========================================================================
-// BINOMIAL DISTRIBUTION (Binomialverteilung)
+// binomial distribution
 // =========================================================================
 
-// Wahrscheinlichkeitsfunktion (PMF / Dichte)
+// Probability function (PDF)
 static inline real dbinom(real x, int n, real p) {
   if (p < (real)0.0f || p > (real)1.0f || n < 0) return (real)0.0f;
   int k = floor(x);
@@ -426,7 +425,7 @@ static inline real dbinom(real x, int n, real p) {
   return exp(log_bin_coeff + k * log(p) + (n - k) * log((real)1.0f - p));
 }
 
-// Verteilungsfunktion (CDF)
+// Distribution function (CDF)
 static inline real pbinom(real q, int n, real p) {
   if (p < (real)0.0f || p > (real)1.0f || n < 0) return (real)0.0f;
   if (q < (real)0.0f) return (real)0.0f;
@@ -440,7 +439,7 @@ static inline real pbinom(real q, int n, real p) {
   return sum;
 }
 
-// Quantilfunktion (Inverse CDF)
+// Quantile function (Inverse CDF)
 static inline int qbinom(real prob, int n, real p) {
   if (prob < (real)0.0f || prob > (real)1.0f || p < (real)0.0f || p > (real)1.0f || n < 0) return (real)NAN;
   if (prob == (real)0.0f) return (real)0.0f;
@@ -456,13 +455,13 @@ static inline int qbinom(real prob, int n, real p) {
   return n;
 }
 
-// Interne RNG-Funktion (Münzwurf-Methode für kleine n, Inversion für große n)
+// Internal RNG function (coin toss method for small n, inversion for large n)
 static inline int rbinom_internal(int n, real p, __private int* idx, __private uint* mt) {
   if (p < (real)0.0f || p > (real)1.0f || n < 0) return (real)NAN;
   
   int successes = 0;
   
-  // Für kleine bis mittlere n simulieren wir direkt die Einzelversuche (Bernoulli)
+  // For small to medium n we directly simulate the individual tests (Bernoulli)
   for (int i = 0; i < n; ++i) {
     if (mt_rand_01(idx, mt) <= p) {
       successes++;
@@ -471,11 +470,10 @@ static inline int rbinom_internal(int n, real p, __private int* idx, __private u
   return successes;
 }
 
-// 🎯 Das Makro versteckt wieder die MT-Variablen für den Kernel-Aufruf
 #define rbinom(size, prob) rbinom_internal((size), (prob), &idx, mt)
 
 // =========================================================================
-// EXPONENTIAL DISTRIBUTION (Exponentialverteilung)
+// exponential distribution
 // =========================================================================
 
 // Density function (PDF)
@@ -497,19 +495,18 @@ static inline real qexp(real p, real rate) {
   return -log((real)1.0f - p) / rate;
 }
 
-// Interne RNG-Funktion (Inversionsmethode)
+// Internal RNG function (inversion method)
 static inline real rexp_internal(real rate, __private int* idx, __private uint* mt) {
   if (rate <= (real)0.0f) return (real)NAN;
-  // Da mt_rand_01 in [0,1) liegt, ist 1.0 - u in (0,1], was log() sicher gegen -Inf macht
+  // Since mt_rand_01 is in [0,1), 1.0 - u is in (0,1], making log() safe against -Inf
   real u = mt_rand_01(idx, mt);
   return -log((real)1.0f - u) / rate;
 }
 
-// 🎯 Das Makro versteckt wieder die MT-Variablen für den Kernel-Aufruf
 #define rexp(rate) rexp_internal((rate), &idx, mt)
 
 // =========================================================================
-// GEOMETRIC DISTRIBUTION (Geometrische Verteilung)
+// geometric distribution
 // =========================================================================
 
 // Probability mass function (PMF)
@@ -532,22 +529,22 @@ static inline real pgeom(real q, real prob) {
   return (real)1.0f - exp((k + (real)1.0f) * log((real)1.0f - prob));
 }
 
-// Quantile function (Inverse CDF) - Exakt auf R-Parametrisierung abgestimmt
+// Quantile function (Inverse CDF)
 static inline int qgeom(real p, real prob) {
   if (p < (real)0.0f || p > (real)1.0f || prob <= (real)0.0f || prob > (real)1.0f) return -1;
   if (p == (real)0.0f) return 0;
-  if (p == (real)1.0f) return 2147483647; // INT_MAX für p = 1
+  if (p == (real)1.0f) return 2147483647; // INT_MAX for p = 1
   if (prob == (real)1.0f) return 0;
 
-  // 🌟 DER ORIGINALE R-CORE-ALGORITHMUS (Aus src/nmath/qgeom.c):
-  // R nutzt: ceil(log(1 - p) / log(1 - prob) - 1e-7) - 1;
-  // Das subtrahierte 1e-7 verhindert, dass exakte Ganzzahlgrenzen 
-  // durch GPU-Bit-Ungenauigkeiten fälschlicherweise aufgerundet werden.
+  // THE ORIGINAL R-CORE ALGORITHM (From src/nmath/qgeom.c):
+  // R uses: ceil(log(1 - p) / log(1 - prob) - 1e-7) - 1;
+  // The subtracted GPGPU_EPSILON prevents exact integer boundaries 
+  // incorrectly rounded up due to GPU bit inaccuracies.
   
   real num = log((real)1.0f - p);
   real denom = log((real)1.0f - prob);
   
-  int q = (int)ceil(num / denom - (real)1e-7) - 1;
+  int q = (int)ceil(num / denom - GPGPU_EPSILON) - 1;
   
   return q < 0 ? 0 : q;
 }
@@ -558,7 +555,7 @@ static inline int rgeom_internal(real prob, __private int* idx, __private uint* 
   if (prob == (real)1.0f) return (real)0.0f;
   
   real u = mt_rand_01(idx, mt);
-  // floor(log(1-u) / log(1-prob)) simuliert exakt die Anzahl der Fehlschläge
+  // floor(log(1-u) / log(1-prob)) simulates exactly the number of failures
   return (int)(floor(log((real)1.0f - u) / log((real)1.0f - prob)));
 }
 
@@ -567,7 +564,7 @@ static inline int rgeom_internal(real prob, __private int* idx, __private uint* 
 
 
 // =========================================================================
-// NEGATIVE BINOMIAL DISTRIBUTION (Negative Binomialverteilung)
+// negative binomial distribution
 // =========================================================================
 
 // Probability mass function (PMF)
@@ -614,10 +611,6 @@ static inline int qnbinom(real p, int size, real prob) {
 static inline int rnbinom_internal(int size, real prob, __private int* idx, __private uint* mt) {
   if (prob <= (real)0.0f || prob > (real)1.0f || size <= 0) return (real)NAN;
   
-  // 1. Generate a Gamma variable Y ~ Gamma(shape=size, scale=(1-prob)/prob)
-  // (Hinweis: Falls rgamma() in deiner libkernel noch fehlt, nutzen wir hier 
-  // temporär die Inversions-Treppensuche oder setzen voraus, dass rgamma_internal existiert)
-  // Da die vollständige Gamma-Generierung komplex ist, nutzen wir die bewährte Inversion für diskrete Werte:
   real u = mt_rand_01(idx, mt);
   real sum = (real)0.0f;
   int k = 0;
@@ -629,14 +622,13 @@ static inline int rnbinom_internal(int size, real prob, __private int* idx, __pr
   return k;
 }
 
-// 🎯 The macro hides the MT variables for the kernel call
 #define rnbinom(size, prob) rnbinom_internal((size), (prob), &idx, mt)
 
 // =========================================================================
-// HYPERGEOMETRIC DISTRIBUTION (Hypergeometrische Verteilung)
+// hypergeometric distribution
 // =========================================================================
 
-// Probability mass function (PMF)
+// Probability mass function (PDF)
 static inline real dhyper(real x, int m, int n, int k) {
   real x_floor = floor(x);
   if (x_floor != x || x < (real)0.0f || x > m || x > k || (k - x) > n) return (real)0.0f;
@@ -692,11 +684,10 @@ static inline int rhyper_internal(int m, int n, int k, __private int* idx, __pri
   return successes;
 }
 
-// 🎯 The macro hides the MT variables for the kernel call
 #define rhyper(m, n, k) rhyper_internal((m), (n), (k), &idx, mt)
 
 // =========================================================================
-// GAMMA DISTRIBUTION (Gamma-Verteilung)
+// gamma distribution
 // =========================================================================
 
 // Probability Density Function (PDF)
@@ -712,15 +703,15 @@ static inline real dgamma(real x, real shape, real rate) {
   return exp(log_density);
 }
 
-// Cumulative Distribution Function (CDF) via unvollständige Gamma-Reihe oder Approximation
+// Cumulative Distribution Function (CDF) via incomplete gamma series or approximation
 static inline real pgamma(real q, real shape, real rate) {
   if (shape <= (real)0.0f || rate <= (real)0.0f) return (real)0.0f;
   if (q <= (real)0.0f) return (real)0.0f;
   
-  // Nutzt den skalierten Wert x = q * rate
+  // Uses the scaled value x = q * rate
   real x = q * rate;
   
-  // Reihenentwicklung für das regulierte untere Gamma (P(a, x))
+  // Series expansion for the regulated lower gamma (P(a, x))
   real sum = (real)1.0f / shape;
   real term = sum;
   for (int i = 1; i < 100; ++i) {
@@ -731,19 +722,19 @@ static inline real pgamma(real q, real shape, real rate) {
   return sum * exp(-x + shape * log(x) - lgamma(shape));
 }
 
-// Quantile Function (Inverse CDF) per numerischer Newton-Raphson Verfeinerung
+// Quantile Function (Inverse CDF) via numerical Newton-Raphson refinement
 static inline real qgamma(real p, real shape, real rate) {
   if (p < (real)0.0f || p > (real)1.0f || shape <= (real)0.0f || rate <= (real)0.0f) return (real)NAN;
   if (p == (real)0.0f) return (real)0.0f;
   if (p == (real)1.0f) return (real)INFINITY;
   
-  // Erste grobe Schätzung (Wilson-Hilferty Transformation)
+  // First rough estimate (Wilson-Hilferty transformation)
   real d = (real)1.0f / ((real)9.0f * shape);
   real v = (real)1.0f - d + qnorm(p, (real)0.0f, (real)1.0f) * sqrt(d);
   real guess = shape * v * v * v / rate;
   if (guess < (real)0.0f) guess = (real)1e-5f;
   
-  // Newton-Raphson Verfeinerungsschleife
+  // Newton-Raphson refinement loop
   for (int i = 0; i < 10; ++i) {
     real error = pgamma(guess, shape, rate) - p;
     if (fabs(error) < (real)1e-6f) break;
@@ -763,12 +754,12 @@ static inline real rgamma_internal(real shape, real rate, __private int* idx, __
   real scale = (real)1.0f / rate;
   real adjustment = (real)1.0f;
 
-  // 🛡️ REKURSIONSFREIER Ahrens-Dieter-Schritt für shape < 1
+  //  recursion-free Ahrens-Dieter step for shape < 1
   if (d_shape < (real)1.0f) {
     real u = mt_rand_01(idx, mt);
     if (u <= (real)0.0f) u = (real)GPGPU_SAFE_MAX;
     adjustment = pow(u, (real)1.0f / d_shape);
-    d_shape += (real)1.0f; // Schaltet auf die Marsaglia-Tsang Basis um
+    d_shape += (real)1.0f; // Switches to the Marsaglia-Tsang base
   }
   
   real d = d_shape - (real)0.3333333f;
@@ -786,7 +777,7 @@ static inline real rgamma_internal(real shape, real rate, __private int* idx, __
     
     real z = sqrt((real)-2.0f * log(u1)) * cos((real)2.0f * (real)M_PI * u2);
     
-    // Guard gegen NaNs aus Box-Muller
+    // Guard against NaNs from Box-Muller
     if (isnan(z) || isinf(z)) continue;
 
     real v = (real)1.0f + c * z;
@@ -805,11 +796,10 @@ static inline real rgamma_internal(real shape, real rate, __private int* idx, __
   }
 }
 
-// 🎯 The macro hides the MT variables for the kernel call
 #define rgamma(shape, rate) rgamma_internal((shape), (rate), &idx, mt)
 
 // =========================================================================
-// WEIBULL DISTRIBUTION (Weibull-Verteilung)
+// weibull distribution
 // =========================================================================
 
 // Probability Density Function (PDF)
@@ -843,7 +833,7 @@ static inline real qweibull(real p, real shape, real scale) {
 static inline real rweibull_internal(real shape, real scale, __private int* idx, __private uint* mt) {
   if (shape <= (real)0.0f || scale <= (real)0.0f) return (real)NAN;
   real u = mt_rand_01(idx, mt);
-  // Da u in [0,1) liegt, ist 1.0 - u in (0,1], absolut sicher für den Logarithmus
+  // Since u is in [0,1), 1.0 - u is in (0,1], absolutely safe for the logarithm
   return scale * pow(-log((real)1.0f - u), (real)1.0f / shape);
 }
 
@@ -851,13 +841,13 @@ static inline real rweibull_internal(real shape, real scale, __private int* idx,
 #define rweibull(shape, scale) rweibull_internal((shape), (scale), &idx, mt)
 
 // =========================================================================
-// CHI-SQUARED DISTRIBUTION (Chi-Quadrat-Verteilung)
+// chi-squared distribution
 // =========================================================================
 
 // Probability Density Function (PDF)
 static inline real dchisq(real x, int df) {
   if (df <= 0) return (real)0.0f;
-  // Chi-squared(df) ist identisch zu Gamma(shape = df/2, rate = 0.5)
+  // Chi-squared(df) is identical to Gamma(shape = df/2, rate = 0.5)
   return dgamma(x, df * (real)0.5f, (real)0.5f);
 }
 
@@ -879,31 +869,30 @@ static inline real rchisq_internal(int df, __private int* idx, __private uint* m
   return rgamma_internal(df * (real)0.5f, (real)0.5f, idx, mt);
 }
 
-// 🎯 The macro hides the MT variables for the kernel call
 #define rchisq(df) rchisq_internal((df), &idx, mt)
 
 
 
 // =========================================================================
-// INVERSE GAMMA MATHEMATIK-ERWEITERUNG (Für deine libkernel.cl)
+// inverse gamma
 // =========================================================================
 
-// Dichte (PDF): Berechnet im stabilen Log-Raum via lgamma
+// Density (PDF): Calculated in stable log space via lgamma
 static inline real dinvgamma(const real x, const real shape, const real rate) {
   if (x <= (real)0.0f || shape <= (real)0.0f || rate <= (real)0.0f) return (real)0.0f;
   real log_pdf = shape * log(rate) - lgamma(shape) - (shape + (real)1.0f) * log(x) - (rate / x);
   return exp(log_pdf);
 }
 
-// Verteilung (CDF): F_InvGamma(x; alpha, beta) = 1 - F_Gamma(1/x; alpha, 1/beta)
-// Nutzt deine bestehende gamma_cdf(x, shape, rate)
+// Distribution (CDF): F_InvGamma(x; alpha, beta) = 1 - F_Gamma(1/x; alpha, 1/beta)
+// Uses your existing pgamma(x, shape, rate)
 static inline real pinvgamma(const real x, const real shape, const real rate) {
   if (x <= (real)0.0f || shape <= (real)0.0f || rate <= (real)0.0f) return (real)0.0f;
   return (real)1.0f - pgamma((real)1.0f / x, shape, rate);
 }
 
 // Quantile (QF): qinvgamma(p; alpha, beta) = 1 / qgamma(1 - p; alpha, 1/beta)
-// Nutzt deine bestehende gamma_q(p, shape, rate)
+// Uses your existing qgamma(p, shape, rate)
 static inline real qinvgamma(const real p, const real shape, const real rate) {
   if (shape <= (real)0.0f || rate <= (real)0.0f || p <= (real)0.0f) return (real)0.0f;
   if (p >= (real)1.0f) return INFINITY;
@@ -913,7 +902,7 @@ static inline real qinvgamma(const real p, const real shape, const real rate) {
 }
 
 // RNG: rinvgamma(alpha, beta) = 1 / rgamma(alpha, beta)
-// Nutzt dein bestehendes rgamma(shape, rate) aus source 5
+// Uses your existing rgamma(shape, rate)
 static inline real rinvgamma_internal(const real shape, const real rate, __private int* idx, __private uint* mt) {
   // Hier rgamma_internal direkt aufrufen und die MT-Zeiger bitscharf weiterreichen!
   real g = rgamma_internal(shape, rate, idx, mt);
@@ -923,10 +912,10 @@ static inline real rinvgamma_internal(const real shape, const real rate, __priva
 #define rinvgamma(shape, rate) rinvgamma_internal((shape), (rate), &idx, mt)
 
 // =========================================================================
-// BETA DISTRIBUTION & STUDENT-T DISTRIBUTION (Stabilized via Continued Fractions)
+// beta distribution & student-t distribution (stabilized via continued fractions)
 // =========================================================================
 
-// Regularized Incomplete Beta Function I_x(a, b) – REKURSIONSFREI FÜR GPU
+// Regularized Incomplete Beta Function I_x(a, b) ! RECURSION-FREE FOR OpenCL !
 static inline real core_incomplete_beta(real x, real a, real b) {
   if (x <= (real)0.0f) return (real)0.0f;
   if (x >= (real)1.0f) return (real)1.0f;
@@ -1014,12 +1003,12 @@ static inline real dbeta(real x, real shape1, real shape2) {
   return exp(log_density);
 }
 
-// Cumulative Distribution Function (CDF) via stabilen Kettenbruch
+// Cumulative Distribution Function (CDF) via stable chain fraction
 static inline real pbeta(real q, real shape1, real shape2) {
   return core_incomplete_beta(q, shape1, shape2);
 }
 
-// Quantile Function (Inverse CDF) per Newton-Raphson Verfeinerung
+// Quantile Function (Inverse CDF) via Newton-Raphson refinement
 static inline real qbeta(real p, real shape1, real shape2) {
   if (p < (real)0.0f || p > (real)1.0f || shape1 <= (real)0.0f || shape2 <= (real)0.0f) return (real)NAN;
   if (p == (real)0.0f) return (real)0.0f;
@@ -1028,10 +1017,10 @@ static inline real qbeta(real p, real shape1, real shape2) {
   real a = shape1;
   real b = shape2;
   
-  // 1. Stabiler Startwert (Mean)
+  // 1. Stable starting value (Mean)
   real guess = a / (a + b);
   
-  // 2. Strikte Schranken für die Absicherung (Bisektion-Klammer)
+  // 2. Strict limits for hedging (bisection bracket)
   real lower = 0.0f;
   real upper = 1.0f;
   
@@ -1039,29 +1028,29 @@ static inline real qbeta(real p, real shape1, real shape2) {
     real current_p = pbeta(guess, a, b);
     real error = current_p - p;
     
-    // Konvergenz-Kriterium für FP32 Single Precision
+    // Convergence criterion has also to work on FP32 Single Precision
     if (fabs(error) < (real)1e-5f) break;
     
-    // Schranken basierend auf dem Vorzeichen des Fehlers verengen
+    // Narrow bounds based on the sign of the error
     if (error > 0.0f) {
       upper = guess;
     } else {
       lower = guess;
     }
     
-    // 🎯 DER FIX: Nutze direkt deine eigene, hochpräzise dbeta-Funktion!
-    // Das verhindert jeden Skalierungs-Mismatch mit pbeta.
+    // Use our own, highly precise dbeta function straight away!
+    // This prevents any scaling mismatch with pbeta.
     real deriv = dbeta(guess, a, b);
     
-    // 3. Numerischer Filter gegen instabile Newton-Schritte
+    // 3. Numerical filter against unstable Newton steps
     if (deriv < (real)1e-6f || !isfinite(deriv)) {
-      // Ableitung zu flach -> Erzwinge sicheren Bisektion-Schritt
+      // Derivation too flat -> Force safe bisection step
       guess = (lower + upper) * (real)0.5f;
     } else {
       real step = error / deriv;
       real next_guess = guess - step;
       
-      // Überprüfen, ob der Newton-Schritt aus der aktuellen Klammer ausbricht
+      // Check whether the Newton step breaks out of the current bracket
       if (next_guess <= lower || next_guess >= upper || !isfinite(next_guess)) {
         guess = (lower + upper) * (real)0.5f;
       } else {
@@ -1069,7 +1058,7 @@ static inline real qbeta(real p, real shape1, real shape2) {
       }
     }
     
-    // Maschinengenauigkeit-Schutz für den nächsten Durchlauf
+    // Machine accuracy protection (FP32!) for the next run
     if (guess <= (real)0.0f) guess = (real)1e-6f;
     if (guess >= (real)1.0f) guess = (real)0.99995f;
   }
@@ -1097,7 +1086,7 @@ static inline real dt(real x, int df) {
   return exp(log_numerator - log_denominator + log_term);
 }
 
-// Student-t Cumulative Distribution Function (CDF) über unvollständige Beta-Identität
+// Student-t Cumulative Distribution Function (CDF) via incomplete beta identity
 static inline real pt(real q, int df) {
   if (df <= 0) return (real)0.0f;
     real df_real = (real)df;
@@ -1146,7 +1135,7 @@ static inline real rt_internal(int df, __private int* idx, __private uint* mt) {
 
 
 // =========================================================================
-// F DISTRIBUTION (F-Verteilung)
+// f distribution
 // =========================================================================
 
 // Probability Density Function (PDF)
@@ -1161,7 +1150,7 @@ static inline real df(real x, int df1, int df2) {
   return exp(log_numerator - log_denominator + log_x_term);
 }
 
-// Cumulative Distribution Function (CDF) via Rückgriff auf die Beta-Verteilung
+// Cumulative Distribution Function (CDF) via fallback to the beta distribution
 static inline real pf(real q, int df1, int df2) {
   if (df1 <= 0 || df2 <= 0) return (real)0.0f;
   if (q <= (real)0.0f) return (real)0.0f;
@@ -1171,7 +1160,7 @@ static inline real pf(real q, int df1, int df2) {
   return pbeta(x, d1 * (real)0.5f, d2 * (real)0.5f);
 }
 
-// Quantile Function (Inverse CDF) per Newton-Raphson Verfeinerung
+// Quantile Function (Inverse CDF) via Newton-Raphson refinement
 static inline real qf(real p, int df1, int df2) {
   if (p < (real)0.0f || p > (real)1.0f || df1 <= 0 || df2 <= 0) return (real)NAN;
   if (p == (real)0.0f) return (real)0.0f;
@@ -1209,7 +1198,7 @@ static inline real rf_internal(int df1, int df2, __private int* idx, __private u
 
 
 // =========================================================================
-// LOG-NORMAL DISTRIBUTION (Log-Normalverteilung)
+// log-normal distribution
 // =========================================================================
 
 // Probability Density Function (PDF)
@@ -1240,7 +1229,7 @@ static inline real qlnorm(real p, real meanlog, real sdlog) {
 static inline real rlnorm_internal(real meanlog, real sdlog, __private int* idx, __private uint* mt) {
   if (sdlog <= (real)0.0f) return (real)NAN;
   
-  // Standardnormalverteiltes Paar generieren (Box-Muller)
+  // Generate standard normally distributed pair (Box-Muller)
   real u1 = mt_rand_01(idx, mt);
   real u2 = mt_rand_01(idx, mt);
   real z = sqrt((real)-2.0f * log(u1)) * cos((real)2.0f * (real)M_PI * u2);
@@ -1250,11 +1239,10 @@ static inline real rlnorm_internal(real meanlog, real sdlog, __private int* idx,
   return exp(y);
 }
 
-// 🎯 The macro hides the MT variables for the kernel call
 #define rlnorm(meanlog, sdlog) rlnorm_internal((meanlog), (sdlog), &idx, mt)
 
 // =========================================================================
-// CAUCHY DISTRIBUTION (Cauchy-Verteilung)
+// cauchy distribution
 // =========================================================================
 
 // Probability Density Function (PDF)
@@ -1282,22 +1270,21 @@ static inline real qcauchy(real p, real location, real scale) {
 static inline real rcauchy_internal(real location, real scale, __private int* idx, __private uint* mt) {
   if (scale <= (real)0.0f) return (real)NAN;
   real u = mt_rand_01(idx, mt);
-  // Da mt_rand_01 im Intervall [0, 1) liegt, ist das mathematisch absolut stabil
+  // Since mt_rand_01 lies in the interval [0, 1), this is mathematically absolutely stable
   return location + scale * tan((real)M_PI * (u - (real)0.5f));
 }
 
-// 🎯 The macro hides the MT variables for the kernel call
 #define rcauchy(location, scale) rcauchy_internal((location), (scale), &idx, mt)
 
 // =========================================================================
-// LOGISTIC DISTRIBUTION (Logistische Verteilung)
+// logistic distribution
 // =========================================================================
 
 // Probability Density Function (PDF)
 static inline real dlogis(real x, real location, real scale) {
   if (scale <= (real)0.0f) return (real)0.0f;
   real z = (x - location) / scale;
-  // Vermeidung von numerischen Overflows bei extremen z-Werten
+  // Avoiding numerical overflows with extreme z values
   if (z > (real)50.0f || z < (real)-50.0f) return (real)0.0f;
   real e = exp(-z);
   return e / (scale * ((real)1.0f + e) * ((real)1.0f + e));
@@ -1322,7 +1309,7 @@ static inline real qlogis(real p, real location, real scale) {
 static inline real rlogis_internal(real location, real scale, __private int* idx, __private uint* mt) {
   if (scale <= (real)0.0f) return (real)NAN;
   real u = mt_rand_01(idx, mt);
-  // Da u in [0, 1) liegt, ist 1-u > 0, log() ist sicher vor -Inf Fehlern geschützt
+  // Since u is in [0, 1), 1-u > 0, log() is safely protected from -Inf errors
   if (u == (real)0.0f) u = (real)1e-7f; 
   return location + scale * log(u / ((real)1.0f - u));
 }
@@ -1333,20 +1320,22 @@ static inline real rlogis_internal(real location, real scale, __private int* idx
 
 // some linear algebra for model fitting
 /**
- * Kernkomponente für lsfit(): Löst das lineare Ausgleichsproblem min ||A*x - b||^2
- * mittels Householder-QR-Zerlegung in einem einzigen Thread.
+ * Core component for lsfit(): Solves the linear balancing problem min ||A*x - b||^2
+ * using Householder QR decomposition in a single thread.
  *
- * @param A_in Zeiger auf die m x n Eingabematrix (Row-Major Layout).
- * @param b_in Zeiger auf den m-dimensionalen Vektor der rechten Seite.
- * @param m    Anzahl der Messpunkte / Gleichungen (m >= n).
- * @param n    Anzahl der Parameter / Unbekannten.
- * @param x    Ziel-Array (Größe n) für die berechneten Koeffizienten.
- * @return     0 bei Erfolg, -1 bei Rangmangel oder Speicherfehler.
+ * @param A_in Pointer to the m x n input matrix (row-major layout).
+ * @param b_in Pointer to the m-dimensional vector of the right side.
+ * @param m Number of measurement points / equations (m >= n).
+ * @param n Number of parameters/unknowns.
+ * @param x Target array (size n) for the calculated coefficients.
+ * @return 0 on success, -1 on lack of rank or memory error.
  */
 
+// NOT YET TESTED!!
+// entry point: wls_gls_fit() below 
 
 // =========================================================================
-// SAKKADISCHER LIN-ALG WORKSPACE FÜR MODEL FITTING (OHNE MALLOC / OHNE NULL)
+// lin-alg workspace for model fitting (without malloc / without zero)
 // =========================================================================
 
 static inline int core_qr_ls_solve(const real *A_in, const real *b_in, int m, int n, real *x, real *R, real *qty) {
@@ -1492,7 +1481,6 @@ static inline void core_forward_substitute(const real *L, int m, const real *inp
     }
 }
 
-// 🛡️ wls_gls_fit STEHT JETZT KORREKT VOR ls_poly_fit!
 static inline int wls_gls_fit(const real *A_in, const real *b_in, int m, int n, 
                               const real *Sigma, const real *weights, real *x_out,
                               real *workspace_A_tilde, real *workspace_b_tilde,
@@ -1500,7 +1488,7 @@ static inline int wls_gls_fit(const real *A_in, const real *b_in, int m, int n,
                               real *workspace_R, real *workspace_qty) {
     if (m < n || !A_in || !b_in || !x_out || !workspace_A_tilde || !workspace_b_tilde || !workspace_R || !workspace_qty) return -1;
 
-    if (Sigma != 0) { // 🛡️ iMac-safe '0' statt 'NULL'
+    if (Sigma != 0) {
         if (!workspace_L || !workspace_col) return -1;
         if (core_cholesky(Sigma, m, workspace_L) != 0) return -1;
         core_forward_substitute(workspace_L, m, b_in, workspace_b_tilde);
@@ -1509,7 +1497,7 @@ static inline int wls_gls_fit(const real *A_in, const real *b_in, int m, int n,
             core_forward_substitute(workspace_L, m, workspace_col, workspace_R);
             for (int i = 0; i < m; i++) workspace_A_tilde[i * n + j] = workspace_R[i];
         }
-    } else if (weights != 0) { // 🛡️ iMac-safe '0' statt 'NULL'
+    } else if (weights != 0) { 
         for (int i = 0; i < m; i++) {
             real w_sqrt = sqrt(weights[i]);
             workspace_b_tilde[i] = b_in[i] * w_sqrt;

@@ -15,7 +15,6 @@ Memory<real> gpu_x(*device, n);
 Memory<real> gpu_y(*device, n); 
 Memory<real> gpu_z(*device, n);
 
-// Jetzt klappt der Zugriff über [] absolut makellos und performant!
 for(int i=0; i<n0; ++i) { gpu_x0[i] = x0[i]; gpu_y0[i] = y0[i]; }
 for(int j=0; j<n; ++j)  { gpu_x[j] = x[j]; gpu_y[j] = y[j]; gpu_z[j] = z[j]; }
 

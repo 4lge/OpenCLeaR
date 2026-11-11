@@ -35,4 +35,5 @@
 ^vignettes/.*\.qmd$
 ^vignettes/\.cl_cache$
 ^cran-comments\.md$
+^vignettes/.*$
 

@@ -139,7 +139,7 @@ for FILE in \
     if [ -f "$FILE" ]; then
         # Check if the last character is a newline
         if [ "$(tail -c1 "$FILE" | wc -l)" -eq 0 ]; then
-            echo "   -> Füge Newline an: $FILE"
+            echo "   -> append newline: $FILE"
             echo "" >> "$FILE"
         fi
     fi

@@ -44,7 +44,7 @@ namespace backend {
 
     void activate(int platform_id, int device_id);
     
-    // Gibt uns eine direkte Referenz auf Ihr fix und fertiges Wrapper-Gerät!
+    // Gives us a direct reference to our ready-made wrapper device!
     inline const Device& getActiveDevice() const { return this->activeDevice; }
 
     void activateDeviceWithMostFlops();

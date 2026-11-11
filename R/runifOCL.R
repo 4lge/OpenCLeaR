@@ -1,4 +1,4 @@
-# Wir teilen R mit, dass diese internen JIT-Objekte fliegend erzeugt werden!
+# We tell R that these internal JIT objects will be created on the fly!
 if (getRversion() >= "2.15.1") {
   utils::globalVariables(".runif_ocl_internal")
 }
@@ -17,13 +17,8 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 runifOCL <- (function() {
   
-  ## Diese Variable bleibt über Lexical Scoping innerhalb der Closure geschützt
   .runif_ocl_internal <- NULL
-  
-  ## Das ist die eigentliche R-Funktion, die exportiert wird
   function(n, min = 0, max = 1, ...) {
-    
-    ## Lazy Evaluation: Nur beim allerersten Aufruf kompilieren
     if (is.null(.runif_ocl_internal)) {
       .runif_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = signature(n = "integer", 
@@ -34,8 +29,6 @@ runifOCL <- (function() {
         ...
         )
     }
-    
-    ## Wichtig: Argumente direkt durchreichen!
     return(.runif_ocl_internal(as.integer(n), min, max))
   }
 })()

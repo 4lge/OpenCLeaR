@@ -14,7 +14,7 @@
 ##' take care about the float/double characteristics on your own.
 ##' You can force the use of float or double by choosing
 ##' \code{inclineCxxPluginFloat} or  \code{inclineCxxPluginDouble} explicitely
-##' while using \code{real} as automatically generated typedef both in your CL und
+##' while using \code{real} as automatically generated typedef both in your CL and
 ##' C++ code. An esier way is to use \code{inlineCL} which automates to inline call or
 ##' even \code{oclFunction} which completely automates this task and adapts on the fly to your
 ##' OpenCL device.
@@ -199,7 +199,6 @@ inlineCxxPluginDouble <- function(...) {
 ##'     Memory<real> gpu_y(*device, n);
 ##'     Memory<real> gpu_z(*device, n);
 ##'
-##'     // Jetzt klappt der Zugriff über [] absolut makellos und performant!
 ##'     for(int i=0; i<n0; ++i) { gpu_x0[i] = x0[i]; gpu_y0[i] = y0[i]; }
 ##'     for(int j=0; j<n; ++j)  { gpu_x[j] = x[j]; gpu_y[j] = y[j]; gpu_z[j] = z[j]; }
 ##'
