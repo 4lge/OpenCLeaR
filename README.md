@@ -1,6 +1,6 @@
 # 📦 OpenCLeaR: OpenCL Easy Access from R
 
-A **R package** that simplifies writing parallel algorithms in OpenCL accessible from R.
+An **R package** that simplifies writing parallel algorithms in OpenCL accessible from R.
 It makes use of **CMake**, **Rcpp** and **OpenCL-Wrapper** (at least a fork of it) to ease 
 platform-independent compilation and linkage to **OpenCL**. The whole package is a fork of the
 **rcpp-cmake-template** package described 
@@ -12,11 +12,17 @@ and available at [GitHUB](https://github.com/jmaerte/cmake-rcpp-template).
 
 ## ✨ Highlights
 
-- ✅ Platform-independent configuration and linkage with **CMake**, this is inherited from **rcpp-cmake-template** package as upstream dependency. 
-- ✅ Easy access to OpenCL vie C++ interface taken from (a fork of) **OpenCL-Wrapper**.
+- ✅ Platform-independent configuration and linkage with **CMake**,
+  this is inherited from **rcpp-cmake-template** package as upstream
+  dependency.
+- ✅ Easy access to OpenCL via C++ interface taken from (a fork of)
+  **OpenCL-Wrapper**.
 - ✅ Functionality accessible via **inline** package using the provided plugin.
 - ✅ Simple Rcpp integration to access the OpenCL backend.
-- ✅ OpenCL kernels have access to a kernel library providing some alternatives to R/Rcpp functions. (currently restricted to a collection of r|d|p<dsitrib> functions like rnorm, dnorm, pnorm etc)
+- ✅ OpenCL kernels have access to a kernel library providing some
+  alternatives to R/Rcpp functions. (currently restricted to a
+  collection of r|d|p<distribution> functions like rnorm, dnorm, pnorm
+  etc)
 
 ---
 
@@ -64,16 +70,27 @@ OpenCLeaR
 
 ```
 
-📝 **Note:** Public headers (`backend/include`) define C/C++ interfaces compatible with `Rcpp`; they should not include external library headers as `Rcpp` does not link against them. Private headers (`backend/src/internal`) manage actual implementation details, allowing clean abstraction.
+📝 **Note:** Public headers (`backend/include`) define C/C++
+interfaces compatible with `Rcpp`; they should not include external
+library headers as `Rcpp` does not link against them. Private headers
+(`backend/src/internal`) manage actual implementation details,
+allowing clean abstraction.
 
 ## ⚙️ Backend with CMake
-The `src/backend` directory is a standalone **CMake** project. It builds a shared library (a static library under Windows) that is automatically linked to the R package.
+
+The `src/backend` directory is a standalone **CMake** project. It
+builds a shared library (a static library under Windows) that is
+automatically linked to the R package.
 
 * CMake handles all platform-dependent paths and setup.
 
 ## 📂 The `inst` Folder
 
-The `inst/` directory contains runtime resources, `.cl` kernels at `inst/kernel` and `.cpp` interfaces at `inst/interface`. During installation, these files from her installed at the `kernel` and `interface` directory of the installed library and can be accessed in R via:
+The `inst/` directory contains runtime resources, `.cl` kernels at
+`inst/kernel` and `.cpp` interfaces at `inst/interface`. During
+installation, these files from her installed at the `kernel` and
+`interface` directory of the installed library and can be accessed in
+R via:
 
 
 ```{}
@@ -102,13 +119,80 @@ make src/RcppExports.cpp
 ...
 ```
 
+## 🖥️ Supported Hardware & Platform Notes
+
+**OpenCLeaR** works across GPUs and CPUs on Linux, macOS, and Windows,
+provided a functional OpenCL ICD runtime is installed.
+
+### Tested Platforms & Runtimes
+
+* **Linux:** Nvidia CUDA OpenCL, Intel oneAPI OpenCL (CPU & GPU), AMD
+  ROCm OpenCL, and PoCL (CPU).
+* **macOS / Legacy OS X:** Apple OpenCL Framework (CL 1.2) on Intel
+  Macs (AMD Radeon / Intel UHD GPUs) and Apple Silicon
+  M-series. *(Note: Intel CPUs on macOS >= 11 are intentionally
+  filtered out because Apple's OpenCL CPU runtime returns non-portable
+  CVMS references instead of standalone binaries).*
+* **Windows:** Nvidia CUDA OpenCL and Intel oneAPI OpenCL. *(If no
+  OpenCL runtime is present at build time, compilation still succeeds
+  via the bundled Khronos OpenCL ICD Loader).*
+
+### Known Limitations
+
+* **Raspberry Pi OS (Mesa RustiCL):** Compiles (with
+  `RUSTICL_ENABLE=v3d`), loads, and detects the device, but kernel
+  execution fails due to incomplete OpenCL support in the Mesa `v3d`
+  driver.
+
+---
+
+### 🔧 Linux / AMD ROCm Tuning (GPUs & APUs)
+
+When running long-running OpenCL kernels or large memory allocations
+on AMD hardware under Linux (especially recent RDNA 3 / 3.5 APUs such
+as Ryzen AI / Strix Point / Strix Halo using `amdgpu` and ROCm),
+default driver watchdogs and memory caps may trigger GPU ring timeouts
+or allocation errors:
+
+1. **Kernel & Firmware Version (RDNA 3.5 / Strix):** Use **Linux
+   kernel >= 6.19** together with up-to-date `linux-firmware`
+   (`firmware-amd-graphics`) to avoid MES scheduler / firmware lockups
+   under compute load. *(On older kernels 6.12–6.18, adding
+   `amdgpu.cwsr_enable=0` to the kernel command line can serve as a
+   workaround).*
+2. **Increase the GPU Watchdog Timeout:** Recent Linux kernels enforce
+   a default `amdgpu` lockup timeout of only **2000 ms (2
+   seconds)**. For compute-heavy kernels, increase this limit in
+   `/etc/default/grub` (`GRUB_CMDLINE_LINUX_DEFAULT`) and run
+   `update-grub`: 
+```text 
+amdgpu.lockup_timeout=600000
+```
+  *(Value is in milliseconds; `600000` = 10 minutes).*
+3. **Unlock Full Unified Memory on APUs (Optional):** To allow OpenCL
+   buffers to utilize more than the default shared system memory (GTT)
+   limit on APUs with large RAM, set the TTM page limits (in 4 KB
+   pages; e.g., `25165824` for 96 GB) in the kernel command line:
+```text 
+ttm.pages_limit=25165824 ttm.page_pool_size=25165824 
+```
+   *(Note: Modern kernels use `ttm.*` instead of the deprecated
+   `amdttm.*` or `amdgpu.gttsize` parameters).*
+
 
 ## 🧪 Example Use Case: Inverse Distance Weighting (IDW)
 
-The core strength of **OpenCLeaR** is `oclFunction()`. It automates compiling an OpenCL C kernel alongside an Rcpp wrapper. It creates a self-adapting, JIT-compiled function that manages hardware precision shifts (FP32/FP64) internally and utilizes an optimized global RAM cache.
+The core strength of **OpenCLeaR** is `oclFunction()`. It automates
+compiling an OpenCL C kernel alongside an Rcpp wrapper. It creates a
+self-adapting, JIT-compiled function that manages hardware precision
+shifts (FP32/FP64) internally and utilizes an optimized global RAM
+cache.
 
 ### 1. The OpenCL Kernel (`inst/kernel/idw_kernel.cl`)
-This kernel executes on the GPU. The architecture-dependent placeholder `real` is dynamically defined as `float` or `double` at runtime depending on your active hardware capabilities.
+
+   This kernel executes on the GPU. The architecture-dependent
+   placeholder `real` is dynamically defined as `float` or `double` at
+   runtime depending on your active hardware capabilities.
 
 ```c
 __kernel void idw_kernel(__global const real* x0, __global const real* y0, __global real* z0,
@@ -130,7 +214,10 @@ __kernel void idw_kernel(__global const real* x0, __global const real* y0, __glo
 ```
 
 ### 2. The Rcpp Interface (`inst/interface/idw_rcpp.cpp`)
-This C++ snippet manages memory allocation on the OpenCL device. Data is mapped efficiently using memory abstraction layers and handles data exchange safely without DLL locks.
+
+This C++ snippet manages memory allocation on the OpenCL device. Data
+is mapped efficiently using memory abstraction layers and handles data
+exchange safely without DLL locks.
 
 ```cpp
 NumericVector x0(r_x0);
@@ -171,7 +258,10 @@ return r_z0;
 ```
 
 ### 3. Generating and Executing the Cached R Interface
-In R, you stitch both files together using `oclFunction()`. The call pattern utilizes an **Evaluate-in-Place** pipeline via a double closure `()(...)`:
+
+In R, you stitch both files together using `oclFunction()`. The call
+pattern utilizes an **Evaluate-in-Place** pipeline via a double
+closure `()(...)`:
 
 ```R
 library(OpenCLeaR)
@@ -193,7 +283,8 @@ result <- idw_gpu(target_x, target_y, source_x, source_y, source_z, p = 2.0)
 
 ### 4. Encapsulate the function in a R wrapper ready to be used in your library
 
-After development of your function you may use this cached IIFE function (Immediately Invoked Function Expression):
+After development of your function you may use this cached IIFE
+function (Immediately Invoked Function Expression):
 
 ```R
 if (getRversion() >= "2.15.1") {

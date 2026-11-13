@@ -1,4 +1,9 @@
-.PHONY: RdFiles source vignettes
+.PHONY: RdFiles source vignettes vignette-intro vignette-mcmc
+
+VIGNETTE_RMDS  := $(wildcard vignettes/*.Rmd)
+VIGNETTE_HTMLS := $(patsubst vignettes/%.Rmd,inst/doc/%.html,$(VIGNETTE_RMDS))
+
+
 
 all:
 
@@ -52,26 +57,29 @@ RdFiles: src/RcppExports.cpp dist-clean
 	@echo "Generate Rd documentation via Roxygen2 with temporary LD_LIBRARY_PATH..."
 	LD_LIBRARY_PATH="$(PWD)/src:$(PWD)/inst/lib:$(PWD)/src/backend/build:$(LD_LIBRARY_PATH)" Rscript -e "roxygen2::roxygenise(package.dir = '.', roclets='rd')"
 
-vignettes: $(wildcard vignettes/*.Rmd)
-	# Create directories
-	mkdir -p inst/doc
-	# Process all Rmd files in a loop
-	@for rmd in vignettes/*.Rmd; do \
-		[ -e "$$rmd" ] || continue; \
-		base=$$(basename "$$rmd" .Rmd); \
-		echo " Processing vignette: $$base..."; \
-		Rscript -e "rmarkdown::render('$$rmd', output_dir='inst/doc')"; \
-		Rscript -e "knitr::purl('$$rmd', output=file.path('inst/doc', paste0('$$base', '.R')))"; \
-		title=$$(grep -m 1 "^title:" "$$rmd" | sed -E 's/^title:[[:space:]]*["'\'']?(.*)["'\'']?/\1/' || echo "$$base"); \
-		[ -z "$$title" ] && title="$$base"; \
-		echo "%\VignetteIndexEntry{$$title}" > inst/doc/$$base.html.asis; \
-		echo "%\VignetteEngine{knitr::rmarkdown}" >> inst/doc/$$base.html.asis; \
-		echo "%\VignetteEncoding{UTF-8}" >> inst/doc/$$base.html.asis; \
-	done
 
+# Baut alle Vignetten (nutzt die Pattern-Rule unten)
+vignettes: $(VIGNETTE_HTMLS)
+
+# Bequeme Kurznamen für einzelne Rechner
+vignette-intro: inst/doc/OpenCLeaR_Introduction_Vignette.html
+vignette-mcmc: inst/doc/OpenCLeaR_MCMC_Vignette.html
+
+# Pattern-Rule: baut genau EINE Vignette aus vignettes/<Name>.Rmd
+inst/doc/%.html: vignettes/%.Rmd
+	mkdir -p inst/doc
+	@echo "Processing vignette: $*..."
+	Rscript -e "rmarkdown::render('$<', output_dir='inst/doc')"
+	Rscript -e "knitr::purl('$<', output=file.path('inst/doc', '$*.R'))"
+	@title=$$(grep -m 1 "^title:" "$<" | sed -E 's/^title:[[:space:]]*["'\'']?(.*)["'\'']?/\1/' || echo "$*"); \
+	[ -z "$$title" ] && title="$*"; \
+	echo "%\\VignetteIndexEntry{$$title}" > inst/doc/$*.html.asis; \
+	echo "%\\VignetteEngine{knitr::rmarkdown}" >> inst/doc/$*.html.asis; \
+	echo "%\\VignetteEncoding{UTF-8}" >> inst/doc/$*.html.asis
+
+# Builds the source package (.tar.gz) directly via devtools in the parent directory (..)
+# vignettes=TRUE ensures that devtools builds the vignettes cleanly and generates the index.
 source: 
-	# Builds the source package (.tar.gz) directly via devtools in the parent directory (..)
-	# vignettes=TRUE ensures that devtools builds the vignettes cleanly and generates the index.
 	if [ -f /opt/intel/oneapi/setvars.sh ]; then \
 		. /opt/intel/oneapi/setvars.sh; \
 	fi; \

@@ -8,8 +8,9 @@
   R 4.x.x MacPorts-based installation, Apple OpenCL Framework (CL 1.2).
 * Linux installations on several hardware combinations, using Nvidia
   CUDA OpenCL, Intel oneAPI OpenCL (CPU and GPU), AMD ROCm OpenCL
-  (note: experimental/recent APUs such as AMD Strix Halo may exhibit
-  upstream driver issues), and PoCL on various CPUs.
+  (note: recent APUs require Linux kernel >= 6.19 and
+  `amdgpu.lockup_timeout=600000` to prevent driver lockups/timeouts; see
+  `README.md` for details), and PoCL on various CPUs.
 * Local Windows 11 with Nvidia CUDA and Intel oneAPI.
 * Win-builder: No OpenCL runtime available; compilation succeeds because
   the Khronos OpenCL ICD Loader is built via CMake. Hardware-dependent
