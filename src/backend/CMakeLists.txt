@@ -50,7 +50,7 @@ ExternalProject_Add(OpenCL_CLHPP
 execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/local_install/include/")
 ExternalProject_Add(OpenCL_Wrapper
     GIT_REPOSITORY https://github.com/4lge/OpenCL-Wrapper.git
-    GIT_TAG bc0f90bc12d36383b5c40d23e7ae3ea14ba58f13
+    GIT_TAG bfe053d8e04df3082c0672b283d20c951421c88e
     SOURCE_DIR ${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper
 
     CONFIGURE_COMMAND ""  # Don't run cmake
