@@ -145,8 +145,137 @@ provided a functional OpenCL ICD runtime is installed.
   driver.
 
 ---
+## 📦 Installation & System Prerequisites
 
-### 🔧 Linux / AMD ROCm Tuning (GPUs & APUs)
+Since **OpenCLeaR** compiles custom C++ extensions and links into hardware-level OpenCL drivers on the fly, a few system-level development tools and runtimes must be installed before installing the R package.
+
+### 1. System Prerequisites
+
+Choose your operating system to set up the build chain and OpenCL runtime:
+
+#### 🐧 Linux (Ubuntu / Debian / Pop!_OS)
+Install the essential compiler tools, **CMake**, and standard OpenCL headers:
+```bash
+sudo apt update
+sudo apt install build-essential cmake opencl-headers
+```
+
+To enable hardware execution, set up the official package repository for your hardware vendor to pull the correct OpenCL ICD runtime:
+
+##### ▪ NVIDIA CUDA OpenCL (GeForce, RTX, Tesla)
+Do not install the stripped-down Ubuntu upstream drivers. Set up the official NVIDIA network repository to get the full deployment kit containing development headers and the runtime ICD:
+```bash
+# 1. Install the repository architecture requirements
+sudo apt install coreutils
+
+# 2. Fetch the official NVIDIA pinfile and repository details (example for Ubuntu 24.04)
+wget https://nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-ubuntu2404.pin
+sudo mv cuda-ubuntu2404.pin /etc/apt/preferences.d/cuda-repository-pin-600
+sudo apt-key adv --fetch-keys https://nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/3bf863cc.pub
+sudo add-apt-repository "deb https://nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/ /"
+
+# 3. Update index and install the mandatory OpenCL runtime packages
+sudo apt update
+sudo apt install cuda-drivers-target-opencl opencl-icd-loaders
+```
+
+##### ▪ AMD ROCm OpenCL (Radeon GPUs, Ryzen APUs / Strix Halo)
+To prevent driver signature and scheduling mismatches, hook up the official AMD package manager structures:
+```bash
+# 1. Download and map the AMD repository signing key
+sudo mkdir -p /etc/apt/keyrings
+wget -O- https://radeon.com/rocm/rocm.gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
+
+# 2. Append the target AMD repository link (example for ROCm 6.3 Stack)
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://radeon.com/rocm/apt/6.3 focal main" | sudo tee /etc/apt/sources.list.d/rocm.list
+
+# 3. Apply package pinning to favor the vendor drivers over native system packages
+echo -e 'Package: *\nPin: release o=://radeon.com\nPin-Priority: 600' | sudo tee /etc/apt/preferences.d/rocm-pin
+
+# 4. Update the package index and deploy the modular compute runtime
+sudo apt update
+sudo apt install rocm-opencl-runtime
+```
+
+##### ▪ Intel oneAPI (Core/Xeon CPUs & Arc/Iris Graphics)
+To tap into official Intel compute runtime pipelines without cloning multi-gigabyte heavy SDK stacks, set up the dedicated network repo:
+```bash
+# 1. Download the Intel package signing credentials
+wget -O- https://intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | gpg --dearmor | sudo tee /usr/share/keyrings/intel-sw-products.gpg > /dev/null
+
+# 2. Mount the official target apt source list entry
+echo "deb [signed-by=/usr/share/keyrings/intel-sw-products.gpg] https://intel.com/intel-mapped-path/oneapi all main" | sudo tee /etc/apt/sources.list.d/intel-oneapi.list
+
+# 3. Synchronize package trees and mount the production-ready OpenCL runtime
+sudo apt update
+sudo apt install intel-oneapi-runtime-opencl
+```
+
+##### ▪ PoCL (Headless Server / Hardware-Independent CPU Fallback)
+If you operate in pure sandbox virtualizations or non-accelerated CI runners without access to physical silicon, run the Portable Compute Layer vendor package:
+```bash
+sudo apt install pocl-opencl-icd
+```
+
+#### 🍏 macOS
+You can set up the build chain either via **Homebrew** or **MacPorts**:
+
+##### Using Homebrew:
+1. Install the Xcode command-line compiler tools:
+   ```bash
+   xcode-select --install
+   ```
+2. Install **CMake**:
+   ```bash
+   brew install cmake
+   ```
+
+##### Using MacPorts:
+1. Install the Xcode command-line compiler tools:
+   ```bash
+   xcode-select --install
+   ```
+2. Install **CMake**:
+   ```bash
+   sudo port install cmake
+   ```
+*(Note: No separate OpenCL driver installation is required. macOS automatically provides the system-wide Apple OpenCL Framework, though Intel-based CPU execution is filtered out for stability on newer OS versions)*.
+
+#### 🪟 Windows
+1. Download and install **Rtools** matching your specific R version.
+2. Download and install **CMake** (ensure it is added to your system `PATH` during installation).
+3. Ensure an OpenCL ICD provider is active (e.g., via NVIDIA CUDA or Intel oneAPI). If no hardware driver is present at compile time, OpenCLeaR safely falls back to compiling via its bundled static Khronos ICD loader.
+
+Note that you can efficiently use **Scoop**, an `apt` or `port` like installer, under Windows too. 
+
+To set up the complete build chain via **Scoop**, open PowerShell and run:
+```powershell
+# Install CMake
+scoop install cmake
+
+# Install Rtools (provided via the 'linwin' bucket)
+scoop bucket add linwin
+scoop install rtools
+```
+
+---
+
+### 2. Installing the R Package
+
+Once your system tools (**CMake** and compiler) are verified, open your R session and run the installation pipeline via the `remotes` package:
+
+```r
+# Install the remotes manager if not already installed
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  install.packages("remotes")
+}
+
+# Install OpenCLeaR directly from GitHub
+remotes::install_github("4lge/OpenCLeaR")
+```
+
+
+### 🔧 3. Linux / AMD ROCm Tuning (GPUs & APUs)
 
 When running long-running OpenCL kernels or large memory allocations
 on AMD hardware under Linux (especially recent RDNA 3 / 3.5 APUs such

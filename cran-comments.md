@@ -25,6 +25,25 @@
   `RUSTICL_ENABLE=v3d`), loads, and detects the device, but kernel
   execution fails due to incomplete OpenCL support in the Mesa v3d driver.
 
+## Test Environments & Platform-Specific Fixes
+
+* **macOS Compatibility:** We explicitly implemented a hardware
+  discovery filter for macOS on Intel hardware. Beside Apple
+  deprecating the OpenCL CPU device for arm64 applications, its
+  security implementation prevents Intel CPUs from passing our caching
+  architecture in macOS >= 11. This is because Apple's OpenCL CPU runtime 
+  returns non-portable CVMS references instead of standalone binaries, 
+  rendering only the built-in iGPU safely accessible via the OpenCL framework 
+  both on Apple Silicon and Intel Mac architectures.
+
+* **Unified Floating-Point Abstraction:** The package has been
+  thoroughly vetted using an abstract `real` mapping layer. This
+  guarantees a flawless `R CMD check` execution cycle across both
+  FP64-capable developer rigs (such as NVIDIA discrete cards) and
+  FP32-only validation environments (integrated graphics
+  architectures) without triggering compiler warnings or emulation
+  latencies.
+
 ## R CMD check results
 
 There were no ERRORs or WARNINGs.

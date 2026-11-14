@@ -1,8 +1,15 @@
 ---
-title: "OpenCLeaR: From Hardware Caching to Enclosed Multi-Epoch Training"
+title: "OpenCLeaR Introduction: From Vector Addition to Multi-Epoch Neural Network Training"
 author: "OpenCLeaR Developer"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+    pdf_document: default
+    rmarkdown::html_vignette:
+        mathjax: "default"
+vignette: >
+  %\VignetteIndexEntry{OpenCLeaR Introduction: From Vector Addition to Multi-Epoch Neural Network Training}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include=FALSE}
@@ -103,7 +110,7 @@ the same way as the helper library.
 Note here that OpenCL C does imply some additional restrictions on the
 scope of variables:
 
-* A variable defined without any prefix is '__local',
+* A variable defined without any prefix is '__private',
 * a variable defined with the prefix '__global' is shared with other
 threads and write access to indices other than 'get_global_id(0)'
 may cause trouble,depending on your algorithm layout.
@@ -132,7 +139,6 @@ these two arguments and store them onto 'NumericVector' variables
 'r_a' and 'r_b':
 
 ```{r create_vector_rcpp_1, eval = FALSE}
-vector_interface_src <- '
 NumericVector r_a(a);
 NumericVector r_b(b);
 ```
@@ -500,7 +506,7 @@ end_gpu_nnet <- Sys.time()
 time_gpu_nnet <- as.numeric(difftime(end_gpu_nnet, start_gpu_nnet, units = "secs"))
 
 max_diff_nnet <- max(abs(res_nnet_cpu - res_nnet_gpu))
-cat("📊 Forward Pass Max Discrepancy:", max_diff_vec, "\n")
+cat("📊 Forward Pass Max Discrepancy:", max_diff_nnet, "\n")
 cat("⏱️ CPU Vector Time:", round(time_cpu_nnet, 4), "s\n")
 cat("⏱️ GPU Vector Time:", round(time_gpu_nnet, 4), "s (Speedup:", round(time_cpu_nnet / time_gpu_nnet, 2), "x)\n")
 ```
@@ -696,7 +702,67 @@ return List::create(Named("Y") = r_Y, Named("dW") = r_dW, Named("dX") = r_dX, Na
 writeLines(nn_interface_src, "./nn_training_rcpp.cpp")
 ```
 
-TODO: insert example run here
+## Section 2.4: Benchmarking the Unoptimized Host-Driven Training Loop
+
+Before moving the entire training loop onto the device memory space in
+Part 3, we compile our single-step Rcpp gateway
+(`./nn_training_rcpp.cpp`) into an `oclFunction`. We then execute a
+5-epoch training loop directly from R.
+
+But first initialize the parameters and data:
+
+```{r setup_benchmark_data}
+num_samples  <- 2000L
+in_features  <- 1500L
+out_features <- 10000L
+epochs       <- 5L
+lr           <- 0.01
+
+set.seed(42)
+mat_X  <- matrix(runif(num_samples * in_features, -1, 1), nrow = num_samples)
+mat_W  <- matrix(runif(in_features * out_features, -0.1, 0.1), nrow = in_features)
+vec_b  <- runif(out_features, -0.5, 0.5)
+mat_dY <- matrix(runif(num_samples * out_features, -0.2, 0.2), nrow = num_samples)
+```
+In this unoptimized setup, all tracking matrices and weight tensors
+are forced to stream back and forth across the PCIe bus between host
+RAM and GPU VRAM in every single epoch:
+
+```{r run_unoptimized_loop}
+nn_single_step_gpu <- (function() {
+  .single_step_internal <- NULL
+  function(X_mat, W_mat, b_vec, dY_mat) {
+    if (is.null(.single_step_internal)) {
+      .single_step_internal <<- OpenCLeaR::oclFunction(
+        signature      = signature(X = "matrix", W = "matrix", b = "numeric", dY = "matrix"),
+        kernel_file    = "./nn_training_kernels.cl",
+        interface_file = "./nn_training_rcpp.cpp",
+        math_lib       = "./libkernel.cl"
+      )
+    }
+    return(.single_step_internal(X = X_mat, W = W_mat, b = b_vec, dY = dY_mat))
+  }
+})()
+
+# Warm-up pass to isolate JIT compilation latency
+invisible(nn_single_step_gpu(mat_X[1:10, ], mat_W, vec_b, mat_dY[1:10, ]))
+
+# Launch the unoptimized loop driven by R
+unopt_W <- mat_W
+unopt_b <- vec_b
+start_unopt <- Sys.time()
+
+for (e in 1:epochs) {
+    grads <- nn_single_step_gpu(X = mat_X, W = unopt_W, b = unopt_b, dY = mat_dY)
+    unopt_W <- unopt_W - lr * grads$dW
+    unopt_b <- unopt_b - lr * grads$db
+}
+
+end_unopt <- Sys.time()
+time_unopt <- as.numeric(difftime(end_unopt, start_unopt, units = "secs"))
+
+cat("⏱️ Unoptimized Host-Loop GPU Time (with per-epoch PCIe transfers):", round(time_unopt, 4), "seconds\n")
+```
 
 
 ---
@@ -737,7 +803,7 @@ __kernel void optimizer_kernel(__global real* W,
 '
 full_kernels_src <- paste(readLines("./nn_training_kernels.cl"), collapse="\n")
 full_kernels_src <- paste(full_kernels_src, optimizer_kernel_src, sep="\n")
-writeLines(full_kernels_src, "./nn_training_kernels.cl")
+writeLines(full_kernels_src, "./nn_multi_epoch_kernels.cl")
 ```
 
 ## Section 3.2: Designing the Enclosed Execution Pipeline Space
@@ -755,7 +821,7 @@ NumericMatrix r_W(W);
 NumericVector r_b(b);
 NumericMatrix r_dY(dY);
 int epochs = as<int>(epochs_in);
-real lr = as<real>(lr_in);
+real r_lr = as<real>(lr);
 
 int num_samples = r_X.nrow();
 int in_features = r_X.ncol();
@@ -792,7 +858,7 @@ Kernel k_bwd_in(*device, (ulong)size_X, "dense_backward_inputs_kernel", gpu_dL, 
 Kernel k_bwd_bias(*device, (ulong)out_features, "dense_backward_bias_kernel", gpu_dL, gpu_db, num_samples, out_features);
 
 int opt_grid = (size_W > out_features) ? size_W : out_features;
-Kernel k_opt(*device, (ulong)opt_grid, "optimizer_kernel", gpu_W, gpu_b, gpu_dW, gpu_db, lr, size_W, out_features);
+Kernel k_opt(*device, (ulong)opt_grid, "optimizer_kernel", gpu_W, gpu_b, gpu_dW, gpu_db, r_lr, size_W, out_features);
 
 for(int e = 0; e < epochs; ++e) {
     k_fwd.run();
@@ -825,30 +891,18 @@ IIFE abstraction boundary layer to encapsulate tracking assignments.
 ```{r setup_benchmark_environment}
 nn_train_loop_gpu <- (function() {
     .train_loop_internal <- NULL
-    function(X_mat, W_mat, b_vec, dY_mat, alpha, num_epochs) {
+    function(X_mat, W_mat, b_vec, dY_mat, lr, num_epochs) {
         if (is.null(.train_loop_internal)) {
             .train_loop_internal <<- OpenCLeaR::oclFunction(
-                 signature      = signature(X = "matrix", W = "matrix", b = "numeric", dY = "matrix", lr_in = "numeric", epochs_in = "integer"),
-                 kernel_file    = "./nn_training_kernels.cl",
+                 signature      = signature(X = "matrix", W = "matrix", b = "numeric", dY = "matrix", lr = "numeric", epochs_in = "integer"),
+                 kernel_file    = "./nn_multi_epoch_kernels.cl",
                  interface_file = "./nn_train_epochs_rcpp.cpp",
                  math_lib       = "./libkernel.cl"
                  )
         }
-        return(.train_loop_internal(X = X_mat, W = W_mat, b = b_vec, dY = dY_mat, lr_in = alpha, epochs_in = num_epochs))
+        return(.train_loop_internal(X = X_mat, W = W_mat, b = b_vec, dY = dY_mat, lr = lr, epochs_in = num_epochs))
     }
 })()
-
-num_samples  <- 2000L
-in_features  <- 1500L
-out_features <- 10000L
-epochs       <- 5L
-lr           <- 0.01
-
-set.seed(42)
-mat_X  <- matrix(runif(num_samples * in_features, -1, 1), nrow = num_samples)
-mat_W  <- matrix(runif(in_features * out_features, -0.1, 0.1), nrow = in_features)
-vec_b  <- runif(out_features, -0.5, 0.5)
-mat_dY <- matrix(runif(num_samples * out_features, -0.2, 0.2), nrow = num_samples)
 ```
 
 ## Section 3.4: Executing the Warmup Pass and CPU Validation Pipeline
@@ -902,8 +956,8 @@ total_final_diff <- max(max_diff_W, max_diff_b)
 
 cat("\n📊 Closed Multi-Epoch Performance Analysis:\n")
 cat("⏱️ CPU Loop Processing Time :", round(time_cpu, 4), "seconds\n")
-cat("⏱️ GPU Pure Streaming Time  :", round(time_gpu, 4), "seconds\n")
-cat("🚀 Absolute Streaming Speedup:", round(time_cpu / time_gpu, 2), "x faster on GPU!\n\n")
+cat("⏱️ GPU Pure OpenCL Time  :", round(time_gpu, 4), "seconds\n")
+cat("🚀 Absolute OpenCL Speedup:", round(time_cpu / time_gpu, 2), "x faster on GPU!\n\n")
 
 cat("📊 Bitwise Verification Maximum Error:", total_final_diff, "\n")
 if(total_final_diff < 1e-6) {
@@ -935,8 +989,8 @@ total_final_diff <- max(max_diff_W, max_diff_b)
 
 cat("\n📊 Closed Multi-Epoch Performance Analysis:\n")
 cat("⏱️ CPU Loop Processing Time :", round(time_cpu, 4), "seconds\n")
-cat("⏱️ GPU Pure Streaming Time  :", round(time_gpu, 4), "seconds\n")
-cat("🚀 Absolute Streaming Speedup:", round(time_cpu / time_gpu, 2), "x faster on GPU!\n\n")
+cat("⏱️ GPU Pure OpenCL Time  :", round(time_gpu, 4), "seconds\n")
+cat("🚀 Absolute OpenCL Speedup:", round(time_cpu / time_gpu, 2), "x faster on GPU!\n\n")
 
 cat("📊 Bitwise Verification Maximum Error:", total_final_diff, "\n")
 if(total_final_diff < 1e-6) {
@@ -953,17 +1007,17 @@ Now force the Nvidia GPU into float mode:
 ActivateDevice(0)
 nn_train_loop_gpu_float <- (function() {
     .train_loop_float_internal <- NULL
-    function(X_mat, W_mat, b_vec, dY_mat, alpha, num_epochs) {
+    function(X_mat, W_mat, b_vec, dY_mat, lr, num_epochs) {
         if (is.null(.train_loop_float_internal)) {
             .train_loop_float_internal <<- OpenCLeaR::oclFunction(
-                signature      = signature(X = "matrix", W = "matrix", b = "numeric", dY = "matrix", lr_in = "numeric", epochs_in = "integer"),
-                kernel_file    = "./nn_training_kernels.cl",
+                signature      = signature(X = "matrix", W = "matrix", b = "numeric", dY = "matrix", lr = "numeric", epochs_in = "integer"),
+                kernel_file    = "./nn_multi_epoch_kernels.cl",
                 interface_file = "./nn_train_epochs_rcpp.cpp",
                 math_lib       = "./libkernel.cl",
                 force_float = TRUE # <--- !!
                 )
         }
-        return(.train_loop_float_internal(X = X_mat, W = W_mat, b = b_vec, dY = dY_mat, lr_in = alpha, epochs_in = num_epochs))
+        return(.train_loop_float_internal(X = X_mat, W = W_mat, b = b_vec, dY = dY_mat, lr = lr, epochs_in = num_epochs))
     }
 })()
 
@@ -974,7 +1028,7 @@ silent_warmup_loop <- nn_train_loop_gpu_float(mat_X[1:10, ], mat_W, vec_b, mat_d
 ```{r execute_gpu_and_verify float on nvidia}
 cat("⏳ Launching Multi-Epoch Neural Loop on GPGPU...\n")
 start_gpu <- Sys.time()
-gpu_loop_res <- nn_train_loop_gpu(mat_X, mat_W, vec_b, mat_dY, lr, epochs)
+gpu_loop_res <- nn_train_loop_gpu_float(mat_X, mat_W, vec_b, mat_dY, lr, epochs)
 end_gpu <- Sys.time()
 time_gpu <- as.numeric(difftime(end_gpu, start_gpu, units = "secs"))
 
@@ -984,8 +1038,8 @@ total_final_diff <- max(max_diff_W, max_diff_b)
 
 cat("\n📊 Closed Multi-Epoch Performance Analysis:\n")
 cat("⏱️ CPU Loop Processing Time :", round(time_cpu, 4), "seconds\n")
-cat("⏱️ GPU Pure Streaming Time  :", round(time_gpu, 4), "seconds\n")
-cat("🚀 Absolute Streaming Speedup:", round(time_cpu / time_gpu, 2), "x faster on GPU!\n\n")
+cat("⏱️ GPU Pure OpenCL Time  :", round(time_gpu, 4), "seconds\n")
+cat("🚀 Absolute OpenCL Speedup:", round(time_cpu / time_gpu, 2), "x faster on GPU!\n\n")
 
 cat("📊 Bitwise Verification Maximum Error:", total_final_diff, "\n")
 if(total_final_diff < 1e-6) {
@@ -1010,8 +1064,9 @@ $$P(Y = 1 \mid x_1, x_2) = \sigma\left(2.5 - 1.8 x_1^2 - 1.8 x_2^2 + 0.8 x_1 x_2
 ## Section 4.1: Adding an On-Device MSE Loss Gradient Kernel
 
 In Part 3, the error gradient `dY` was fixed externally. For real
-multi-epoch training, the residual gradient $\frac{\partial
-L}{\partial \hat{y}} = \frac{2}{N}(\hat{y} - y)$ must be updated
+multi-epoch training, the residual gradient 
+$\frac{\partial L}{\partial \hat{y}} = \frac{2}{N}(\hat{y} - y)$ must 
+be updated
 directly inside GPU VRAM after each forward pass.
 
 ```{r add_loss_kernel}
@@ -1026,7 +1081,7 @@ __kernel void mse_grad_kernel(__global const real* Y_pred,
     }
 }
 '
-full_stat_kernels <- paste(readLines("./nn_training_kernels.cl"), collapse = "\n")
+full_stat_kernels <- paste(readLines("./nn_multi_epoch_kernels.cl"), collapse = "\n")
 full_stat_kernels <- paste(full_stat_kernels, loss_kernel_src, sep = "\n")
 writeLines(full_stat_kernels, "./nn_stat_kernels.cl")
 ```
@@ -1040,7 +1095,7 @@ NumericMatrix r_W(W);
 NumericVector r_b(b);
 NumericMatrix r_Y_true(Y_true);
 int epochs = as<int>(epochs_in);
-real lr = as<real>(lr_in);
+real r_lr = as<real>(lr);
 
 int num_samples  = r_X.nrow();
 int in_features  = r_X.ncol();
@@ -1079,7 +1134,7 @@ Kernel k_bwd_in(*device, (ulong)size_X, "dense_backward_inputs_kernel", gpu_dL, 
 Kernel k_bwd_bias(*device, (ulong)out_features, "dense_backward_bias_kernel", gpu_dL, gpu_db, num_samples, out_features);
 
 int opt_grid = (size_W > out_features) ? size_W : out_features;
-Kernel k_opt(*device, (ulong)opt_grid, "optimizer_kernel", gpu_W, gpu_b, gpu_dW, gpu_db, lr, size_W, out_features);
+Kernel k_opt(*device, (ulong)opt_grid, "optimizer_kernel", gpu_W, gpu_b, gpu_dW, gpu_db, r_lr, size_W, out_features);
 
 for(int e = 0; e < epochs; ++e) {
     k_fwd.run();
@@ -1112,16 +1167,16 @@ writeLines(stat_interface_src, "./nn_stat_rcpp.cpp")
 ```{r run_stat_application}
 nn_classify_gpu <- (function() {
   .cls_internal <- NULL
-  function(X_mat, W_mat, b_vec, Y_mat, alpha, num_epochs) {
+  function(X_mat, W_mat, b_vec, Y_mat, lr, num_epochs) {
     if (is.null(.cls_internal)) {
       .cls_internal <<- OpenCLeaR::oclFunction(
-        signature      = signature(X = "matrix", W = "matrix", b = "numeric", Y_true = "matrix", lr_in = "numeric", epochs_in = "integer"),
+        signature      = signature(X = "matrix", W = "matrix", b = "numeric", Y_true = "matrix", lr= "numeric", epochs_in = "integer"),
         kernel_file    = "./nn_stat_kernels.cl",
         interface_file = "./nn_stat_rcpp.cpp",
         math_lib       = "./libkernel.cl"
       )
     }
-    return(.cls_internal(X = X_mat, W = W_mat, b = b_vec, Y_true = Y_mat, lr_in = alpha, epochs_in = num_epochs))
+    return(.cls_internal(X = X_mat, W = W_mat, b = b_vec, Y_true = Y_mat, lr = lr, epochs_in = num_epochs))
   }
 })()
 
@@ -1141,16 +1196,16 @@ y_obs      <- matrix(rbinom(N, size = 1, prob = true_prob), ncol = 1)
 W_init <- matrix(rnorm(ncol(X_design), sd = 0.1), nrow = ncol(X_design), ncol = 1)
 b_init <- 0.0
 
-fit_gpu <- nn_classify_gpu(X_design, W_init, b_init, y_obs, alpha = 2.0, num_epochs = 2000L)
+fit_gpu <- nn_classify_gpu(X_design, W_init, b_init, y_obs, lr = 2.0, num_epochs = 2000L)
 
 # 3. Evaluate estimated parameters and classification accuracy
-pred_prob  <- as.vector(fit_gpu\$Y_pred)
+pred_prob  <- as.vector(fit_gpu$Y_pred)
 pred_class <- ifelse(pred_prob >= 0.5, 1, 0)
 accuracy   <- mean(pred_class == as.vector(y_obs))
 
-cat("Estimated Weights:", round(as.vector(fit_gpu\$W), 3), "\n")
+cat("Estimated Weights:", round(as.vector(fit_gpu$W), 3), "\n")
 cat("True Weights     : 0.000, 0.000, -1.800, -1.800, 0.800\n")
-cat("Estimated Bias   :", round(fit_gpu\$b, 3), "(True: 2.500)\n")
+cat("Estimated Bias   :", round(fit_gpu$b, 3), "(True: 2.500)\n")
 cat("Classification Accuracy:", round(accuracy * 100, 2), "%\n")
 ```
 
@@ -1159,9 +1214,16 @@ Finally clean up the cache of generated OpenCL sources, interfaces and binaries:
 
 ```{r cleanup}
 CleanCLCache()
-unlink(c("./libkernel.cl", "./sigmoid_add_kernel.cl", "./sigmoid_add_rcpp.cpp",
-         "./nn_training_kernels.cl", "./nn_training_rcpp.cpp", "./nn_train_epochs_rcpp.cpp"))
+unlink(c(
+  "./libkernel.cl", 
+  "./sigmoid_add_kernel.cl", "./sigmoid_add_rcpp.cpp",
+  "./nn_forward_kernel.cl", "./nn_forward_rcpp.cpp",
+  "./nn_training_kernels.cl", "./nn_training_rcpp.cpp", 
+  "./nn_multi_epoch_kernels.cl", "./nn_train_epochs_rcpp.cpp",
+  "./nn_stat_kernels.cl", "./nn_stat_rcpp.cpp"
+))
 ```
+
 
 ## Section 4.4: Visualizing the Learned Decision Boundary
 
@@ -1189,11 +1251,11 @@ obs_df <- data.frame(
 )
 
 ggplot() +
-  geom_raster(data = grid_df, aes(x = x1, y = x2, fill = prob_hat), alpha = 0.75) +
+  geom_raster(data = grid_df, aes(x = x1, y = x2, fill = prob_hat), lr = 0.75) +
   geom_contour(data = grid_df, aes(x = x1, y = x2, z = prob_hat),
                breaks = 0.5, color = "black", linewidth = 1.1) +
   geom_point(data = obs_df, aes(x = x1, y = x2, color = Class),
-             alpha = 0.55, size = 1.4) +
+             lr = 0.55, size = 1.4) +
   scale_fill_gradient2(low = "#2b8cbe", mid = "#f7f7f7", high = "#e34a33",
                        midpoint = 0.5, name = "Est. P(Y=1)") +
   scale_color_manual(values = c("Class 0" = "#08519c", "Class 1" = "#a50f15")) +
@@ -1207,6 +1269,89 @@ ggplot() +
   theme(legend.position = "right")
 ```
 
+# Part 5: Guidelines for Package Developers – Packaging Multi-Kernel JIT Pipelines
+
+If you want to include custom GPGPU functionalities into your own
+redistributable R package, you can leverage `OpenCLeaR::oclFunction`
+inside an Immediately Invoked Function Expression (IIFE) using lexical
+scoping. This structural pattern provides an elegant on-the-fly
+caching mechanism: the expensive multi-kernel compilation step happens
+exactly once during the very first invocation, while subsequent
+training cycles instantly execute the pre-compiled VRAM pipeline.
+
+To make a complex architecture like our multi-epoch neural classifier
+fully compliant with CRAN policies and `roxygen2` documentation
+pipelines, you can package it using the following blueprint:
+
+```r
+# 1. Register the hidden closure variable as a global to prevent CRAN check notes
+if (getRversion() >= "2.15.1") {
+  utils::globalVariables(".nn_classify_gpu_internal")
+}
+
+##' Enclosed Multi-Epoch Neural Network Training via OpenCL
+##' 
+##' This function demonstrates how to wrap a complex OpenCLeaR JIT-compiled 
+##' multi-kernel pipeline into a standard R package function utilizing 
+##' a persistent closure cache.
+##' 
+##' @name nn_classify_gpu
+##' @param X_mat     A numeric design matrix containing input features.
+##' @param W_mat     A numeric matrix representing initial layer weights.
+##' @param b_vec     A numeric vector containing layer biases.
+##' @param Y_mat     A numeric matrix containing observed target variables.
+##' @param lr     The learning rate parameter for the SGD optimizer.
+##' @param num_epochs The total number of training epochs to run entirely in VRAM.
+##' @param ...        Arguments passed through to \code{\link{oclFunction}} like \code{verbose} or \code{force_float}.
+##' @return A list containing the updated weight matrix \code{W}, the bias vector \code{b}, and predicted probabilities \code{Y_pred}.
+##' @export
+nn_classify_gpu <- (function() {
+  # This variable remains persistent in the function's enclosing environment
+  .nn_classify_gpu_internal <- NULL
+  
+  function(X_mat, W_mat, b_vec, Y_mat, lr, num_epochs, ...) {
+    if (is.null(.nn_classify_gpu_internal)) {
+      # The JIT compilation triggers ONLY on the first call
+      .nn_classify_gpu_internal <<- OpenCLeaR::oclFunction(
+        signature = signature(X       = "matrix", 
+                              W       = "matrix", 
+                              b       = "numeric", 
+                              Y_true  = "matrix", 
+                              lr      = "numeric", 
+                              epochs_in = "integer"),
+        kernel_file    = "nn_stat_kernels.cl",
+        interface_file = "nn_stat_rcpp.cpp",
+        math_lib       = "libkernel.cl",
+        ...
+      )
+    }
+    # Direct execution of the cached binary pointer
+    return(.nn_classify_gpu_internal(X = X_mat, W = W_mat, b = b_vec, Y_true = Y_mat, lr = lr, epochs_in = num_epochs))
+  }
+})()
+```
+
+### Architectural Key Takeaways for Developers:
+* **The Global Variables Shield:** CRAN checks strictly flag
+  assignments to external environments (`<<-`). Pre-registering your
+  internal pointer name (e.g., `.nn_classify_gpu_internal`) via
+  `utils::globalVariables()` ensures a completely clean `R CMD check`
+  without any architectural `NOTEs`.
+* **Roxygen2 Integration:** Because the IIFE evaluates immediately
+  during package loading, `roxygen2::roxygenise()` can parse the
+  preceding comment block normally. It extracts the `@param`
+  documentation, generates the standard `.Rd` help files, and safely
+  places the `export(nn_classify_gpu)` directive into your package's
+  `NAMESPACE`.
+* **Path Resolution:** When shipping kernels inside a package, omit
+  the leading `./` in `kernel_file` and `interface_file`. `OpenCLeaR`
+  will then automatically search for them within the `kernel/` and
+  `interface/` subdirectories of your installed library structure.
+* **Forwarding Controls via Dot-Dot-Dot:** Passing `...` straight into
+  `oclFunction` allows your package users to seamlessly inject
+  hardware control flags at runtime (such as forcing single-precision
+  compilation using `force_float = TRUE`) without changing a single
+  line of your C++ backend code.  ```
 
 ---
 
