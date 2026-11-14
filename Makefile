@@ -64,6 +64,7 @@ vignettes: $(VIGNETTE_HTMLS)
 # Bequeme Kurznamen für einzelne Rechner
 vignette-intro: inst/doc/OpenCLeaR_Introduction_Vignette.html
 vignette-mcmc: inst/doc/OpenCLeaR_MCMC_Vignette.html
+vignette-geostat: inst/doc/OpenCLeaR_Geostatistics_Vignette.html
 
 # Pattern-Rule: baut genau EINE Vignette aus vignettes/<Name>.Rmd
 inst/doc/%.html: vignettes/%.Rmd
