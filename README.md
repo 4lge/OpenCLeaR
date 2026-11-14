@@ -8,7 +8,7 @@ platform-independent compilation and linkage to **OpenCL**. The whole package is
 and available at [GitHUB](https://github.com/jmaerte/cmake-rcpp-template).
 
 
----
+___
 
 ## ✨ Highlights
 
@@ -24,7 +24,7 @@ and available at [GitHUB](https://github.com/jmaerte/cmake-rcpp-template).
   collection of r|d|p<distribution> functions like rnorm, dnorm, pnorm
   etc)
 
----
+___
 
 ## 📁 Project Structure
 
@@ -93,14 +93,14 @@ installation, these files from her installed at the `kernel` and
 R via:
 
 
-```{}
+```r
 system.file("kernel", package = "OpenCLeaR")
 system.file("interface", package = "OpenCLeaR")
 ```
 
 
 A simple example can be run from here:
-```{}
+```r
 source(paste(system.file("examples", package = "OpenCLeaR"),"idw.R",sep="/"))
 ```
 
@@ -108,7 +108,7 @@ source(paste(system.file("examples", package = "OpenCLeaR"),"idw.R",sep="/"))
 ## ⚙️ Package administration
 
 Development task like NAMESPACE generation are automated via a Makefile:
-```{}
+```bash
 touch NAMESPACE.in
 make NAMESPACE
 
@@ -116,7 +116,7 @@ make RdFiles
 
 make src/RcppExports.cpp
 
-...
+   ...
 ```
 
 ## 🖥️ Supported Hardware & Platform Notes
@@ -144,7 +144,7 @@ provided a functional OpenCL ICD runtime is installed.
   execution fails due to incomplete OpenCL support in the Mesa `v3d`
   driver.
 
----
+___
 ## 📦 Installation & System Prerequisites
 
 Since **OpenCLeaR** compiles custom C++ extensions and links into hardware-level OpenCL drivers on the fly, a few system-level development tools and runtimes must be installed before installing the R package.
@@ -258,7 +258,7 @@ scoop bucket add linwin
 scoop install rtools
 ```
 
----
+___
 
 ### 2. Installing the R Package
 
@@ -293,18 +293,21 @@ or allocation errors:
    a default `amdgpu` lockup timeout of only **2000 ms (2
    seconds)**. For compute-heavy kernels, increase this limit in
    `/etc/default/grub` (`GRUB_CMDLINE_LINUX_DEFAULT`) and run
-   `update-grub`: 
+   `update-grub`   *(Value is in milliseconds; `600000` = 10 minutes).*: 
+   
    ```text 
    amdgpu.lockup_timeout=600000
    ```
-  *(Value is in milliseconds; `600000` = 10 minutes).*
+   
 3. **Unlock Full Unified Memory on APUs (Optional):** To allow OpenCL
    buffers to utilize more than the default shared system memory (GTT)
    limit on APUs with large RAM, set the TTM page limits (in 4 KB
    pages; e.g., `25165824` for 96 GB) in the kernel command line:
+
    ```text 
     ttm.pages_limit=25165824 ttm.page_pool_size=25165824 
    ```
+
    *(Note: Modern kernels use `ttm.*` instead of the deprecated
    `amdttm.*` or `amdgpu.gttsize` parameters).*
 
