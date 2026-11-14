@@ -3,7 +3,6 @@ title: "OpenCLeaR Introduction: From Vector Addition to Multi-Epoch Neural Netwo
 author: "OpenCLeaR Developer"
 date: "`r Sys.Date()`"
 output:
-    pdf_document: default
     rmarkdown::html_vignette:
         mathjax: "default"
 vignette: >

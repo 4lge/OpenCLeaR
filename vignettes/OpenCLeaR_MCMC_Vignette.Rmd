@@ -1,15 +1,16 @@
 ---
 title: "OpenCLeaR: GPGPU-Accelerated MCMC Sampling"
-subtitle: "Vignette 1: From Serial R Code to GPGPU Speed"
-author: "AG"
-date: "2026-10-11"
-output: rmarkdown::html_vignette
+subtitle: "From Serial R Code to Hardware-Parallelized Markov Chains"
+author: "OpenCLeaR Developer"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_vignette:
+    mathjax: "default"
 vignette: >
   %\VignetteIndexEntry{OpenCLeaR: GPGPU-Accelerated MCMC Sampling}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
-    
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
@@ -22,21 +23,31 @@ library(ggplot2)
 library(gridExtra)
 ```
 
-## Introduction
+## Introduction: The Independent Parallel Chains (IPCs) Paradigm
 
-This vignette demonstrates how the `OpenCLeaR` package accelerates
-computationally intensive statistical methods like the
-**Metropolis-Hastings (MH) Sampler** using Graphics Processing Units
-(GPGPU). We compare performance across five evolutionary stages:
-1. Pure serial R code
-2. Subprocess parallelization (`mclapply`)
-3. Native serial C++ kernel (`Rcpp`)
-4. Multi-threaded C++ (`RcppParallel` / Intel TBB)
-5. GPGPU acceleration via OpenCL (`OpenCLeaR`)
+Markov Chain Monte Carlo (MCMC) methods, particularly the Metropolis-Hastings (MH) algorithm, are foundational tools in Bayesian statistics for sampling from complex, unnormalized posterior distributions. However, by their mathematical definition, Markov chains are strictly sequential processes: the state at iteration $t+1$ depends directly on the state at iteration $t$. This inherent serialization represents a severe computational bottleneck on modern multi-core CPU and many-core GPGPU architectures.
 
-The system in use is a 2024 DELL XPS 17 system:
+To overcome this limitation without altering the target distribution, modern statistical computing leverages the **Independent Parallel Chains (IPCs)** paradigm. Instead of simulating a single, extremely long Markov chain on one execution thread, the total computational workload is split across $C$ independent processing units (cores or compute units). Each unit simulates an isolated Markov chain governed by its own pseudorandom number generator (RNG) stream and starting from distinct initial values. 
 
-```{sh}
+Once execution finishes, the individual sub-chains are concatenated into a unified, high-density sample pool. This method belongs to the class of *task-parallel* or *embarrassingly parallel* problems because the chains require zero communication or synchronization during active sampling. 
+
+The mathematical advantages of the IPC approach are threefold:
+1. **Asymptotic Convergence:** The aggregated sample pool retains the exact same asymptotic bias and stationary convergence properties as a single long chain.
+2. **Space Exploration:** Simulating multiple independent paths simultaneously significantly mitigates the risk of a single chain getting trapped in a local energy minimum or single mode.
+3. **Linear Speedup:** In an ideal, hardware-parallelized environment, generating $N$ total simulation steps across $C$ compute cores reduces the active wall-clock execution time by a factor of nearly $1/C$.
+
+This vignette documents the architectural evolution of the IPC paradigm across five distinct engineering stages using a 2024 DELL XPS 17 system:
+* Stage 1: Pure serial R code (The non-parallelized baseline)
+* Stage 2: Subprocess parallelization via OS forking (`parallel::mclapply`)
+* Stage 3: Native serial C++ execution (`Rcpp`)
+* Stage 4: Multi-threaded CPU execution via Intel TBB (`RcppParallel`)
+* Stage 5: Hardware-abstracted GPGPU acceleration (`OpenCLeaR`)
+
+### Hardware Diagnostic Baseline
+
+To establish a verified baseline of the available compute layers on this workstation, we query the runtime environment:
+
+```{sh, eval=FALSE}
 clinfo -l
 ```
 
@@ -44,20 +55,16 @@ clinfo -l
 GetDeviceList()
 ```
 
-```{sh}
-neofetch --stdout
-```
-
 ---
 
 ## 1. Mathematical Problem & Data Generation
 
-We fit a simple normal distribution model $y \sim N(\mu, \sigma)$ with
-uninformative priors via MCMC. First, we generate our synthetic
-observational data:
+We evaluate the performance of each execution engine by fitting a classic Bayesian normal distribution model where the observed data follows $y \sim N(\mu, \sigma)$. We place an uninformative normal prior on the mean parameter, $\mu \sim N(0, 10)$, and an uninformative Inverse-Gamma prior on the scale parameter, $\sigma \sim \text{Inverse-Gamma}(0.01, 0.01)$.
+
+First, we generate a synthetic dataset consisting of $1,000$ independent draws from a true normal distribution with $\mu = 5.0$ and $\sigma = 2.0$:
 
 ```{r data_generation}
-# Define simulation configurations
+# Define simulation configurations: 1,000 chains simulating 1,000 steps each
 total_samples <- 1000000L    
 num_chains <- 1000L       
 samples_per_chain <- as.integer(total_samples / num_chains)
@@ -67,21 +74,17 @@ raw_data <- rnorm(1000, mean = 5, sd = 2)
 mu_empirical <- mean(raw_data)
 sigma_empirical <- sd(raw_data)
 
-# Extract stable RNG start state for the C++ engines
+# Extract a stable random seed to synchronize the initial states of the C++ and OpenCL engines
 rng_state <- get(".Random.seed", envir = .GlobalEnv)
 seed_base <- as.integer(rng_state[2])
 ```
 
-
-In the following sections we will generate 1000 chains of 1000
-iterations each resulting in 1000000 simulation steps.
-
 ---
 
-## 2. The CPU Engines
+## 2. The CPU Execution Engines
 
-### Loop-Based R (The Baseline)
-The classical, serial implementation in R serves as our performance baseline.
+### 2.1. Pure Serial R Loop (Baseline)
+The non-parallelized, loop-based R implementation executes all 1,000 chains sequentially on a single thread. This serves as our absolute baseline.
 
 ```{r engine_pure_r}
 run_mh_pure_r <- function(samples_per_chain, num_chains, raw_data, mu_init, sigma_init, seed_base) {
@@ -117,7 +120,7 @@ run_mh_pure_r <- function(samples_per_chain, num_chains, raw_data, mu_init, sigm
       
       if (log(runif(1)) < ((log_prior_prop + log_lik_prop) - (log_prior_curr + log_lik_curr))) {
         mu_current <- mu_proposal
-        sigma_current = sigma_proposal
+        sigma_current <- sigma_proposal
       }
       extracted_mu[chain_offset + t] <- mu_current
       extracted_sigma[chain_offset + t] <- sigma_current
@@ -126,8 +129,59 @@ run_mh_pure_r <- function(samples_per_chain, num_chains, raw_data, mu_init, sigm
   return(list(mu = extracted_mu, sigma = extracted_sigma))
 }
 ```
-### Rcpp & RcppParallel (The Native CPU Bound)
-Here we compile both the serial C++ kernel and the multi-threaded engine via Intel TBB using `RcppParallel`.
+
+### 2.2. Subprocess Parallelization (`parallel::mclapply`)
+This engine utilizes the native operating system `fork` mechanism via the `parallel` package. It distributes the independent chains across all available physical CPU threads, bypassing R's single-threaded evaluation limitation.
+
+```{r engine_mclapply}
+run_mh_r_subprocesses <- function(samples_per_chain, num_chains, raw_data, mu_init, sigma_init, seed_base) {
+  cores_to_use <- parallel::detectCores()
+  
+  chain_results <- parallel::mclapply(1:num_chains, function(c) {
+    set.seed(seed_base + ((c - 1) * 777))
+    mu_curr <- mu_init
+    sigma_curr <- sigma_init
+    m_mu <- numeric(samples_per_chain)
+    m_sigma <- numeric(samples_per_chain)
+    m_mu[1] <- mu_curr
+    m_sigma[1] <- sigma_curr
+    
+    for (t in 2:samples_per_chain) {
+      mu_prop <- rnorm(1, mean = mu_curr, sd = 0.05)
+      sigma_prop <- rnorm(1, mean = sigma_curr, sd = 0.05)
+      
+      if (sigma_prop <= 0.01) { 
+        m_mu[t] <- mu_curr
+        m_sigma[t] <- sigma_curr
+        next 
+      }
+      
+      log_prior_prop <- dnorm(mu_prop, 0.0, 10.0, log = TRUE) + 
+                        dgamma(1 / sigma_prop, shape = 0.01, scale = 1 / 0.01, log = TRUE) + 
+                        sum(dnorm(raw_data, mu_prop, sigma_prop, log = TRUE))
+                        
+      log_prior_curr <- dnorm(mu_curr, 0.0, 10.0, log = TRUE) + 
+                        dgamma(1 / sigma_curr, shape = 0.01, scale = 1 / 0.01, log = TRUE) + 
+                        sum(dnorm(raw_data, mu_curr, sigma_curr, log = TRUE))
+                        
+      if (log(runif(1)) < (log_prior_prop - log_prior_curr)) { 
+        mu_curr <- mu_prop
+        sigma_curr <- sigma_prop 
+      }
+      m_mu[t] <- mu_curr
+      m_sigma[t] <- sigma_curr
+    }
+    return(list(mu = m_mu, sigma = m_sigma))
+  }, mc.cores = cores_to_use)
+  
+  extracted_mu <- unlist(lapply(chain_results, function(x) x$mu))
+  extracted_sigma <- unlist(lapply(chain_results, function(x) x$sigma))
+  return(list(mu = extracted_mu, sigma = extracted_sigma))
+}
+```
+
+### 2.3. Compiled C++ and Multi-Threaded TBB Engines (`Rcpp` / `RcppParallel`)
+To eliminate the overhead of R's interpreter loop, we compile a native serial C++ sampler alongside a multi-threaded C++ sampler that utilizes Intel Threading Building Blocks (TBB) via `RcppParallel`.
 
 ```{r engine_rcpp}
 Rcpp::sourceCpp(code = '
@@ -236,59 +290,156 @@ Rcpp::List run_mh_rcpp_parallel(int total_samples, int num_chains, Rcpp::Numeric
 ')
 ```
 
-### Subprocess Parallelization (`parallel::mclapply`)
-This CPU routine targets multicore scaling through native OS forking mechanisms.
+---
 
-```{r engine_mclapply}
-run_mh_r_subprocesses <- function(samples_per_chain, num_chains, raw_data, mu_init, sigma_init, seed_base) {
-  cores_to_use <- parallel::detectCores()
-  
-  chain_results <- parallel::mclapply(1:num_chains, function(c) {
-    set.seed(seed_base + ((c - 1) * 777))
-    mu_curr <- mu_init
-    sigma_curr <- sigma_init
-    m_mu <- numeric(samples_per_chain)
-    m_sigma <- numeric(samples_per_chain)
-    m_mu[1] <- mu_curr
-    m_sigma[1] <- sigma_curr
-    
-    for (t in 2:samples_per_chain) {
-      mu_prop <- rnorm(1, mean = mu_curr, sd = 0.05)
-      sigma_prop <- rnorm(1, mean = sigma_curr, sd = 0.05)
-      
-      if (sigma_prop <= 0.01) { 
-        m_mu[t] <- mu_curr
-        m_sigma[t] <- sigma_curr
-        next 
-      }
-      
-      log_prior_prop <- dnorm(mu_prop, 0.0, 10.0, log = TRUE) + 
-                        dgamma(1 / sigma_prop, shape = 0.01, scale = 1 / 0.01, log = TRUE) + 
-                        sum(dnorm(raw_data, mu_prop, sigma_prop, log = TRUE))
-                        
-      log_prior_curr <- dnorm(mu_curr, 0.0, 10.0, log = TRUE) + 
-                        dgamma(1 / sigma_curr, shape = 0.01, scale = 1 / 0.01, log = TRUE) + 
-                        sum(dnorm(raw_data, mu_curr, sigma_curr, log = TRUE))
-                        
-      if (log(runif(1)) < (log_prior_prop - log_prior_curr)) { 
-        mu_curr <- mu_prop
-        sigma_curr <- sigma_prop 
-      }
-      m_mu[t] <- mu_curr
-      m_sigma[t] <- sigma_curr
+## 3. The GPGPU Execution Engine (OpenCLeaR)
+
+The `OpenCLeaR` engine binds an OpenCL C hardware kernel to a persistent C++ memory interface via the `oclFunction` JIT-compiler pipeline.
+
+During package deployment, these resources are permanently stored within the package structure and can be compiled without directory prefixes. For interactive development or local modifications, you can target local files using relative paths like `./mh_sampler.cl` and `./mh_sampler.cpp`. Here, we pass the parameters directly to a double closure IIFE to preserve the compiled binary pointers in the active R session.
+
+
+
+### 3.1. Standard Double-Precision GPU Engine (FP64 Mode)
+
+## 3. The GPGPU Execution Engine (OpenCLeaR)
+
+To demonstrate interactive local development, we first write the OpenCL C kernel source and its corresponding Rcpp gateway interface directly into the active working directory before compiling them via `oclFunction`.
+
+```{r create_mcmc_sources, echo=FALSE}
+mcmc_kernel_src <- '// -*- c -*-
+__kernel void mh_sampler_kernel(__global real* out_mu,
+                                __global real* out_sigma,
+                                __global const real* data,
+                                const int data_len,
+                                const int samples_per_chain,
+                                const int n_chains,
+                                const real mu_init,
+                                const real sigma_init,
+                                const real prop_sd_mu,
+                                const real prop_sd_sigma,
+                                const int seed) {
+
+  int gid = get_global_id(0);
+  int offset = gid * samples_per_chain;
+  int max_allowed_index = n_chains * samples_per_chain;
+
+  INIT_MT(seed);
+
+  real mu_current = mu_init;
+  real sigma_current = sigma_init;
+
+  if (offset < max_allowed_index) {
+    out_mu[offset] = mu_current;
+    out_sigma[offset] = sigma_current;
+  }
+
+  for (int t = 1; t < samples_per_chain; ++t) {
+    int current_idx = offset + t;
+
+    if (current_idx >= max_allowed_index) {
+      break;
     }
-    return(list(mu = m_mu, sigma = m_sigma))
-  }, mc.cores = cores_to_use)
-  
-  extracted_mu <- unlist(lapply(chain_results, function(x) x$mu))
-  extracted_sigma <- unlist(lapply(chain_results, function(x) x$sigma))
-  return(list(mu = extracted_mu, sigma = extracted_sigma))
-}
-```
-## 3. The GPGPU Engine (OpenCLeaR)
 
+    real mu_proposal    = rnorm(mu_current, prop_sd_mu);
+    real sigma_proposal = rnorm(sigma_current, prop_sd_sigma);
+
+    if (sigma_proposal <= (real)0.01f) {
+      out_mu[current_idx] = mu_current;
+      out_sigma[current_idx] = sigma_current;
+      continue;
+    }
+
+    real log_prior_prop = log(dnorm(mu_proposal, (real)0.0f, (real)10.0f)) +
+      log(dgamma((real)1.0f/sigma_proposal, (real)0.01f, (real)1.0f/(real)0.01f)) -
+      2.0 * log(sigma_proposal);
+    real log_lik_prop = (real)0.0f;
+    for(int d = 0; d < data_len; ++d) {
+      log_lik_prop += log(dnorm(data[d], mu_proposal, sigma_proposal));
+    }
+    real log_post_prop = log_prior_prop + log_lik_prop;
+
+    real log_prior_curr = log(dnorm(mu_current, (real)0.0f, (real)10.0f)) +
+      log(dgamma((real)1.0/sigma_current, (real)0.01f, (real)100.0f)) -
+      (real)2.0f * log(sigma_current);
+
+    real log_lik_curr = (real)0.0f;
+    for(int d = 0; d < data_len; ++d) {
+      log_lik_curr += log(dnorm(data[d], mu_current, sigma_current));
+    }
+    real log_post_curr = log_prior_curr + log_lik_curr;
+
+    real p_accept = min((real)1.0f, exp(log_post_prop - log_post_curr));
+
+    if (runif(0,1) < p_accept) {
+      mu_current = mu_proposal;
+      sigma_current = sigma_proposal;
+    }
+
+    out_mu[current_idx] = mu_current;
+    out_sigma[current_idx] = sigma_current;
+  }
+}'
+writeLines(mcmc_kernel_src, "./mh_sampler.cl")
+```
+
+Prepare the OpencL kerenl interface:
+
+```{r kernel interface}
+mcmc_interface_src <- '// Rcpp function body
+int total_samples = as<int>(n_samples);
+int chains        = as<int>(n_chains);
+int samples_per_chain = total_samples / chains;
+
+NumericVector r_data(data_vector);
+int data_len = r_data.size();
+int total_output_size = chains * samples_per_chain;
+
+NumericVector out_mu(total_output_size);
+NumericVector out_sigma(total_output_size);
+
+Environment e = Environment::global_env();
+std::vector<int> r_seed = e[".Random.seed"];
+int base_seed = r_seed[r_seed[1] + 1];
+
+Memory<real> GpuData(*device, data_len);
+Memory<real> GpuMu(*device, total_output_size);
+Memory<real> GpuSigma(*device, total_output_size);
+
+for(int i = 0; i < data_len; ++i) GpuData[i] = (real)r_data[i];
+
+GpuData.write_to_device();
+
+real mu_init_typed       = as<real>(mu_init);
+real sigma_init_typed    = as<real>(sigma_init);
+real prop_sd_mu_typed    = (real)0.05f;
+real prop_sd_sigma_typed = (real)0.05f;
+
+Kernel mh_kernel(*device, chains, "mh_sampler_kernel", 
+                 GpuMu, GpuSigma, GpuData, data_len, samples_per_chain, chains,
+                 mu_init_typed, sigma_init_typed, prop_sd_mu_typed, prop_sd_sigma_typed, base_seed);
+
+mh_kernel.run();
+
+GpuMu.read_from_device();
+GpuSigma.read_from_device();
+
+for(int i = 0; i < total_output_size; ++i) {
+    out_mu[i]    = GpuMu[i];
+    out_sigma[i] = GpuSigma[i];
+}
+
+Function f("runif"); f(1);
+
+return List::create(
+    _["mu"]    = out_mu,
+    _["sigma"] = out_sigma
+);'
+writeLines(mcmc_interface_src, "./mh_sampler.cpp")
+```
 
 Register the OpenCL kernel object via `oclFunction`.
+
 
 ```{r engine_opencl}
 if (getRversion() >= "2.15.1") {
@@ -296,7 +447,7 @@ if (getRversion() >= "2.15.1") {
 }
 parallel_MH_sampler <- (function() {
     .parallel_mh_sampler_internal <- NULL
-    function(n_samples, n_chains, data_vector, mu_init, sigme_init) {
+    function(n_samples, n_chains, data_vector, mu_init, sigma_init) {
         if (is.null(.parallel_mh_sampler_internal)) {
             .parallel_mh_sampler_internal <<- oclFunction(
                 signature = methods::signature(
@@ -306,34 +457,26 @@ parallel_MH_sampler <- (function() {
                                          mu_init     = "numeric",
                                          sigma_init  = "numeric"
                                      ),
-                kernel_file     = "mh_sampler.cl",
-                interface_file  = "mh_sampler.cpp",
+                kernel_file     = "./mh_sampler.cl",
+                interface_file  = "./mh_sampler.cpp"
             )
         }
-        return(.parallel_mh_sampler_internal(n_samples, n_chains, data_vector, mu_init, sigme_init))
+        return(.parallel_mh_sampler_internal(n_samples, n_chains, data_vector, mu_init, sigma_init))
     }
 })()
 ```
 
-Kernel source definitions compiled dynamically from package structure:
+### 3.2. Single-Precision Forced GPU Engine (FP32 Mode)
 
-```{c , code=readLines('../inst/kernel/mh_sampler.cl', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
-```
+To enable execution on consumer graphics cards that lack dedicated double-precision FP64 compute clusters, `OpenCLeaR` provides a runtime flag `force_float = TRUE`. This flag forces the JIT compiler to remap the abstract type `real` to standard 32-bit floating-point structures.
 
-Rcpp bridging interface definitions:
-
-```{c , code=readLines('../inst/interface/mh_sampler.cpp', warn=FALSE), eval=FALSE, echo=TRUE, comment=""}
-```
-
-
-And create a similar funcrion where the GPU is forced to use float instead of double:
-```{r engine_opencl float}
+```{r engine_opencl_float}
 if (getRversion() >= "2.15.1") {
   utils::globalVariables(".parallel_mh_sampler_float_internal")
 }
 parallel_MH_sampler_float <- (function() {
     .parallel_mh_sampler_float_internal <- NULL
-    function(n_samples, n_chains, data_vector, mu_init, sigme_init) {
+    function(n_samples, n_chains, data_vector, mu_init, sigma_init) {
         if (is.null(.parallel_mh_sampler_float_internal)) {
             .parallel_mh_sampler_float_internal <<- oclFunction(
                 signature = methods::signature(
@@ -343,19 +486,19 @@ parallel_MH_sampler_float <- (function() {
                                          mu_init     = "numeric",
                                          sigma_init  = "numeric"
                                      ),
-                kernel_file     = "mh_sampler.cl",
-                interface_file  = "mh_sampler.cpp",
-                force_float = TRUE
+                kernel_file     = "./mh_sampler.cl",
+                interface_file  = "./mh_sampler.cpp",
+                force_float     = TRUE
             )
         }
-        return(.parallel_mh_sampler_float_internal(n_samples, n_chains, data_vector, mu_init, sigme_init))
+        return(.parallel_mh_sampler_float_internal(n_samples, n_chains, data_vector, mu_init, sigma_init))
     }
 })()
 ```
 
 ---
 
-## 4. Benchmarking & Quantified Evaluation (Device 0)
+## 4. Benchmarking & Quantified Evaluation
 
 To eliminate any JIT compilation or cache allocation latencies, all routines undergo an unmeasured warm-up cycle before true execution timers are triggered.
 
@@ -372,9 +515,6 @@ invisible(parallel_MH_sampler(as.integer(100), as.integer(100), raw_data, mu_emp
 ActivateDevice(2)
 invisible(parallel_MH_sampler(as.integer(100), as.integer(100), raw_data, mu_empirical, sigma_empirical))
 invisible(parallel_MH_sampler_float(as.integer(100), as.integer(100), raw_data, mu_empirical, sigma_empirical))
-#ActivateDevice(3)
-#invisible(parallel_MH_sampler(as.integer(100), as.integer(100), raw_data, mu_empirical, sigma_empirical))
-#invisible(parallel_MH_sampler_float(as.integer(100), as.integer(100), raw_data, mu_empirical, sigma_empirical))
 ```
 
 ### 4.1. Serial R Loop
@@ -467,37 +607,21 @@ timer_start <- Sys.time()
 output_cpu_float  <- parallel_MH_sampler_float(as.integer(total_samples), as.integer(num_chains), raw_data, mu_empirical, sigma_empirical)
 time_cpu_float    <- as.numeric(difftime(Sys.time(), timer_start, units = "secs"))
 ```
-Switch device to last index, Intel Core i9 CPU using the Intel oneapi driver, currently not working
 
-```{r device 3}
-#ActivateDevice(3)
-#GetActiveDeviceInfo()
-```
-
-```{r openclear Intel CPU oneapi}
-#timer_start <- Sys.time()
-#output_intel_cpu  <- parallel_MH_sampler(as.integer(total_samples), as.integer(num_chains), raw_data, mu_empirical, sigma_empirical)
-#time_intel_cpu    <- as.numeric(difftime(Sys.time(), timer_start, units = "secs"))
-```
-
-Now we force also the  CPU into 'float' mode
-
-```{r openclear Intel CPU oneapi float}
-#timer_start <- Sys.time()
-#output_intel_cpu_float  <- parallel_MH_sampler_float(as.integer(total_samples), as.integer(num_chains), raw_data, mu_empirical, sigma_empirical)
-#time_intel_cpu_float    <- as.numeric(difftime(Sys.time(), timer_start, units = "secs"))
-```
-
----
+___
   
 
-### Performance & Validation Matrix
+---
 
-The following comprehensive matrix illustrates the massive scaling potential of the OpenCL backend compared to all CPU alternatives, while validating statistical precision across all computing layers:
+## 5. Convergence Diagnostics & Visualizations
+
+GPGPU speedups are only scientifically relevant if numeric integrity is preserved perfectly. We extract the sampled data vectors from the graphic card memory and generate posterior density distributions and convergence traceplots.
+
+### 5.1. Performance & Validation Matrix
 
 ```{r print_table, echo=FALSE}
-# Helper function to extract mean estimates safely, handles potential list structures
-get_mu_hat <- function(obj) { round(mean(obj$mu), 4) }
+# Helper function to extract mean estimates safely
+get_mu_hat    <- function(obj) { round(mean(obj$mu), 4) }
 get_sigma_hat <- function(obj) { round(mean(obj$sigma), 4) }
 
 performance_matrix <- data.frame(
@@ -510,11 +634,9 @@ performance_matrix <- data.frame(
     "🚀 OpenCLeaR: NVIDIA GPU (Dev 0) float",
     "🚀 OpenCLeaR: Intel GPU (Dev 1) float",
     "🚀 OpenCLeaR: Intel CPU (Dev 2) POCL double",
-    "🚀 OpenCLeaR: Intel CPU (Dev 2) POCL float"#,
-#    "🚀 OpenCLeaR: Intel CPU (Dev 2) oneapi double",
-#    "🚀 OpenCLeaR: Intel CPU (Dev 2) oneapi float"
+    "🚀 OpenCLeaR: Intel CPU (Dev 2) POCL float"
   ),
-  Precision = c("Double", "Double", "Double", "Double", "Double", "Float", "Float", "Double", "Float"), #, "Double", "Float"),
+  Precision = c("Double", "Double", "Double", "Double", "Double", "Float", "Float", "Double", "Float"),
   Runtime = c(
     sprintf("%.4fs", time_pure_r), 
     sprintf("%.4fs", time_mcl), 
@@ -524,9 +646,7 @@ performance_matrix <- data.frame(
     sprintf("%.4fs", time_gpu_float),
     sprintf("%.4fs", time_intel_gpu),
     sprintf("%.4fs", time_cpu),
-    sprintf("%.4fs", time_cpu_float)#,
-#    sprintf("%.4fs", time_intel_cpu),
-#    sprintf("%.4fs", time_intel_cpu_float)
+    sprintf("%.4fs", time_cpu_float)
   ),
   Speedup = c(
     "1.00x (Baseline)", 
@@ -537,11 +657,9 @@ performance_matrix <- data.frame(
     sprintf("%.2fx", time_pure_r / time_gpu_float),
     sprintf("%.2fx", time_pure_r / time_intel_gpu),
     sprintf("%.2fx", time_pure_r / time_cpu),
-    sprintf("%.2fx", time_pure_r / time_cpu_float)#,
-#    sprintf("%.2fx", time_pure_r / time_intel_cpu),
-#    sprintf("%.2fx", time_pure_r / time_intel_cpu_float)
+    sprintf("%.2fx", time_pure_r / time_cpu_float)
   ),
-  `Mu_Hat` = c(
+  Mu_Hat = c(
     get_mu_hat(output_r),
     get_mu_hat(output_mcl),
     get_mu_hat(output_spp),
@@ -550,11 +668,9 @@ performance_matrix <- data.frame(
     get_mu_hat(output_gpu_float),
     get_mu_hat(output_intel_gpu),
     get_mu_hat(output_cpu),
-    get_mu_hat(output_cpu_float)#,
-#    get_mu_hat(output_intel_cpu),
-#    get_mu_hat(output_inytel_cpu_float)
+    get_mu_hat(output_cpu_float)
   ),
-  `Sigma_Hat` = c(
+  Sigma_Hat = c(
     get_sigma_hat(output_r),
     get_sigma_hat(output_mcl),
     get_sigma_hat(output_spp),
@@ -563,9 +679,7 @@ performance_matrix <- data.frame(
     get_sigma_hat(output_gpu_float),
     get_sigma_hat(output_intel_gpu),
     get_sigma_hat(output_cpu),
-    get_sigma_hat(output_cpu_float)#,
-#    get_sigma_hat(output_intel_cpu),
-#    get_sigma_hat(output_intel_cpu_float)
+    get_sigma_hat(output_cpu_float)
   ),
   check.names = FALSE
 )
@@ -574,22 +688,12 @@ knitr::kable(performance_matrix,
              caption = sprintf("Execution Metrics and Parameter Validation on XPS 17 (True Mu = %.2f, True Sigma = %.2f)", mu_empirical, sigma_empirical))
 ```
 
----
+### 5.2. Posterior Density Identifications
 
-## 5. Convergence Diagnostics & Visualizations
-
-GPGPU speedups are only scientifically relevant if numeric integrity
-is preserved perfectly. We extract the sampled data vectors from the
-graphic card memory and generate posterior density distributions and
-convergence traceplots.
-
-### 5.1. Posterior Density Identifications
-
-We evaluate the sampled posterior landscapes of parameter \(\mu\)
-(Target: ~`r round(mu_empirical, 2)`) and parameter \(\sigma\)
-(Target: ~`r round(sigma_empirical, 2)`) against empirical baselines.
+We evaluate the sampled posterior landscapes of parameter $\mu$ (Target: ~`r round(mu_empirical, 2)`) and parameter $\sigma$ (Target: ~`r round(sigma_empirical, 2)`) against empirical baselines.
 
 ```{r plotting_density, fig.width=10, fig.height=4}
+# We use the double-precision NVIDIA output for validation
 visualization_df <- data.frame(
   mu    = output_gpu$mu,
   sigma = output_gpu$sigma
@@ -616,7 +720,7 @@ plot_sigma <- ggplot(visualization_df, aes(x = sigma)) +
 grid.arrange(plot_mu, plot_sigma, ncol = 2)
 ```
 
-### 5.2. MCMC Traceplots (Chain Mixing Verification)
+### 5.3. MCMC Traceplots (Chain Mixing Verification)
 
 To verify the mixing properties of the parallelized chains generated across the OpenCL compute units, we extract the structural path tracks of the first three chains.
 
@@ -641,37 +745,17 @@ ggplot(traceplot_df, aes(x = Iteration, y = Mu_Value, color = Chain)) +
   theme(legend.position = "bottom")
 ```
 
-## Kernel binaries
 
-These are the OpenCL kernel binaries generated above
-```{sh}
-find .cl_cache/
-```
+## Cache maintenance
 
-You may simply cleanup via
-```{r binary cleanup}
+These are the OpenCL kernel binaries generated above. You may simply cleanup via:
+```{r binary_cleanup}
 CleanCLCache()
 ```
 
 ## Conclusion
 
-As documented by this vignette, the GPGPU processing engine of
-`OpenCLeaR` massively outclasses classic CPU-bound routines at least
-when running in 'float' mode. Despite running tens of thousands of
-independent chains concurrently across parallel thread architectures,
-density outputs and trace histories confirm flawless mathematical
-convergence and strict numeric alignment with targeted empirical
-values. The runtime architecture is fully optimized for productive
-simulation pipelines directly from R. 
+As documented by this vignette, the GPGPU processing engine of `OpenCLeaR` massively outclasses classic CPU-bound routines at least when running in 'float' mode. Despite running tens of thousands of independent chains concurrently across parallel thread architectures, density outputs and trace histories confirm flawless mathematical convergence and strict numeric alignment with targeted empirical values.
 
-Note that here we use mobile consumer GPUs lacking the features of
-high performance server GPUs. On such systems maybe it could
-outperform the CPU hardware even in 'double' mode. Moreover the
-portable OpenCL driver (POCL) approach as used for the CPU seems to
-get no advances even over the simple `mclapply` method. But
-nevertheless it enables otherwise OpenCL device free computers beeing
-used as a convenient developer platform for this type of software
-which later can run on much more powerful systems without change.  For
-some reasons intels oneapi driver only recognises the CPU from time to
-time, so this test is disabled for now.
+Note that here we use mobile consumer GPUs lacking the features of high performance server GPUs. On such systems maybe it could outperform the CPU hardware even in 'double' mode. Moreover the portable OpenCL driver (POCL) approach as used for the CPU seems to get no advances even over the simple `mclapply` method. But nevertheless it enables otherwise OpenCL device free computers being used as a convenient developer platform for this type of software which later can run on much more powerful systems without change. For some reasons intels oneapi driver only recognises the CPU from time to time, so this test is disabled for now.
 
