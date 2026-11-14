@@ -294,17 +294,17 @@ or allocation errors:
    seconds)**. For compute-heavy kernels, increase this limit in
    `/etc/default/grub` (`GRUB_CMDLINE_LINUX_DEFAULT`) and run
    `update-grub`: 
-```text 
-amdgpu.lockup_timeout=600000
-```
+   ```text 
+   amdgpu.lockup_timeout=600000
+   ```
   *(Value is in milliseconds; `600000` = 10 minutes).*
 3. **Unlock Full Unified Memory on APUs (Optional):** To allow OpenCL
    buffers to utilize more than the default shared system memory (GTT)
    limit on APUs with large RAM, set the TTM page limits (in 4 KB
    pages; e.g., `25165824` for 96 GB) in the kernel command line:
-```text 
-ttm.pages_limit=25165824 ttm.page_pool_size=25165824 
-```
+   ```text 
+    ttm.pages_limit=25165824 ttm.page_pool_size=25165824 
+   ```
    *(Note: Modern kernels use `ttm.*` instead of the deprecated
    `amdttm.*` or `amdgpu.gttsize` parameters).*
 
