@@ -52,21 +52,17 @@ __kernel void diffusion_advection_3d(
     const int base_seed,
     const int t)                
 {
-    // Native Extraktion über das 2D-Ausführungsgitter deines Frameworks
-    int i = get_global_id(0); // Direkter X-Index
-    int global_m = get_global_id(1); // Kombinierter Y- und Z-Index
+    int i = get_global_id(0); 
+    int global_m = get_global_id(1); 
 
     if (i >= nx || global_m >= (ny * nz)) return;
 
-    // Rekonstruktion von Y und Z aus der zweiten Gitterdimension
-    int k = global_m / ny; // Höhen-Index Z
-    int j = global_m % ny; // Nord-Süd-Index Y
+    int k = global_m / ny; 
+    int j = global_m % ny; 
 
-    // Lineare 1D-Indexierung für den flachen VRAM-Puffer
     int current_idx = k * (nx * ny) + j * nx + i;
     int n_plane = nx * ny;
 
-    // Wenn der Voxel im Boden oder in einem Hindernis liegt, passiert nichts
     if (dem_mask[current_idx] <= 0.0f) {
         c_output[current_idx] = 0.0f;
         return;
@@ -74,7 +70,6 @@ __kernel void diffusion_advection_3d(
 
     real c_center = c_input[current_idx];
 
-    // 1. Stencil-Nachbarschaftsabfrage mit Schutz vor Array-Overruns
     real c_west  = (i > 0)      ? c_input[current_idx - 1]       : c_center;
     real c_east  = (i < nx - 1) ? c_input[current_idx + 1]       : c_center;
     real c_south = (j > 0)      ? c_input[current_idx - nx]      : c_center;
@@ -82,7 +77,6 @@ __kernel void diffusion_advection_3d(
     real c_down  = (k > 0)      ? c_input[current_idx - n_plane] : c_center;
     real c_up    = (k < nz - 1) ? c_input[current_idx + n_plane] : c_center;
 
-    // Topographischer Maskenabgleich (Hügel-Kollision)
     if (i > 0      && dem_mask[current_idx - 1]       <= 0.0f) c_west  = c_center;
     if (i < nx - 1 && dem_mask[current_idx + 1]       <= 0.0f) c_east  = c_center;
     if (j > 0      && dem_mask[current_idx - nx]      <= 0.0f) c_south = c_center;
@@ -90,7 +84,6 @@ __kernel void diffusion_advection_3d(
     if (k > 0      && dem_mask[current_idx - n_plane] <= 0.0f) c_down  = c_center;
     if (k < nz - 1 && dem_mask[current_idx + n_plane] <= 0.0f) c_up    = c_center;
 
-    // 2. Mathematische Kernrechnung (Laplace + Upwind-Advektion)
     real laplacian = (c_east + c_west + c_north + c_south + c_up + c_down - 6.0f * c_center) / (dx * dx);
 
     real adv_x = (wind_x >= 0.0f) ? (wind_x * (c_center - c_west) / dx)  : (wind_x * (c_east - c_center) / dx);
@@ -100,23 +93,29 @@ __kernel void diffusion_advection_3d(
     real c_next = c_center + dt * (diff_coeff * laplacian - (adv_x + adv_y + adv_z));
     if (c_next < 0.0f) c_next = 0.0f;
 
-    // 3. Kontinuierliche Emissionsquelle mit libkernel-RNG auf der GPU injezieren
+    // 3. 🎯 KONTINUIERLICHE EMISSION MIT EXTREMEN SCHWANKUNGEN
     if (i == source_x && j == source_y && k == source_z) {
-        // Initialisiere Mersenne Twister Zustand exklusiv für diesen Quell-Thread
         INIT_MT(base_seed + t);
         
-        // Nutze runif(min, max) aus libkernel.cl für kontinuierlichen Nachschub
-        real noise = runif(-50.0f, 50.0f);
-        c_next += (500.0f + noise);
+        // runif liefert einen Wert von 0.0 bis 1.0
+        real rand_val = runif(0.0f, 1.0f);
+        
+        // Quadrieren verschiebt die Wahrscheinlichkeit stark nach unten (fast nix),
+        // erzeugt aber bei Werten nahe 1.0 heftige Ausbrüche (ganz viel)!
+        real dynamic_source = 1200.0f * (rand_val * rand_val * rand_val);
+        
+        // Absolut minimale Grundlast, damit die Quelle nie komplett erlischt
+        if (dynamic_source < 5.0f) dynamic_source = 2.0f;
+        
+        c_next += dynamic_source;
     }
 
     c_output[current_idx] = c_next;
 }
-
 '
 ```
 
-  ### 3.2 C++ Interface:
+### 3.2 C++ Interface:
 
 ```{r cpp interface}
 diffusion_interface <- '
@@ -137,7 +136,7 @@ real diff_coeff = as<real>(r_diff_coeff);
 // Start-Windgeschwindigkeiten aus R als Basis-Stärke
 real base_wind_x = as<real>(r_wind_x);
 real base_wind_y = as<real>(r_wind_y);
-real wind_z      = as<real>(r_wind_z); // Vertikalwind bleibt konstant
+real wind_z      = as<real>(r_wind_z); 
 
 // Berechne die absolute Windstärke in der Horizontalen
 real wind_speed = sqrt(base_wind_x * base_wind_x + base_wind_y * base_wind_y);
@@ -149,9 +148,12 @@ int source_z = 10;
 
 Environment e = Environment::global_env();
 std::vector<int> r_seed = e[".Random.seed"];
-int base_seed = r_seed[1];
+int base_seed = r_seed[r_seed[1]+1];
 
-// 1. Allokation von zwei gespiegelten VRAM-Puffern (Ping-Pong)
+// 🛡️ REPARATUR: Extrahiert das offizielle, signaturkonforme Argument "t" als globalen Offset
+int t_offset = as<int>(t);
+
+// Allokation von zwei gespiegelten VRAM-Puffern (Ping-Pong)
 Memory<real> gpu_c_puffer_A(*device, n_total);
 Memory<real> gpu_c_puffer_B(*device, n_total);
 Memory<real> gpu_dem_mask(*device, n_total);
@@ -169,19 +171,17 @@ gpu_dem_mask.write_to_device();
 ulong grid_N = (ulong)nx;
 ulong grid_M = (ulong)(ny * nz);
   
-for (int t = 0; t < steps; ++t) {
-    int current_t = t;
+for (int t_loop = 0; t_loop < steps; ++t_loop) {
+    int current_t = t_loop;
     
     // 🌀 DYNAMISCHE WIND-DREHUNG:
-    // Wir lassen den Wind pro Zeitschritt um einen winzigen Winkel (z.B. 0.002 Radiant) weiterwandern.
-    // Das entspricht einer langsamen, kontinuierlichen Richtungsänderung.
-    real current_angle = (real)t * 0.002f; 
+    // Nutze den globalen Offset, damit der Winkel blockübergreifend fortlaufend addiert wird!
+    real current_angle = (real)(t_offset + t_loop) * 0.002f; 
     
-    // Berechne die neuen, rotierten Windkomponenten
     real dynamic_wind_x = wind_speed * cos(current_angle);
     real dynamic_wind_y = wind_speed * sin(current_angle);
     
-    if (t % 2 == 0) {
+    if (t_loop % 2 == 0) {
         Kernel k(*device, grid_N, grid_M, WORKGROUP_SIZE, "diffusion_advection_3d",
                  gpu_c_puffer_A, gpu_c_puffer_B, gpu_dem_mask,
                  nx, ny, nz, dt, dx, diff_coeff, dynamic_wind_x, dynamic_wind_y, wind_z,
@@ -207,7 +207,6 @@ if (steps % 2 == 0) {
 
 Function f("runif"); f(1);
 return r_c_final;
-
 '
 ```
 
@@ -219,7 +218,7 @@ writeLines(diffusion_kernel, "./diffusion.cl")
 writeLines(diffusion_interface, "./diffusion.cpp")
 ```
 
-Aufruf als oclFunction im IIEF Wrapper bauen:
+Aufruf als oclFunction bauen (mit synchronisierter Argumenten-Signatur):
 
 ```{r oclFunction}
 if (getRversion() >= "2.15.1") {
@@ -229,8 +228,8 @@ if (getRversion() >= "2.15.1") {
 diffusion3D <- (function() {
   .diffusion_internal <- NULL
   
-  # 🛡️ REPARATUR: Die äußere R-Funktion MUSS das ... Argument besitzen, um variable Argumente zu fangen!
-  function(r_c_start, r_dem_mask, r_nx, r_ny, r_nz, r_iterations, r_dt, r_dx, r_diff_coeff, r_wind_x, r_wind_y, r_wind_z, ...) { 
+  # 🛡️ REPARATUR: "t" wird als festes, benanntes Argument deklariert, damit inline es parsen kann!
+  function(r_c_start, r_dem_mask, r_nx, r_ny, r_nz, r_iterations, r_dt, r_dx, r_diff_coeff, r_wind_x, r_wind_y, r_wind_z, t, ...) { 
     
     if (is.null(.diffusion_internal)) {
       .diffusion_internal <<- OpenCLeaR::oclFunction(
@@ -240,14 +239,15 @@ diffusion3D <- (function() {
           r_iterations = "integer", r_dt         = "numeric", r_dx = "numeric",
           r_diff_coeff = "numeric", r_wind_x     = "numeric", r_wind_y = "numeric", r_wind_z = "numeric",
           source_x     = "integer", source_y     = "integer", source_z = "integer",
-          base_seed    = "integer", t            = "integer"
+          base_seed    = "integer", 
+          t            = "integer"  # 🎯 Fest in der inline/C++ Signatur verankert!
         ),
         kernel_file    = "./diffusion.cl",
         interface_file = "./diffusion.cpp"
       )
     }
-    # ⚡ REPARATUR: Das ... Tunnel-Makro reicht source_x, source_y, source_z, base_seed und t bitscharf an das Backend weiter!
-    return(.diffusion_internal(r_c_start, r_dem_mask, r_nx, r_ny, r_nz, r_iterations, r_dt, r_dx, r_diff_coeff, r_wind_x, r_wind_y, r_wind_z, ...))
+    # Übergabe aller expliziten Parameter direkt an das Backend
+    return(.diffusion_internal(r_c_start, r_dem_mask, r_nx, r_ny, r_nz, r_iterations, r_dt, r_dx, r_diff_coeff, r_wind_x, r_wind_y, r_wind_z, t, ...))
   }
 })()
 ```
@@ -381,7 +381,7 @@ Um eine Überlastung des R-Arbeitsspeichers durch die massiven 3D-Voxelmatrizen 
 
 ### 5.1. Das interaktive Speicher-Streaming Skript
 
-```{r rgl_interactive_loop, eval=FALSE}
+```{r rgl_interactive_loop, echo=TRUE, eval=TRUE}
 library(rgl)
 close3d()
 
@@ -430,10 +430,10 @@ for (block in seq(1, total_steps, by = n0)) {
     source_y     = s_y,        
     source_z     = s_z,        
     base_seed    = seed_init,  
-    t            = as.integer(block) 
+    t            = as.integer(block)
   )
   
- # 🎨 VISUALISIERUNGSPHASE (FLACKERFREI VIA PAR3D)
+  # 🎨 VISUALISIERUNGSPHASE (FLACKERFREI VIA PAR3D)
   par3d(skipRedraw = TRUE)
   
   clear3d() 
@@ -444,14 +444,13 @@ for (block in seq(1, total_steps, by = n0)) {
     color = "#888888", emission = "#444444", draw_labels = TRUE
   )
   
-  # ⛰️ TOPOGRAPHIE-GRID (Dank deiner Reparatur perfekt flach!)
+  # ⛰️ TOPOGRAPHIE-GRID
   surface3d(
     x = 1:nx, z = 1:ny, y = dem_surface,
     color = "#444444", alpha = 0.5, front = "lines", back = "lines"
   )
 
-  # ⏱️ 🎯 ZEITSTEMPEL AN DER RÜCKWAND:
-  # Platziert den Text bei X=Mitte, Y=knapp über der Box-Obergrenze, Z=1 (Rückwand)
+  # ⏱️ ZEITSTEMPEL AN DER RÜCKWAND
   text3d(
     x = nx / 2, y = nz + 4, z = 1,
     texts = paste("Iteration:", block),
@@ -465,43 +464,45 @@ for (block in seq(1, total_steps, by = n0)) {
     voxel_coords <- coords[visible_idx, ]
     voxel_values <- current_state[visible_idx]
     
-    # Log-Transformation für hohe visuelle Dynamik im Strömungsfeld
     log_values <- log(voxel_values + 1.0)
     max_log <- max(log_values)
     if(max_log <= 0) max_log <- 1.0
     
     color_indices <- cut(log_values, breaks = 100)
-    
-    # Farbverlauf: Hellgelb an der Quelle -> Dunkelrot am Rand
     color_palette <- heat.colors(100)
     voxel_colors  <- color_palette[color_indices]
     
-    # Dynamische Opazität
-    dynamic_alpha = 0.15 + 0.55 * (log_values / max_log)
+    # Deckkraft anpassen für optimalen Kern-Durchschein-Effekt
+    dynamic_alpha = 0.40 + 0.55 * (log_values / max_log)
     
     # Symmetrisches Voxel-Mapping
     points3d(
       voxel_coords$x, voxel_coords$z, voxel_coords$y, 
-      color = voxel_colors, size = 6, alpha = dynamic_alpha, lit = FALSE
+      color = voxel_colors, size = 8, alpha = dynamic_alpha, lit = TRUE
     )
     
-    # Quellmündung (Schornstein) am transformierten Fixpunkt hervorheben
     points3d(s_x, s_z, s_y, color = "cyan", size = 10, lit = FALSE)
   }
   
   par3d(skipRedraw = FALSE)
   
-  # Speicherbereinigung
+  # Speicherbereinigung innerhalb des Loops
   rm(visible_idx)
   gc(verbose = FALSE)
 }
+
+# 🛠️ REPARATUR 1: Friere die Szene explizit in einer globalen R-Variable ein!
+final_scene <<- rgl::scene3d()
 ```
 
+### 5.2 Interaktiver WebGL-Export für den HTML-Bericht
 
-
-
-
-
-
-
-
+```{r rgl_html_widget, echo=FALSE, eval=TRUE}
+# 🛠️ REPARATUR: Nur feste Pixelgrößen erlaubt (Zahlen ohne Anführungszeichen)
+library(rgl)
+if (exists("final_scene")) {
+  rglwidget(final_scene, width = 900, height = 650)
+} else {
+  cat("⚠️ Keine aufgezeichnete 3D-Szene im globalen Speicher gefunden.")
+}
+```
