@@ -1,6 +1,14 @@
 ---
-title: "OpenCLeaR_Diffusion_Vignette"
-output: html_document
+title: "OpenCLeaR: 3D Atmospheric Advection-Diffusion Simulation via GPGPU Accelerators"
+subtitle: "High-Performance Voxel Dispersion Modeling over Complex Topographies"
+author: "OpenCLeaR Development Team"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    theme: cosmo
+    highlight: tango
 ---
 
 ```{r setup, include=FALSE}
@@ -11,25 +19,55 @@ library(ggplot2)
 
 ## 1. Physical Foundations of 3D Voxel Diffusion
 
-This simulation framework models the three-dimensional dispersion of airborne pollutants within a turbulent atmospheric boundary layer. The localized transport dynamics are governed by the classic advection-diffusion equation, combining mass conservation with stochastic wind-vector displacements.
+This simulation framework models the three-dimensional transport and dispersion of airborne pollutants within the atmospheric boundary layer (ABL). The macroscopically observed expansion dynamics are fundamentally governed by the fluid-dynamic mass conservation principle, mathematically formulated as the classical **Advection-Diffusion Equation**.
+
+To accurately resolve turbulent atmospheric transport over highly complex, non-planar terrain, the physical model partitions the region into a discrete, three-dimensional Cartesian voxel grid. In a real-world boundary layer, fluid parcels experience two simultaneous velocity fields:
+
+* **Advective Transport (Deterministic Drift):** The directional movement of pollutant mass driven by the ambient, macro-scale mean wind vector field $\vec{u} = (u_x, u_y, u_z)^T$.
+* **Turbulent Diffusion (Stochastic Mixing):** Small-scale eddies and thermal buoyancy induce isotropic sub-grid velocity fluctuations. Following Fick's first law of diffusion, these chaotic mixing profiles are parameterized via a turbulent diffusion coefficient matrix $K$, driving mass fluxes down the local concentration gradient $\nabla C$.
+
+Under the assumption of an incompressible flow regime ($\nabla \cdot \vec{u} = 0$) and an isotropic eddy diffusivity ($K = D \cdot I$), the continuous governing mass transport equation for the scalar concentration field $C(x, y, z, t)$ expands to:
+
+$$\frac{\partial C}{\partial t} + u_x \frac{\partial C}{\partial x} + u_y \frac{\partial C}{\partial y} + u_z \frac{\partial C}{\partial z} = D \left( \frac{\partial^2 C}{\partial x^2} + \frac{\partial^2 C}{\partial y^2} + \frac{\partial^2 C}{\partial z^2} \right) + S(x, y, z, t)$$
+
+Where $D$ represents the macro-scale turbulent diffusion coefficient, and $S$ denotes a localized time-dependent emission source term injected directly into the fluid stream.
 
 ## 2. Mathematical Discretization & Numerical Stability
 
-The mathematical formulation utilizes a localized finite-difference stencil map to resolve turbulent mixing profiles over complex topographical digital elevation models (DEM).
+To map the continuous partial differential equation (PDE) onto parallelized GPGPU streaming multiprocessors, the continuous space-time continuum must be discretized using finite difference methods (FDM) over a rigid grid layout.
 
-### 2.1. Finite Difference Laplacian Stencil
+### 2.1. Finite Difference Laplacian Stencil (Diffusion Part)
 
-To evaluate the molecular and turbulent expansion arrays natively on the GPGPU streaming multiprocessors, we map a discrete second-order 6-point stencil grid directly over the dense VRAM buffers.
+The spatial second-order derivatives representing the diffusion term are evaluated using a symmetric, isotropic 6-point central finite difference stencil. For any interior voxel node $(i, j, k)$ at spatial location $x = i \cdot \Delta x$, $y = j \cdot \Delta y$, and $z = k \cdot \Delta z$, assuming a uniform spatial voxel size $\Delta x = \Delta y = \Delta z$, the discrete 3D Laplacian operator $\nabla^2 C$ maps to:
 
-### 2.2. Upwind Advection Vector Schemes
+$$\nabla^2 C_{i,j,k} \approx \frac{C_{i+1,j,k} + C_{i-1,j,k} + C_{i,j+1,k} + C_{i,j-1,k} + C_{i,j,k+1} + C_{i,j,k-1} - 6C_{i,j,k}}{(\Delta x)^2}$$
 
-To guarantee strict numerical stability and prevent artificial cell oscillations under high wind-velocity profiles, the atmospheric transport planes utilize a first-order upstream upwind advection configuration.
+This 6-point connectivity structure links each cell directly to its spatial neighbors: East, West, North, South, Up, and Down. At solid topography boundaries (where the digital elevation model cuts into the fluid domain), a zero-flux Neumann boundary condition ($\nabla C \cdot \vec{n} = 0$) is enforced. This ensures perfect mass conservation by bouncing back any mass attempting to diffuse into solid grid elements.
+
+### 2.2. Upwind Advection Vector Schemes (Convective Part)
+
+Using standard central differences for the first-order advective derivatives creates non-physical spatial oscillations and numerical instability when wind speeds are high. To prevent these cell oscillations, the transport plane employs a **First-Order Upwind Scheme**. 
+
+The upwind scheme adaptively shifts its spatial derivative stencil backwards into the upstream direction of the velocity vector component, honoring the directional flow of physical information:
+
+$$\frac{\partial C}{\partial x} \approx \begin{cases} 
+\frac{C_{i,j,k} - C_{i-1,j,k}}{\Delta x} & \text{if } u_x \ge 0 \\
+\frac{C_{i+1,j,k} - C_{i,j,k}}{\Delta x} & \text{if } u_x < 0 
+\end{cases}$$
+
+Temporal integration is achieved via an explicit Forward Euler scheme. To prevent numerical divergence, the discrete time-step size $\Delta t$ is strictly bounded by the multi-dimensional **Courant-Friedrichs-Lewy (CFL)** stability criterion and the diffusion limit:
+
+$$\Delta t < \min \left( \frac{(\Delta x)^2}{6D}, \frac{\Delta x}{|u_x| + |u_y| + |u_z|} \right)$$
 
 ## 3. Implementation
 
-### 3.1 OpenCL kernel
+### 3.1 OpenCL Kernel
 
-```{r}
+The core numeric solver is written in native OpenCL C to leverage massive hardware parallelization across thousands of hardware processing cores. Each voxel element $(i, j, k)$ is mapped directly onto an independent execution thread (Work-Item).
+
+It embeds a emission source at the top of a 'guassian' hill with temporaraly fluctuating emission rate. The wind starts west-east but rotates later on.
+
+```{r opencl_kernel}
 diffusion_kernel <- '
 // -*- c -*-
 
@@ -63,6 +101,7 @@ __kernel void diffusion_advection_3d(
     int current_idx = k * (nx * ny) + j * nx + i;
     int n_plane = nx * ny;
 
+    // Solid terrain masking (DEM constraint)
     if (dem_mask[current_idx] <= 0.0f) {
         c_output[current_idx] = 0.0f;
         return;
@@ -70,6 +109,7 @@ __kernel void diffusion_advection_3d(
 
     real c_center = c_input[current_idx];
 
+    // Neighborhood stencil acquisition with active boundary fallback
     real c_west  = (i > 0)      ? c_input[current_idx - 1]       : c_center;
     real c_east  = (i < nx - 1) ? c_input[current_idx + 1]       : c_center;
     real c_south = (j > 0)      ? c_input[current_idx - nx]      : c_center;
@@ -77,6 +117,7 @@ __kernel void diffusion_advection_3d(
     real c_down  = (k > 0)      ? c_input[current_idx - n_plane] : c_center;
     real c_up    = (k < nz - 1) ? c_input[current_idx + n_plane] : c_center;
 
+    // Neumann boundary conditions for complex topographies (Zero-Flux bounce back)
     if (i > 0      && dem_mask[current_idx - 1]       <= 0.0f) c_west  = c_center;
     if (i < nx - 1 && dem_mask[current_idx + 1]       <= 0.0f) c_east  = c_center;
     if (j > 0      && dem_mask[current_idx - nx]      <= 0.0f) c_south = c_center;
@@ -84,28 +125,28 @@ __kernel void diffusion_advection_3d(
     if (k > 0      && dem_mask[current_idx - n_plane] <= 0.0f) c_down  = c_center;
     if (k < nz - 1 && dem_mask[current_idx + n_plane] <= 0.0f) c_up    = c_center;
 
+    // 2.1. Spatial Laplacian derivative evaluation
     real laplacian = (c_east + c_west + c_north + c_south + c_up + c_down - 6.0f * c_center) / (dx * dx);
 
+    // 2.2. Upwind directional advective derivative evaluation
     real adv_x = (wind_x >= 0.0f) ? (wind_x * (c_center - c_west) / dx)  : (wind_x * (c_east - c_center) / dx);
     real adv_y = (wind_y >= 0.0f) ? (wind_y * (c_center - c_south) / dx) : (wind_y * (c_north - c_center) / dx);
     real adv_z = (wind_z >= 0.0f) ? (wind_z * (c_center - c_down) / dx)  : (wind_z * (c_up - c_center) / dx);
 
+    // Explicit temporal integration forward step
     real c_next = c_center + dt * (diff_coeff * laplacian - (adv_x + adv_y + adv_z));
     if (c_next < 0.0f) c_next = 0.0f;
 
-    // 3. 🎯 KONTINUIERLICHE EMISSION MIT EXTREMEN SCHWANKUNGEN
+    // Stochastic continuous point-source injection with extreme fluctuations
     if (i == source_x && j == source_y && k == source_z) {
         INIT_MT(base_seed + t);
         
-        // runif liefert einen Wert von 0.0 bis 1.0
         real rand_val = runif(0.0f, 1.0f);
         
-        // Quadrieren verschiebt die Wahrscheinlichkeit stark nach unten (fast nix),
-        // erzeugt aber bei Werten nahe 1.0 heftige Ausbrüche (ganz viel)!
+        // Cubic scaling skews probability towards zero while provoking massive bursts
         real dynamic_source = 1200.0f * (rand_val * rand_val * rand_val);
         
-        // Absolut minimale Grundlast, damit die Quelle nie komplett erlischt
-        if (dynamic_source < 5.0f) dynamic_source = 2.0f;
+        if (dynamic_source < 5.0f) dynamic_source = 2.0f; // Minimal background emission
         
         c_next += dynamic_source;
     }
@@ -115,11 +156,13 @@ __kernel void diffusion_advection_3d(
 '
 ```
 
-### 3.2 C++ Interface:
+### 3.2 C++ Interface
 
-```{r cpp interface}
+The bridge between R and the OpenCL runtime environment is managed via a specialized C++ abstraction layer using Rcpp. This interface handles hardware-level allocation, memory mapping, and executes the segmented temporal loop.
+
+```{r cpp_interface}
 diffusion_interface <- '
-// Extraktion der R-Eingabeparameter und Dimensionen
+// Extract R input arrays and discrete layer dimensions
 NumericVector r_c_init(r_c_start);
 NumericVector r_dem(r_dem_mask);  
 
@@ -133,27 +176,29 @@ real dt         = as<real>(r_dt);
 real dx         = as<real>(r_dx);
 real diff_coeff = as<real>(r_diff_coeff);
 
-// Start-Windgeschwindigkeiten aus R als Basis-Stärke
+// Baseline meteorological wind vectors from R session
 real base_wind_x = as<real>(r_wind_x);
 real base_wind_y = as<real>(r_wind_y);
 real wind_z      = as<real>(r_wind_z); 
 
-// Berechne die absolute Windstärke in der Horizontalen
+// Compute the scalar horizontal velocity magnitude
 real wind_speed = sqrt(base_wind_x * base_wind_x + base_wind_y * base_wind_y);
 
-// Schornstein-Mündung im Zentrum
+// Localized stack emission source constraints
 int source_x = nx / 2;
 int source_y = ny / 2;
 int source_z = 10;
 
 Environment e = Environment::global_env();
 std::vector<int> r_seed = e[".Random.seed"];
+
+// Extract the active hardware-level random seed using the precise state pointer
 int base_seed = r_seed[r_seed[1]+1];
 
-// 🛡️ REPARATUR: Extrahiert das offizielle, signaturkonforme Argument "t" als globalen Offset
+// Extract the global temporal step offset to synchronize block transitions
 int t_offset = as<int>(t);
 
-// Allokation von zwei gespiegelten VRAM-Puffern (Ping-Pong)
+// Allocate mirror VRAM memory buffers on the accelerator device (Ping-Pong framework)
 Memory<real> gpu_c_puffer_A(*device, n_total);
 Memory<real> gpu_c_puffer_B(*device, n_total);
 Memory<real> gpu_dem_mask(*device, n_total);
@@ -174,8 +219,8 @@ ulong grid_M = (ulong)(ny * nz);
 for (int t_loop = 0; t_loop < steps; ++t_loop) {
     int current_t = t_loop;
     
-    // 🌀 DYNAMISCHE WIND-DREHUNG:
-    // Nutze den globalen Offset, damit der Winkel blockübergreifend fortlaufend addiert wird!
+    // Instationary horizontal wind vector rotation profile
+    // The angle advances continuously across streaming block boundaries
     real current_angle = (real)(t_offset + t_loop) * 0.002f; 
     
     real dynamic_wind_x = wind_speed * cos(current_angle);
@@ -212,15 +257,13 @@ return r_c_final;
 
 ### 3.3 Create oclFunction
 
-Kernel und Interface speichern:
-```{r save files}
+The native files are written to the workspace disk storage and compiled dynamically into a unified R wrapper object using `OpenCLeaR::oclFunction` under explicit parameter matching.
+
+```{r compile_ocl_function}
+# Flush strings to physical disk structures
 writeLines(diffusion_kernel, "./diffusion.cl")
 writeLines(diffusion_interface, "./diffusion.cpp")
-```
 
-Aufruf als oclFunction bauen (mit synchronisierter Argumenten-Signatur):
-
-```{r oclFunction}
 if (getRversion() >= "2.15.1") {
   utils::globalVariables(".diffusion_internal")
 }
@@ -228,7 +271,6 @@ if (getRversion() >= "2.15.1") {
 diffusion3D <- (function() {
   .diffusion_internal <- NULL
   
-  # 🛡️ REPARATUR: "t" wird als festes, benanntes Argument deklariert, damit inline es parsen kann!
   function(r_c_start, r_dem_mask, r_nx, r_ny, r_nz, r_iterations, r_dt, r_dx, r_diff_coeff, r_wind_x, r_wind_y, r_wind_z, t, ...) { 
     
     if (is.null(.diffusion_internal)) {
@@ -240,95 +282,104 @@ diffusion3D <- (function() {
           r_diff_coeff = "numeric", r_wind_x     = "numeric", r_wind_y = "numeric", r_wind_z = "numeric",
           source_x     = "integer", source_y     = "integer", source_z = "integer",
           base_seed    = "integer", 
-          t            = "integer"  # 🎯 Fest in der inline/C++ Signatur verankert!
+          t            = "integer"
         ),
         kernel_file    = "./diffusion.cl",
-        interface_file = "./diffusion.cpp"
+        interface_file = "./diffusion.cpp",
+        force_float = TRUE
       )
     }
-    # Übergabe aller expliziten Parameter direkt an das Backend
     return(.diffusion_internal(r_c_start, r_dem_mask, r_nx, r_ny, r_nz, r_iterations, r_dt, r_dx, r_diff_coeff, r_wind_x, r_wind_y, r_wind_z, t, ...))
   }
 })()
 ```
 
-## 4. Simulation
+## 4. Simulation Execution
 
-## 4.1 Simulation Setup und Datenvorbereitung:
+### 4.1 Simulation Setup and Data Preparation
 
-```{r init OpenCL}
+The simulation grid dimensions are locked to a dense 3D voxel structure, and a digital elevation model representing a symmetrical Gaussian hill structure is constructed directly within the domain masking framework.
+
+```{r data_preparation}
+# Activate hardware accelerator context
 ActivateDevice()
 GetActiveDeviceInfo()
-```
 
-```{r simulation_setup}
-# 1. Dimensionen festlegen
-nx <- 120L   # X-Achse (Ost-West)
-ny <- 120L   # Y-Achse (Nord-Süd)
-nz <- 40L   # Z-Achse (Höhe)
+# 1. Structural dimensions constraint definition
+# those settings work in terms of GPU memory size but will kill rgl 
+# nx <- 580L   # X-Axis grid limits (West -> East)
+# ny <- 580L   # Y-Axis grid limits (South -> North)
+# nz <- 160L    # Z-Axis grid limits (Vertical Elevation)
+# use this for a more fluent run without crashing the rgl plots
+nx <- 120L   # X-Axis grid limits (West -> East)
+ny <- 120L   # Y-Axis grid limits (South -> North)
+nz <- 40L    # Z-Axis grid limits (Vertical Elevation)
 n_total <- nx * ny * nz
 
-dx <- 5.0   # Voxelgröße in Metern (10m x 10m x 10m)
-dt <- 0.1    # Zeitschrittweite in Sekunden
+dx <- 1.25    # Spatial resolution metric (2.5m voxel cube spacing)
+#dx <- 5    # Spatial resolution metric (2.5m voxel cube spacing)
+dt <- 0.1    # Temporal resolution metric (0.1s time-step increments)
 
-# 2. Topographie erstellen (Digitales Geländemodell als Maske)
-# Wir erzeugen einen Gauß'schen Hügel im Zentrum des Gitters
+# 2. Digital Elevation Model (DEM) masking setup
+# Constructing a symmetrical Gaussian hill topographic layout at the domain center
 dem_mask <- array(1.0, dim = c(nx, ny, nz))
 center_x <- nx / 2
 center_y <- ny / 2
 
 for (x in 1:nx) {
   for (y in 1:ny) {
-    # Berechne die Hügelhöhe an dieser Position
     dist_sq <- (x - center_x)^2 + (y - center_y)^2
-    hill_height <- 8 * exp(-dist_sq / 150) # Maximal 8 Voxel hoch
+    hill_height <- 8 * exp(-dist_sq / 150) # Peak height locked to 8 vertical voxels
     
     if (hill_height > 0) {
       max_solid_z <- min(nz, floor(hill_height))
       if (max_solid_z > 0) {
-        # Markiere Voxel im Hügel als massiven Boden (0.0)
+        # Define subsurface structures as non-permeable elements (0.0)
         dem_mask[x, y, 1:max_solid_z] <- 0.0
       }
     }
   }
 }
 
-# 3. Startkonzentration initialisieren (Schornstein-Emissionsquelle)
-# Wir setzen eine permanente Schadstoffquelle knapp über der Hügelspitze
+# 3. Mass concentration matrix seed setup
+# Positioning a continuous source stack directly over the topographic peak
 c_start <- array(0.0, dim = c(nx, ny, nz))
 source_x <- as.integer(center_x)
 source_y <- as.integer(center_y)
-source_z <- 10L # Schornstein-Mündung im 10. Voxel in der Höhe
+source_z <- 10L 
 
 c_start[source_x, source_y, source_z] <- 500.0
 
-# 4. Arrays für das Rcpp-Interface flachklopfen (1D-Vektoren)
-# Wichtig: OpenCL-C-Memory-Layout muss mit der Indexierung im Kernel übereinstimmen
+# 4. Serialize multi-dimensional configurations into linearized 1D arrays
 c_start_flat <- as.numeric(c_start)
 dem_mask_flat <- as.numeric(dem_mask)
 ```
 
-### 4.2 Simulation auf der GPU ausführen:
 
-```{r run_simulation}
-# Meteorologische Randbedingungen festlegen
+This uses ~1GB on a Nvida GPU when used with 'double' (the default), it simulates `r nx * ny * nz` voxels in a `r nx` by `r ny` by `r nz` array, it covers  `r nx * ny * dx^2` square meters. 
+
+
+### 4.2 Monolithic GPU Execution Test
+
+Before executing the interactive visual framing script, we perform a non-interrupted, monolithic test execution over 2000 steps directly inside the isolated compute kernel.
+
+```{r test_gpu_run}
+# Configure meteorological baseline parameters
 iterations <- 2000L
-diff_coeff <- 1.5      # Molekulare / Turbulente Diffusion
-wind_x     <- 4.0      # Mäßiger Westwind
-wind_y     <- 0.5      # Minimaler Nord/Süd-Wind
-wind_z     <- 0.2      # Leichter thermischer Aufwind
+diff_coeff <- 1.5      
+wind_x     <- 4.0      # Dominant westerly breeze profile
+wind_y     <- 0.5      
+wind_z     <- 0.2      
 
-# Schornstein-Mündung und Seed für den statischen Einmaldurchlauf festlegen
 s_x  <- as.integer(nx / 2)
 s_y  <- as.integer(ny / 2)
 s_z  <- 10L
 seed_init <- 12345L
 t_init    <- 0L
 
-cat("🎬 Starte 3D-Schadstoffausbreitung über", iterations, "Zeitschritte auf der GPU...\n")
+cat("🎬 Launching monolithic 3D voxel advection-diffusion pipeline on the GPU...\n")
 t_start <- Sys.time()
 
-# JIT-Kernel mit ALLEN signaturgerechten Parametern aufrufen
 c_final_flat <- diffusion3D(
   r_c_start    = c_start_flat, 
   r_dem_mask   = dem_mask_flat,
@@ -350,49 +401,52 @@ c_final_flat <- diffusion3D(
 )
 
 t_end <- Sys.time()
-cat("✅ Simulation beendet! Reine Rechenzeit der GPU:", round(as.numeric(t_end - t_start), 4), "Sekunden.\n")
+cat("✅ Core task terminated! Absolute GPGPU device computing time:", round(as.numeric(t_end - t_start), 4), "seconds.\n")
 
-# Ergebnis zurück in die 3D-Array-Struktur gießen
 c_final <- array(c_final_flat, dim = c(nx, ny, nz))
 ```
 
-### 4.3 Ergebnis-Visualisierung (Horizontalschnitt):
+### 4.3 Static Evaluation Plot (Horizontal Cross-Section)
 
-```{r visualization}
-# Wir extrahieren einen horizontalen Schnitt auf Höhe der Schornsteinmündung (z = 10)
+To verify the mathematical validity of the monolithic execution run, we extract a flat horizontal slice exactly at the elevation plane of the stack mouth ($z = 10$).
+
+```{r static_2d_plot}
 z_slice <- 10
 slice_data <- c_final[, , z_slice]
 
-# Plot der Schadstofffahne im Windfeld
+# Render the dispersion footprint within the ambient flow field
 image(
   x = 1:nx, y = 1:ny, z = slice_data,
   col = terrain.colors(100),
-  main = paste("Schadstoffausbreitung im Westwind (Höhenschicht", z_slice, ")"),
-  xlab = "X-Achse (West -> Ost)",
-  ylab = "Y-Achse (Süd -> Nord)"
+  main = paste("Horizontal Dispersion Footprint (Vertical Layer z =", z_slice, ")"),
+  xlab = "X-Axis: West -> East (Grid Units)",
+  ylab = "Y-Axis: South -> North (Grid Units)"
 )
 contour(x = 1:nx, y = 1:ny, z = slice_data, add = TRUE, col = "black")
 ```
 
-## 5. Interaktive 3D-Simulation & GIS-Visualisierung (rgl Loop)
+## 5. Interactive 3D Simulation & GIS-Visualisierung (rgl Loop)
 
-Um eine Überlastung des R-Arbeitsspeichers durch die massiven 3D-Voxelmatrizen (120x120x40 = 576.000 Knoten) zu verhindern, brechen wir die 2000 Iterationen in handliche Blöcke (n0 = 50 Schritte) auf. Nach jedem Block streamen wir den Zustand fliegend zurück, säubern die rgl-Szene und triggern manuell die Speicherbereinigung.
+To prevent R session host-memory exhaustion when handling large multi-dimensional voxel arrays (120x120x40 = 576,000 spatial nodes per block iteration), the continuous time domain is parsed into compact block windows ($n_0 = 50$ steps). 
 
+After each compute frame terminates, the current concentration state is streamed back to the CPU host, the active scene graph is cleared, and memory structures are explicitly purged.
 
-### 5.1. Das interaktive Speicher-Streaming Skript
+### 5.1. The Segmented Memory-Streaming Script
+
+This section is only really useable in an interactive session. It opens a rgl window and you can watch 'total_steps' of simulation in a 3d interactive stream flying by.
 
 ```{r rgl_interactive_loop, echo=TRUE, eval=TRUE}
 library(rgl)
 close3d()
 
-# 1. 🖥️ FENSTER-SETUP: Großes Format (1000x800 Pixel) öffnen
+# 1. Window initialization: Instantiating a large display canvas
 open3d(windowRect = c(100, 100, 1100, 900))
 bg3d("black") 
 
-# 2. 🦅 BLICKWINKEL: Von vorne schräg oben direkt auf das flache Modell
+# 2. Viewport alignment: Orienting camera diagonally from front-top
 view3d(theta = 0, phi = 35, zoom = 0.82, fov = 30)
 
-# Koordinatennetz für die Voxel (Synchron zur GPU-Struktur)
+# Coordinate grid generation for voxel spaces (Synchronized to OpenCL layout)
 coords <- expand.grid(x = 1:nx, y = 1:ny, z = 1:nz)
 
 total_steps <- 2000L
@@ -404,10 +458,10 @@ s_y  <- as.integer(ny / 2)
 s_z  <- 10L
 seed_init <- 12345L
 
-# ⛰️ Höhenmatrix sauber für das Gitter extrahieren
+# Extract un-distorted elevation matrices for the wireframe mesh topography
 dem_array <- array(dem_mask_flat, dim = c(nx, ny, nz))
 dem_surface <- apply(dem_array, c(1, 2), function(v) {
-  solid_layers <- which(v == 0.0) # Suche festen Boden
+  solid_layers <- which(v == 0.0) # Identify solid subsurface boundary voxels
   if (length(solid_layers) > 0) {
     return(max(solid_layers))
   } else {
@@ -415,10 +469,10 @@ dem_surface <- apply(dem_array, c(1, 2), function(v) {
   }
 })
 
-# Starte den segmentierten GPU-CPU-Wechselrahmen
+# Execute the segmented hardware-to-host streaming loop
 for (block in seq(1, total_steps, by = n0)) {
   
-  # ⚡ RECHENPHASE: Führe n0 Schritte autark auf der GPU aus
+  # Compute phase: Execute n0 steps autonomously on the GPGPU accelerator
   current_state <- diffusion3D(
     r_c_start    = current_state, 
     r_dem_mask   = dem_mask_flat,
@@ -430,40 +484,42 @@ for (block in seq(1, total_steps, by = n0)) {
     source_y     = s_y,        
     source_z     = s_z,        
     base_seed    = seed_init,  
-    t            = as.integer(block)
+    t            = as.integer(block) # Pass global offset step to drive wind rotation
   )
   
-  # 🎨 VISUALISIERUNGSPHASE (FLACKERFREI VIA PAR3D)
+  # Rendering phase: Defer redrawing to prevent screen flickering
   par3d(skipRedraw = TRUE)
   
   clear3d() 
   
-  # 📦 ORIENTIERUNGS-BOX
+  # Orientation bounding box mapping
   bbox3d(
     xat = seq(0, nx, by = 20), yat = seq(0, nz, by = 10), zat = seq(0, ny, by = 20),
     color = "#888888", emission = "#444444", draw_labels = TRUE
   )
   
-  # ⛰️ TOPOGRAPHIE-GRID
+  # Explicit parameter mapping layout ensures the DEM mesh lies flat on the canvas
+  # RGL-X = Width, RGL-Y = Matrix Height (Y-Argument), RGL-Z = Depth (Z-Argument)
   surface3d(
     x = 1:nx, z = 1:ny, y = dem_surface,
     color = "#444444", alpha = 0.5, front = "lines", back = "lines"
   )
 
-  # ⏱️ ZEITSTEMPEL AN DER RÜCKWAND
+  # Display the live iteration counter on the physiscal backwall (Z = 1)
   text3d(
     x = nx / 2, y = nz + 4, z = 1,
     texts = paste("Iteration:", block),
     color = "white", cex = 2.5, adj = c(0.5, 0), font = 2
   )
 
-  # 💨 SCHADSTOFFWOLKE: Filtere signifikante Konzentrationen
+  # Pollutant Cloud: Filter out sub-threshold concentrations for crisp visualization
   visible_idx <- which(current_state > 0.1 & dem_mask_flat > 0.0)
   
   if (length(visible_idx) > 0) {
     voxel_coords <- coords[visible_idx, ]
     voxel_values <- current_state[visible_idx]
     
+    # Log-transform concentrations to resolve high spatial dynamic ranges
     log_values <- log(voxel_values + 1.0)
     max_log <- max(log_values)
     if(max_log <= 0) max_log <- 1.0
@@ -472,37 +528,42 @@ for (block in seq(1, total_steps, by = n0)) {
     color_palette <- heat.colors(100)
     voxel_colors  <- color_palette[color_indices]
     
-    # Deckkraft anpassen für optimalen Kern-Durchschein-Effekt
+    # High base opacity accentuates dense plume cores while keeping edges translucent
     dynamic_alpha = 0.40 + 0.55 * (log_values / max_log)
     
-    # Symmetrisches Voxel-Mapping
+    # Map points symmetrically onto the flat spatial canvas system
     points3d(
       voxel_coords$x, voxel_coords$z, voxel_coords$y, 
       color = voxel_colors, size = 8, alpha = dynamic_alpha, lit = TRUE
     )
     
+    # Emphasize source origin point (Emission Stack)
     points3d(s_x, s_z, s_y, color = "cyan", size = 10, lit = FALSE)
   }
   
   par3d(skipRedraw = FALSE)
   
-  # Speicherbereinigung innerhalb des Loops
+  # Host memory cleanup allocation
   rm(visible_idx)
   gc(verbose = FALSE)
 }
 
-# 🛠️ REPARATUR 1: Friere die Szene explizit in einer globalen R-Variable ein!
+# Freeze and serialize the active geometric scene structure into global memory
 final_scene <<- rgl::scene3d()
 ```
 
-### 5.2 Interaktiver WebGL-Export für den HTML-Bericht
+For non-interactive views the next section shows a single frame from the end of this simulation in an interactive JavaScript viewer embedded below. 
+
+### 5.2 Interactive WebGL-Export for the HTML Report
+
+The compiled 3D geometry can be embedded directly into this vignette as a standalone WebGL canvas object. The output supports interactive panning, zooming, and full orbital rotation inside standard modern web browsers.
 
 ```{r rgl_html_widget, echo=FALSE, eval=TRUE}
-# 🛠️ REPARATUR: Nur feste Pixelgrößen erlaubt (Zahlen ohne Anführungszeichen)
+# Render the serialized scene structure using absolute pixel dimension scales
 library(rgl)
 if (exists("final_scene")) {
   rglwidget(final_scene, width = 900, height = 650)
 } else {
-  cat("⚠️ Keine aufgezeichnete 3D-Szene im globalen Speicher gefunden.")
+  cat("⚠️ Active scene graph allocation missing in global R memory context.")
 }
 ```

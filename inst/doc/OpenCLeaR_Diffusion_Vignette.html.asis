@@ -1,0 +1,3 @@
+%\VignetteIndexEntry{OpenCLeaR: 3D Atmospheric Advection-Diffusion Simulation via GPGPU Accelerators"}
+%\VignetteEngine{knitr::rmarkdown}
+%\VignetteEncoding{UTF-8}

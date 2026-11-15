@@ -65,6 +65,8 @@ vignettes: $(VIGNETTE_HTMLS)
 vignette-intro: inst/doc/OpenCLeaR_Introduction_Vignette.html
 vignette-mcmc: inst/doc/OpenCLeaR_MCMC_Vignette.html
 vignette-geostat: inst/doc/OpenCLeaR_Geostatistics_Vignette.html
+vignette-diffusion: inst/doc/OpenCLeaR_Diffusion_Vignette.html
+vignette-white: inst/doc/OpenCLeaR_Whitepaper_Vignette.html
 
 # Pattern-Rule: baut genau EINE Vignette aus vignettes/<Name>.Rmd
 inst/doc/%.html: vignettes/%.Rmd
