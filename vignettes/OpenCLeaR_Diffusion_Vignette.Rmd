@@ -1,0 +1,507 @@
+---
+title: "OpenCLeaR_Diffusion_Vignette"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(OpenCLeaR)
+library(ggplot2)
+```
+
+## 1. Physical Foundations of 3D Voxel Diffusion
+
+This simulation framework models the three-dimensional dispersion of airborne pollutants within a turbulent atmospheric boundary layer. The localized transport dynamics are governed by the classic advection-diffusion equation, combining mass conservation with stochastic wind-vector displacements.
+
+## 2. Mathematical Discretization & Numerical Stability
+
+The mathematical formulation utilizes a localized finite-difference stencil map to resolve turbulent mixing profiles over complex topographical digital elevation models (DEM).
+
+### 2.1. Finite Difference Laplacian Stencil
+
+To evaluate the molecular and turbulent expansion arrays natively on the GPGPU streaming multiprocessors, we map a discrete second-order 6-point stencil grid directly over the dense VRAM buffers.
+
+### 2.2. Upwind Advection Vector Schemes
+
+To guarantee strict numerical stability and prevent artificial cell oscillations under high wind-velocity profiles, the atmospheric transport planes utilize a first-order upstream upwind advection configuration.
+
+## 3. Implementation
+
+### 3.1 OpenCL kernel
+
+```{r}
+diffusion_kernel <- '
+// -*- c -*-
+
+__kernel void diffusion_advection_3d(
+    __global const real* c_input,     
+    __global real* c_output,          
+    __global const real* dem_mask,    
+    const int nx,                     
+    const int ny,                     
+    const int nz,                     
+    const real dt,                    
+    const real dx,                    
+    const real diff_coeff,            
+    const real wind_x,                
+    const real wind_y,                
+    const real wind_z,
+    const int source_x,
+    const int source_y,
+    const int source_z,
+    const int base_seed,
+    const int t)                
+{
+    // Native Extraktion über das 2D-Ausführungsgitter deines Frameworks
+    int i = get_global_id(0); // Direkter X-Index
+    int global_m = get_global_id(1); // Kombinierter Y- und Z-Index
+
+    if (i >= nx || global_m >= (ny * nz)) return;
+
+    // Rekonstruktion von Y und Z aus der zweiten Gitterdimension
+    int k = global_m / ny; // Höhen-Index Z
+    int j = global_m % ny; // Nord-Süd-Index Y
+
+    // Lineare 1D-Indexierung für den flachen VRAM-Puffer
+    int current_idx = k * (nx * ny) + j * nx + i;
+    int n_plane = nx * ny;
+
+    // Wenn der Voxel im Boden oder in einem Hindernis liegt, passiert nichts
+    if (dem_mask[current_idx] <= 0.0f) {
+        c_output[current_idx] = 0.0f;
+        return;
+    }
+
+    real c_center = c_input[current_idx];
+
+    // 1. Stencil-Nachbarschaftsabfrage mit Schutz vor Array-Overruns
+    real c_west  = (i > 0)      ? c_input[current_idx - 1]       : c_center;
+    real c_east  = (i < nx - 1) ? c_input[current_idx + 1]       : c_center;
+    real c_south = (j > 0)      ? c_input[current_idx - nx]      : c_center;
+    real c_north = (j < ny - 1) ? c_input[current_idx + nx]      : c_center;
+    real c_down  = (k > 0)      ? c_input[current_idx - n_plane] : c_center;
+    real c_up    = (k < nz - 1) ? c_input[current_idx + n_plane] : c_center;
+
+    // Topographischer Maskenabgleich (Hügel-Kollision)
+    if (i > 0      && dem_mask[current_idx - 1]       <= 0.0f) c_west  = c_center;
+    if (i < nx - 1 && dem_mask[current_idx + 1]       <= 0.0f) c_east  = c_center;
+    if (j > 0      && dem_mask[current_idx - nx]      <= 0.0f) c_south = c_center;
+    if (j < ny - 1 && dem_mask[current_idx + nx]      <= 0.0f) c_north = c_center;
+    if (k > 0      && dem_mask[current_idx - n_plane] <= 0.0f) c_down  = c_center;
+    if (k < nz - 1 && dem_mask[current_idx + n_plane] <= 0.0f) c_up    = c_center;
+
+    // 2. Mathematische Kernrechnung (Laplace + Upwind-Advektion)
+    real laplacian = (c_east + c_west + c_north + c_south + c_up + c_down - 6.0f * c_center) / (dx * dx);
+
+    real adv_x = (wind_x >= 0.0f) ? (wind_x * (c_center - c_west) / dx)  : (wind_x * (c_east - c_center) / dx);
+    real adv_y = (wind_y >= 0.0f) ? (wind_y * (c_center - c_south) / dx) : (wind_y * (c_north - c_center) / dx);
+    real adv_z = (wind_z >= 0.0f) ? (wind_z * (c_center - c_down) / dx)  : (wind_z * (c_up - c_center) / dx);
+
+    real c_next = c_center + dt * (diff_coeff * laplacian - (adv_x + adv_y + adv_z));
+    if (c_next < 0.0f) c_next = 0.0f;
+
+    // 3. Kontinuierliche Emissionsquelle mit libkernel-RNG auf der GPU injezieren
+    if (i == source_x && j == source_y && k == source_z) {
+        // Initialisiere Mersenne Twister Zustand exklusiv für diesen Quell-Thread
+        INIT_MT(base_seed + t);
+        
+        // Nutze runif(min, max) aus libkernel.cl für kontinuierlichen Nachschub
+        real noise = runif(-50.0f, 50.0f);
+        c_next += (500.0f + noise);
+    }
+
+    c_output[current_idx] = c_next;
+}
+
+'
+```
+
+  ### 3.2 C++ Interface:
+
+```{r cpp interface}
+diffusion_interface <- '
+// Extraktion der R-Eingabeparameter und Dimensionen
+NumericVector r_c_init(r_c_start);
+NumericVector r_dem(r_dem_mask);  
+
+int nx = as<int>(r_nx);
+int ny = as<int>(r_ny);
+int nz = as<int>(r_nz);
+int n_total = nx * ny * nz;
+int steps = as<int>(r_iterations);
+
+real dt         = as<real>(r_dt);
+real dx         = as<real>(r_dx);
+real diff_coeff = as<real>(r_diff_coeff);
+
+// Start-Windgeschwindigkeiten aus R als Basis-Stärke
+real base_wind_x = as<real>(r_wind_x);
+real base_wind_y = as<real>(r_wind_y);
+real wind_z      = as<real>(r_wind_z); // Vertikalwind bleibt konstant
+
+// Berechne die absolute Windstärke in der Horizontalen
+real wind_speed = sqrt(base_wind_x * base_wind_x + base_wind_y * base_wind_y);
+
+// Schornstein-Mündung im Zentrum
+int source_x = nx / 2;
+int source_y = ny / 2;
+int source_z = 10;
+
+Environment e = Environment::global_env();
+std::vector<int> r_seed = e[".Random.seed"];
+int base_seed = r_seed[1];
+
+// 1. Allokation von zwei gespiegelten VRAM-Puffern (Ping-Pong)
+Memory<real> gpu_c_puffer_A(*device, n_total);
+Memory<real> gpu_c_puffer_B(*device, n_total);
+Memory<real> gpu_dem_mask(*device, n_total);
+
+for (int i = 0; i < n_total; ++i) {
+    gpu_c_puffer_A[i] = (real)r_c_init[i];
+    gpu_c_puffer_B[i] = (real)0.0;
+    gpu_dem_mask[i]   = (real)r_dem[i];
+}
+
+gpu_c_puffer_A.write_to_device();
+gpu_c_puffer_B.write_to_device();
+gpu_dem_mask.write_to_device();
+
+ulong grid_N = (ulong)nx;
+ulong grid_M = (ulong)(ny * nz);
+  
+for (int t = 0; t < steps; ++t) {
+    int current_t = t;
+    
+    // 🌀 DYNAMISCHE WIND-DREHUNG:
+    // Wir lassen den Wind pro Zeitschritt um einen winzigen Winkel (z.B. 0.002 Radiant) weiterwandern.
+    // Das entspricht einer langsamen, kontinuierlichen Richtungsänderung.
+    real current_angle = (real)t * 0.002f; 
+    
+    // Berechne die neuen, rotierten Windkomponenten
+    real dynamic_wind_x = wind_speed * cos(current_angle);
+    real dynamic_wind_y = wind_speed * sin(current_angle);
+    
+    if (t % 2 == 0) {
+        Kernel k(*device, grid_N, grid_M, WORKGROUP_SIZE, "diffusion_advection_3d",
+                 gpu_c_puffer_A, gpu_c_puffer_B, gpu_dem_mask,
+                 nx, ny, nz, dt, dx, diff_coeff, dynamic_wind_x, dynamic_wind_y, wind_z,
+                 source_x, source_y, source_z, base_seed, current_t);
+        k.run();
+    } else {
+        Kernel k(*device, grid_N, grid_M, WORKGROUP_SIZE, "diffusion_advection_3d",
+                 gpu_c_puffer_B, gpu_c_puffer_A, gpu_dem_mask,
+                 nx, ny, nz, dt, dx, diff_coeff, dynamic_wind_x, dynamic_wind_y, wind_z,
+                 source_x, source_y, source_z, base_seed, current_t);
+        k.run();
+    }
+}
+
+NumericVector r_c_final(n_total);
+if (steps % 2 == 0) {
+    gpu_c_puffer_A.read_from_device();
+    for (int i = 0; i < n_total; ++i) r_c_final[i] = gpu_c_puffer_A[i];
+} else {
+    gpu_c_puffer_B.read_from_device();
+    for (int i = 0; i < n_total; ++i) r_c_final[i] = gpu_c_puffer_B[i];
+}
+
+Function f("runif"); f(1);
+return r_c_final;
+
+'
+```
+
+### 3.3 Create oclFunction
+
+Kernel und Interface speichern:
+```{r save files}
+writeLines(diffusion_kernel, "./diffusion.cl")
+writeLines(diffusion_interface, "./diffusion.cpp")
+```
+
+Aufruf als oclFunction im IIEF Wrapper bauen:
+
+```{r oclFunction}
+if (getRversion() >= "2.15.1") {
+  utils::globalVariables(".diffusion_internal")
+}
+
+diffusion3D <- (function() {
+  .diffusion_internal <- NULL
+  
+  # 🛡️ REPARATUR: Die äußere R-Funktion MUSS das ... Argument besitzen, um variable Argumente zu fangen!
+  function(r_c_start, r_dem_mask, r_nx, r_ny, r_nz, r_iterations, r_dt, r_dx, r_diff_coeff, r_wind_x, r_wind_y, r_wind_z, ...) { 
+    
+    if (is.null(.diffusion_internal)) {
+      .diffusion_internal <<- OpenCLeaR::oclFunction(
+        signature = methods::signature(
+          r_c_start    = "numeric", r_dem_mask   = "numeric",
+          r_nx         = "integer", r_ny         = "integer", r_nz = "integer",
+          r_iterations = "integer", r_dt         = "numeric", r_dx = "numeric",
+          r_diff_coeff = "numeric", r_wind_x     = "numeric", r_wind_y = "numeric", r_wind_z = "numeric",
+          source_x     = "integer", source_y     = "integer", source_z = "integer",
+          base_seed    = "integer", t            = "integer"
+        ),
+        kernel_file    = "./diffusion.cl",
+        interface_file = "./diffusion.cpp"
+      )
+    }
+    # ⚡ REPARATUR: Das ... Tunnel-Makro reicht source_x, source_y, source_z, base_seed und t bitscharf an das Backend weiter!
+    return(.diffusion_internal(r_c_start, r_dem_mask, r_nx, r_ny, r_nz, r_iterations, r_dt, r_dx, r_diff_coeff, r_wind_x, r_wind_y, r_wind_z, ...))
+  }
+})()
+```
+
+## 4. Simulation
+
+## 4.1 Simulation Setup und Datenvorbereitung:
+
+```{r init OpenCL}
+ActivateDevice()
+GetActiveDeviceInfo()
+```
+
+```{r simulation_setup}
+# 1. Dimensionen festlegen
+nx <- 120L   # X-Achse (Ost-West)
+ny <- 120L   # Y-Achse (Nord-Süd)
+nz <- 40L   # Z-Achse (Höhe)
+n_total <- nx * ny * nz
+
+dx <- 5.0   # Voxelgröße in Metern (10m x 10m x 10m)
+dt <- 0.1    # Zeitschrittweite in Sekunden
+
+# 2. Topographie erstellen (Digitales Geländemodell als Maske)
+# Wir erzeugen einen Gauß'schen Hügel im Zentrum des Gitters
+dem_mask <- array(1.0, dim = c(nx, ny, nz))
+center_x <- nx / 2
+center_y <- ny / 2
+
+for (x in 1:nx) {
+  for (y in 1:ny) {
+    # Berechne die Hügelhöhe an dieser Position
+    dist_sq <- (x - center_x)^2 + (y - center_y)^2
+    hill_height <- 8 * exp(-dist_sq / 150) # Maximal 8 Voxel hoch
+    
+    if (hill_height > 0) {
+      max_solid_z <- min(nz, floor(hill_height))
+      if (max_solid_z > 0) {
+        # Markiere Voxel im Hügel als massiven Boden (0.0)
+        dem_mask[x, y, 1:max_solid_z] <- 0.0
+      }
+    }
+  }
+}
+
+# 3. Startkonzentration initialisieren (Schornstein-Emissionsquelle)
+# Wir setzen eine permanente Schadstoffquelle knapp über der Hügelspitze
+c_start <- array(0.0, dim = c(nx, ny, nz))
+source_x <- as.integer(center_x)
+source_y <- as.integer(center_y)
+source_z <- 10L # Schornstein-Mündung im 10. Voxel in der Höhe
+
+c_start[source_x, source_y, source_z] <- 500.0
+
+# 4. Arrays für das Rcpp-Interface flachklopfen (1D-Vektoren)
+# Wichtig: OpenCL-C-Memory-Layout muss mit der Indexierung im Kernel übereinstimmen
+c_start_flat <- as.numeric(c_start)
+dem_mask_flat <- as.numeric(dem_mask)
+```
+
+### 4.2 Simulation auf der GPU ausführen:
+
+```{r run_simulation}
+# Meteorologische Randbedingungen festlegen
+iterations <- 2000L
+diff_coeff <- 1.5      # Molekulare / Turbulente Diffusion
+wind_x     <- 4.0      # Mäßiger Westwind
+wind_y     <- 0.5      # Minimaler Nord/Süd-Wind
+wind_z     <- 0.2      # Leichter thermischer Aufwind
+
+# Schornstein-Mündung und Seed für den statischen Einmaldurchlauf festlegen
+s_x  <- as.integer(nx / 2)
+s_y  <- as.integer(ny / 2)
+s_z  <- 10L
+seed_init <- 12345L
+t_init    <- 0L
+
+cat("🎬 Starte 3D-Schadstoffausbreitung über", iterations, "Zeitschritte auf der GPU...\n")
+t_start <- Sys.time()
+
+# JIT-Kernel mit ALLEN signaturgerechten Parametern aufrufen
+c_final_flat <- diffusion3D(
+  r_c_start    = c_start_flat, 
+  r_dem_mask   = dem_mask_flat,
+  r_nx         = nx, 
+  r_ny         = ny, 
+  r_nz         = nz,
+  r_iterations = iterations, 
+  r_dt         = dt, 
+  r_dx         = dx,
+  r_diff_coeff = diff_coeff, 
+  r_wind_x     = wind_x, 
+  r_wind_y     = wind_y, 
+  r_wind_z     = wind_z,
+  source_x     = s_x,          
+  source_y     = s_y,          
+  source_z     = s_z,          
+  base_seed    = seed_init,    
+  t            = t_init        
+)
+
+t_end <- Sys.time()
+cat("✅ Simulation beendet! Reine Rechenzeit der GPU:", round(as.numeric(t_end - t_start), 4), "Sekunden.\n")
+
+# Ergebnis zurück in die 3D-Array-Struktur gießen
+c_final <- array(c_final_flat, dim = c(nx, ny, nz))
+```
+
+### 4.3 Ergebnis-Visualisierung (Horizontalschnitt):
+
+```{r visualization}
+# Wir extrahieren einen horizontalen Schnitt auf Höhe der Schornsteinmündung (z = 10)
+z_slice <- 10
+slice_data <- c_final[, , z_slice]
+
+# Plot der Schadstofffahne im Windfeld
+image(
+  x = 1:nx, y = 1:ny, z = slice_data,
+  col = terrain.colors(100),
+  main = paste("Schadstoffausbreitung im Westwind (Höhenschicht", z_slice, ")"),
+  xlab = "X-Achse (West -> Ost)",
+  ylab = "Y-Achse (Süd -> Nord)"
+)
+contour(x = 1:nx, y = 1:ny, z = slice_data, add = TRUE, col = "black")
+```
+
+## 5. Interaktive 3D-Simulation & GIS-Visualisierung (rgl Loop)
+
+Um eine Überlastung des R-Arbeitsspeichers durch die massiven 3D-Voxelmatrizen (120x120x40 = 576.000 Knoten) zu verhindern, brechen wir die 2000 Iterationen in handliche Blöcke (n0 = 50 Schritte) auf. Nach jedem Block streamen wir den Zustand fliegend zurück, säubern die rgl-Szene und triggern manuell die Speicherbereinigung.
+
+
+### 5.1. Das interaktive Speicher-Streaming Skript
+
+```{r rgl_interactive_loop, eval=FALSE}
+library(rgl)
+close3d()
+
+# 1. 🖥️ FENSTER-SETUP: Großes Format (1000x800 Pixel) öffnen
+open3d(windowRect = c(100, 100, 1100, 900))
+bg3d("black") 
+
+# 2. 🦅 BLICKWINKEL: Von vorne schräg oben direkt auf das flache Modell
+view3d(theta = 0, phi = 35, zoom = 0.82, fov = 30)
+
+# Koordinatennetz für die Voxel (Synchron zur GPU-Struktur)
+coords <- expand.grid(x = 1:nx, y = 1:ny, z = 1:nz)
+
+total_steps <- 2000L
+n0 <- 50L  
+current_state <- c_start_flat
+
+s_x  <- as.integer(nx / 2)
+s_y  <- as.integer(ny / 2)
+s_z  <- 10L
+seed_init <- 12345L
+
+# ⛰️ Höhenmatrix sauber für das Gitter extrahieren
+dem_array <- array(dem_mask_flat, dim = c(nx, ny, nz))
+dem_surface <- apply(dem_array, c(1, 2), function(v) {
+  solid_layers <- which(v == 0.0) # Suche festen Boden
+  if (length(solid_layers) > 0) {
+    return(max(solid_layers))
+  } else {
+    return(0)
+  }
+})
+
+# Starte den segmentierten GPU-CPU-Wechselrahmen
+for (block in seq(1, total_steps, by = n0)) {
+  
+  # ⚡ RECHENPHASE: Führe n0 Schritte autark auf der GPU aus
+  current_state <- diffusion3D(
+    r_c_start    = current_state, 
+    r_dem_mask   = dem_mask_flat,
+    r_nx         = nx, r_ny = ny, r_nz = nz,
+    r_iterations = n0, 
+    r_dt = dt, r_dx = dx, r_diff_coeff = diff_coeff, 
+    r_wind_x = wind_x, r_wind_y = wind_y, r_wind_z = wind_z,
+    source_x     = s_x,        
+    source_y     = s_y,        
+    source_z     = s_z,        
+    base_seed    = seed_init,  
+    t            = as.integer(block) 
+  )
+  
+ # 🎨 VISUALISIERUNGSPHASE (FLACKERFREI VIA PAR3D)
+  par3d(skipRedraw = TRUE)
+  
+  clear3d() 
+  
+  # 📦 ORIENTIERUNGS-BOX
+  bbox3d(
+    xat = seq(0, nx, by = 20), yat = seq(0, nz, by = 10), zat = seq(0, ny, by = 20),
+    color = "#888888", emission = "#444444", draw_labels = TRUE
+  )
+  
+  # ⛰️ TOPOGRAPHIE-GRID (Dank deiner Reparatur perfekt flach!)
+  surface3d(
+    x = 1:nx, z = 1:ny, y = dem_surface,
+    color = "#444444", alpha = 0.5, front = "lines", back = "lines"
+  )
+
+  # ⏱️ 🎯 ZEITSTEMPEL AN DER RÜCKWAND:
+  # Platziert den Text bei X=Mitte, Y=knapp über der Box-Obergrenze, Z=1 (Rückwand)
+  text3d(
+    x = nx / 2, y = nz + 4, z = 1,
+    texts = paste("Iteration:", block),
+    color = "white", cex = 2.5, adj = c(0.5, 0), font = 2
+  )
+
+  # 💨 SCHADSTOFFWOLKE: Filtere signifikante Konzentrationen
+  visible_idx <- which(current_state > 0.1 & dem_mask_flat > 0.0)
+  
+  if (length(visible_idx) > 0) {
+    voxel_coords <- coords[visible_idx, ]
+    voxel_values <- current_state[visible_idx]
+    
+    # Log-Transformation für hohe visuelle Dynamik im Strömungsfeld
+    log_values <- log(voxel_values + 1.0)
+    max_log <- max(log_values)
+    if(max_log <= 0) max_log <- 1.0
+    
+    color_indices <- cut(log_values, breaks = 100)
+    
+    # Farbverlauf: Hellgelb an der Quelle -> Dunkelrot am Rand
+    color_palette <- heat.colors(100)
+    voxel_colors  <- color_palette[color_indices]
+    
+    # Dynamische Opazität
+    dynamic_alpha = 0.15 + 0.55 * (log_values / max_log)
+    
+    # Symmetrisches Voxel-Mapping
+    points3d(
+      voxel_coords$x, voxel_coords$z, voxel_coords$y, 
+      color = voxel_colors, size = 6, alpha = dynamic_alpha, lit = FALSE
+    )
+    
+    # Quellmündung (Schornstein) am transformierten Fixpunkt hervorheben
+    points3d(s_x, s_z, s_y, color = "cyan", size = 10, lit = FALSE)
+  }
+  
+  par3d(skipRedraw = FALSE)
+  
+  # Speicherbereinigung
+  rm(visible_idx)
+  gc(verbose = FALSE)
+}
+```
+
+
+
+
+
+
+
+
+
