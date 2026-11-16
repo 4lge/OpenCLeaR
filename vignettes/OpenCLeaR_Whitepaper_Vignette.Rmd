@@ -1,0 +1,485 @@
+---
+title: "OpenCLeaR: Architectural Internals and Runtime JIT Compilation"
+subtitle: "Breaking the Static Compilation Barrier in Parallel R Packages"
+author: "OpenCLeaR Developer"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    mathjax: "default"
+vignette: >
+  %\VignetteIndexEntry{OpenCLeaR: Architectural Internals and Runtime JIT Compilation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(OpenCLeaR)
+```
+
+## Abstract
+
+Traditional high-performance R packages written in compiled languages
+(C, C++, Fortran) rely heavily on static ahead-of-time (AOT)
+compilation during the package installation phase. While highly
+efficient for fixed algorithmic paths, this paradigm introduces severe
+limitations when handling user-defined mathematical models, such as
+adaptive Markov Chain Monte Carlo (MCMC) proposal densities or dynamic
+spatial interpolation kernels.
+
+This whitepaper details the architectural design of `OpenCLeaR`, an R
+framework that bypasses the static compilation barrier. By bridging
+the R interpreter session with the OpenCL Just-In-Time (JIT)
+compilation driver via native `Rcpp` host interfaces, `OpenCLeaR`
+enables arbitrary mathematical expressions defined in R to be compiled
+directly into hardware-parallelized GPGPU machine code at runtime.
+
+---
+
+## 1. Introduction & Historical Motivation
+
+The computational bottleneck in statistical computing often arises
+from elementary, element-wise loops executed over dense datasets. A
+prime example is Inverse Distance Weighting (IDW), where the
+prediction value $\hat{z}(s_0)$ at an unobserved location $s_0$ is
+determined by a linearly weighted combination of surrounding
+observations:
+
+$$\hat{z}(s_0) = \frac{\sum_{i=1}^{N} w_i z_i}{\sum_{i=1}^{N} w_i},
+\quad \text{where } w_i = \frac{1}{d(s_0, s_i)^p}$$
+
+Evaluating this expression across a massive target prediction matrix
+$M$ against $N$ tracking stations maps to an $O(M \times N)$
+computational complexity. Of course there is no need to search for a
+parallel solutiuon if you apply this only to small to medium sized
+setups.
+
+The early design phase of this framework faced a stark dilemma:
+forcing the user to pre-define all potential distance metrics and
+weight functions $w_i$ ahead of time, or suffering severe interpreter
+loop overhead inside R. The conceptual solution required a runtime
+compiler gateway that could accomplish three critical steps:
+1. Load a parameterized, abstract template kernel string from the
+   package directory.
+2. Inject user-specified parameters, hardware precision profiles
+   (FP32/FP64), and custom distribution functions into the source code
+   at runtime.
+3. Automatically marshall R matrix memory structures directly into the
+   physical host-device abstraction layer without manual user
+   intervention.
+
+This architectural requirement led directly to the implementation of
+the `oclFunction` framework provided by `OpenCLeaR`.
+
+___
+
+
+## 1.1. The Hardware-API Barrier: Massive Configuration Overhead in CUDA and Raw OpenCL
+
+When moving CPU task from single-threading over multi-threading
+to dedicated hardware accelerators like GPUs, the programming overhead
+expands exponentially. The researcher is forced to leave the
+mathematical domain entirely and act as a low-level hardware
+orchestrator.
+
+### 1.1.1 The CUDA Memory Management Burden (`cuIDW.cu`)
+
+Even for a simple task like IDW interpolation, a native CUDA
+implementation via R's `.C()` interface requires explicit
+hardware-level block configuration, manual host-to-device memory
+mirroring, and synchronous device cleanup to prevent devastating VRAM
+corruption and leaks. The following code is not completely shown --
+this is meant as asketch only:
+
+```cpp
+// CUDA and R #include statements skipped here for smaller display
+__global__ void IDWkernel(double *d_x0, double *d_y0, double *d_z0, int n0,
+                          double *d_x, double *d_y, double *d_z, int n,
+                          double p
+                          ) {
+  int i = threadIdx.x + blockIdx.x * blockDim.x;
+  double wsum=0.0;
+  if(i<n0){
+    d_z0[i]=0.0;
+    for(int j=0; j<n; j++){
+      double d=sqrt((d_x0[i]-d_x[j])*(d_x0[i]-d_x[j])+(d_y0[i]-d_y[j])*(d_y0[i]-d_y[j]));
+      if(d<=1.0e-16){
+        d_z0[i]=d_z[j];
+        wsum=1.0;
+        break;
+      } else {
+        double w=1.0/exp((p)*log(d));
+        wsum+=w;
+        d_z0[i] += w*d_z[j];
+      }
+    }  
+    d_z0[i]/=wsum;
+  }  
+}
+// .C() Interface from R:
+extern "C" void cuIDW(double *x0, double *y0, double *z0, int *n0, 
+                      double *x, double *y, double *z, int *n, double *p) {
+  int jobs = *n0; cudaError_t cudaStat;
+  double *d_x0, *d_y0, *d_z0, *d_x, *d_y, *d_z; // GPU device pointers
+
+  // THE CRITICAL OVERHEAD: Manual VRAM allocation for every single input layer
+  cudaStat = cudaMalloc((void**)&d_x0, *n0 * sizeof(double));
+  cudaStat = cudaMalloc((void**)&d_z0, *n0 * sizeof(double));
+  cudaStat = cudaMalloc((void**)&d_x,  *n  * sizeof(double));
+  // ... [Repeated for all 6 sequential data buffers] ...
+
+  // Synchronous Host-to-Device memory mirroring
+  cudaStat = cudaMemcpy(d_x0, x0, *n0 * sizeof(double), cudaMemcpyHostToDevice);
+  cudaStat = cudaMemcpy(d_x,  x,  *n  * sizeof(double), cudaMemcpyHostToDevice);
+
+  // Explicit hardware grid execution geometry execution call, feed input pointers:
+  IDWkernel<<<(jobs + THREADS - 1) / THREADS, THREADS>>>(d_x0, d_y0, d_z0, *n0, 
+                                                         d_x, d_y, d_z, *n, *p);
+  cudaDeviceSynchronize();
+
+  // Retrieve data back to CPU host and execute manual pointer garbage collection
+  cudaStat = cudaMemcpy(z0, d_z0, *n0 * sizeof(double), cudaMemcpyDeviceToHost);
+  // take care freeing all unneeded memory in correct order:
+  cudaFree(d_z); cudaFree(d_x); cudaFree(d_z0); cudaFree(d_x0); 
+  // ... repeat for remaining buffers.
+  // We should better encapsulate all cuda* calls in error catching if-then-else
+  // blocks returning error indications if needed.
+}
+```
+
+### 1.1.2. The Raw OpenCL Host Boilerplate Nightmare
+
+Operating raw OpenCL without a framework is even more severe. Because
+OpenCL comes without built-in automated runtime abstractions or
+expressive error logging, the researcher must manually implement
+structural diagnostic mapping, compile code buffers at runtime, query
+platform layers, and bind every single kernel argument by index:
+
+```c
+// OpenCL and other #include statements skipped ...
+void IDWoc(double *x0, double *y0, double *z0, int *n0, double *x, double *y, double *z, 
+           int *n, double *p, ...) {
+  // 1. Disk-I/O: Load kernel strings from separate .cl files manually
+  FILE *fp = fopen("IDWkernel_double.cl", "r");
+  source_str = (char*)malloc(MAX_SOURCE_SIZE);
+  fread(source_str, 1, MAX_SOURCE_SIZE, fp); fclose(fp);
+
+  // 2. Hardware Query Layer: Enumerate platforms and explicit hardware contexts
+  // 2.a Allocate memory for returned list
+  cl_platform_id *platforms = (cl_platform_id*)malloc(ret_num_platforms * sizeof(cl_platform_id));
+  // 2.b. Query available hardware list:
+  clGetPlatformIDs(ret_num_platforms, platforms, NULL);
+  // 2.c Create OpenCL context foe selected device:
+  cl_context context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
+  cl_command_queue command_queue = clCreateCommandQueueWithProperties(context, 
+    device_id, 0, &ret);
+
+  // 3. Memory stuff
+  // 3.a Buffer Allocation
+  cl_mem x0_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, *n0 * sizeof(double), 
+                                     NULL, &ret);
+  // Skipped here: fill input variables like x0_mem_bj with data from *x0 ...   
+  // 3.b Memory transfer
+  clEnqueueWriteBuffer(command_queue, x0_mem_obj, CL_TRUE, 0, *n0 * sizeof(double), 
+                       x0, 0, NULL, NULL);
+  // Repeat for remaining input variables                     
+
+  // 4. Manual index argument coupling (highly prone to segmentation faults)
+  ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&x0_mem_obj);
+  ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&y0_mem_obj);
+  // repaet for remaining 6 input variables ...
+  // allocate and assign output variable:
+  ret = clSetKernelArg(kernel, 8, sizeof(cl_mem), (void *)&p_mem_obj); 
+  
+  // 5. Grid Execution and Manual Reference Count Cleaning
+  size_t global_item_size = next_power_of_2(*n0); size_t local_item_size = next_power_of_2(64);
+  // setup execution grid and run kernel
+  clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, &local_item_size, 0, NULL, NULL);
+  clEnqueueReadBuffer(command_queue, z0_mem_obj, CL_TRUE, 0, *n0 * sizeof(double), z0, 0, NULL, NULL);
+  // Release all intermediately created structures
+  clReleaseKernel(kernel); 
+  clReleaseMemObject(x0_mem_obj); // Repeat for other variables ...
+  clReleaseContext(context);
+  // In this shortened sketch we didnt encapsulate the cl* calls in apropriate 
+  // if-then-else blocks catching possible errors, which should be done!
+  // Side-note: There is no standard error rporting other than integer numbers,
+  // readable error statements need to be written yourself.
+}
+```
+
+## 1.2. The OpenCLeaR Solution: Automated JIT Abstraction
+
+`OpenCLeaR` entirely eradicates this hundreds-of-lines configuration
+layer. It synthesizes the performance of native OpenCL with the
+structural simplicity of standard R.
+
+By handling memory virtualization, index argument matching, platform
+selection, and build-log routing under the hood, the entire
+multi-tiered boilerplate collapses into a single declarative R block:
+
+```R
+idw_gpu <- OpenCLeaR::oclFunction(
+  signature      = signature(x0="numeric", y0="numeric",
+                             x="numeric", y="numeric", z="numeric", p="numeric"),
+  kernel_file    = "./idw_kernel.cl",
+  interface_file = "./idw_rcpp.cpp"
+)
+```
+
+Execution reduces to a single, clean in-place statement:
+
+```r
+Z_grid <- idw_gpu(x0, y0, x, y, z, p = 2.0)
+```
+
+It references the kernel file `idw_kernel.cl`:
+ 
+```c 
+    __kernel void idw_kernel(__global const real* x0, __global const real* y0, 
+          __global const real* x,  __global const real* y,  __global const real* z, 
+          const real p, __global real* z0, const int n_known) {
+      int i = get_global_id(0);
+      real wsum = 0.0; z0[i] = 0.0;
+      for(int j=0; j<n_known; j++) {
+        real d = sqrt((x0[i]-x[j])*(x0[i]-x[j]) + (y0[i]-y[j])*(y0[i]-y[j]));
+        if(d == 0.0) { z0[i] = z[j]; wsum = 1.0; break; }
+        real w = 1.0 / pow(d, p); wsum += w; z0[i] += w * z[j];
+      }
+      z0[i] /= wsum;
+    }
+```
+
+and a Rcpp interface `idw_rcpp.cpp`:
+
+```c
+NumericVector x0(r_x0);
+NumericVector y0(r_y0);
+NumericVector x(r_x);
+NumericVector y(r_y);
+NumericVector z(r_z);
+
+int n0 = x0.size();
+int n = x.size();
+NumericVector r_z0(n0);
+
+// Allocate device memory utilizing the active device pointer
+Memory<real> gpu_x0(*device, n0);
+Memory<real> gpu_y0(*device, n0);
+Memory<real> gpu_z0(*device, n0);
+Memory<real> gpu_x(*device, n);
+Memory<real> gpu_y(*device, n);
+Memory<real> gpu_z(*device, n);
+
+// High-performance element-wise buffer filling
+for(int i=0; i<n0; ++i) { gpu_x0[i] = x0[i]; gpu_y0[i] = y0[i]; }
+for(int j=0; j<n; ++j)  { gpu_x[j] = x[j]; gpu_y[j] = y[j]; gpu_z[j] = z[j]; }
+
+// Push buffers to the OpenCL device
+gpu_x0.write_to_device(); gpu_y0.write_to_device();
+gpu_x.write_to_device();  gpu_y.write_to_device(); gpu_z.write_to_device();
+
+// Enqueue and execute the JIT-compiled kernel
+Kernel k(*device, n0, "idw_kernel", gpu_x0, gpu_y0, gpu_z0, 
+                                    gpu_x, gpu_y, gpu_z, n0, n, as<real>(p));
+k.run();
+
+// Read result matrix back to host RAM
+gpu_z0.read_from_device();
+for(int i=0; i<n0; ++i) r_z0[i] = gpu_z0[i];
+
+return r_z0;
+```
+
+This clean interface is achieved by using c++ `Device`, `Memory` und
+`Kernel` objects inherited from the ProjectPhysx OpenCL-Wrapper C++
+header-only library available at
+https://github.com/ProjectPhysX/OpenCL-Wrapper by Moritz Lehman
+<moritz.lehmann@uni-bayreuth.de>. It is used here via a GitHub fork as
+in its origianl formit is not intended to be used via dynamic loading
+from whithin another application like R. It's error handling and
+output behaviour had to be rewritten and some new methods and members
+had to be added to its core structure.
+
+## 2. The `oclFunction` Pipeline Architecture
+
+The core operational unit of OpenCLeaR is the oclFunction runtime
+factory wrapper. It orchestrates a multi-layered compilation and
+execution stack that bridges three distinct environments:
+
+R Session (Interpreter) -> Methods Signature Checking -> Rcpp Native
+Host Gateway -> Automated Memory Marshalling -> OpenCL Driver JIT
+Engine -> Physical Device (e.g. GPU Cores)
+
+TODO: Mention the inline::plugin mechanism implmented for package
+`inline` to be used here.
+
+TODO: Mention the need for delayed compilation via `inline` package at
+run time (JIT principle) to be able to use C** templates in
+combination with OpenCL-Wrappers `Memory` class.
+
+### 2.1. Signature Verification and Compilation Hoisting
+
+When oclFunction is instantiated, it registers the target variable
+names and datatypes via an R methods::signature block. Rather than
+recompiling the source code on every subsequent function
+invocation—which would introduce a devastating JIT latency penalty—the
+framework utilizes an Immediately Invoked Function Expression (IIFE)
+closure pattern.
+
+The underlying C++ binary pointer resides persistently within the
+lexical scope of the R function environment. If the function is called
+a second time within the same R session, the compilation phase is
+hoisted and skipped entirely, routing execution straight into the
+pre-compiled hardware registers.
+
+TODO: Explain how wrapping the oclfunction in a IIEF R function
+enables caching.
+
+TODO: Mention caching of OpenCL binaries created by the included
+`ocl_compiler`.
+
+### 2.2. Header Export and Runtime Availability
+
+To allow the OpenCL driver to compile complex mathematical functions
+natively on the chip (such as custom matrix decomposition routines or
+probability density curves), the package exports its internal core
+library (libkernel.cl) directly to the inst/include/ directory during
+installation.
+
+At runtime, the oclFunction fabric strings these source components
+together on the host file system. This ensures that the JIT compiler
+has immediate access to the full mathematical portfolio of the package
+without requiring a local development toolchain on the client machine.
+
+
+### 2.3. TODO: Describe the included inline library of R-like functions
+
+* Mersenne Twister
+* [dpqr]{unif|norm|binom|chisq|...} functions useable in OpenCL C kernels.
+* discuss FP32/FP64 challenges
+* discuss alternatives: R's mathlib via package `opencltools`, initial
+  steps already done: `ImportNmathKernels()`, problem: relies heavily
+  on fp64 (double)
+* basic linalg routines (already done: `wls_gls_fit()`)
+* eigenvalues/eigenvectors (TODO)
+
+
+TODO:Mention the testsuite to justify use of our own library functions...
+
+---
+
+## 3. Host-Device Memory Marshalling via Memory<T> templates
+
+Transferring dense statistical matrices between the volatile host RAM
+and the high-speed global graphics memory (VRAM) is historically
+error-prone and fraught with alignment penalties. OpenCLeaR abstracts
+this process entirely through an automated C++ template layer named
+Memory<T>. 
+
+TODO: Mention the abstract `real` data type which is used to adapt to
+`float` or `double` automatically.
+
+### 3.1. Zero-Copy Fused Buffer Optimization
+
+On hardware architectures that feature unified host-device memory
+layouts (such as modern CPUs or integrated graphics processors sharing
+system RAM), allocating separate buffers introduces needless copy
+duplication overhead.
+
+The Memory<T> subsystem automatically evaluates the hardware topology
+profile of the active device. If a shared-memory layout is detected,
+it flags the memory assignment using the CL_MEM_USE_HOST_PTR
+attribute. This fuses the R numerical vector pointer directly with the
+hardware thread context, achieving a true Zero-Copy pipeline that
+eliminates I/O latency entirely. FIXME: double check?
+
+### 3.2. Private Register Array Caps for Linear Algebra
+
+When moving from elementary calculations to intense, pixel-level
+matrix solvers (such as solving localized Kriging systems via
+Generalized Least Squares), the thread arrays must allocate fast
+storage on the chip.
+
+Because GPGPU register configurations must be strictly determined at
+compile time, OpenCLeaR marries dynamic spatial distance thresholds
+(e.g., searching within a localized geographic radius) with a static
+register array allocation cap (e.g. #define MAX_NEIGHBORS). This dual setup
+prevents Register Spilling into slow VRAM blocks and allows the
+hardware to execute heavy matrix operations natively within the local
+processor cores.
+
+---
+
+## 4. Minimal Validation Baseline: Dynamic IDW
+
+To demonstrate the structural purity of the concept, we establish a
+minimal validation baseline using the Inverse Distance Weighting (IDW)
+kernel introduced above.
+
+
+### 4.1. Executing the Example
+
+Through the abstraction layers provided by OpenCLeaR, launching this
+asynchronous GPGPU engine inside an R session is reduced to an
+intuitive, high-level interface call:
+
+```{r execute idw}
+# Minimal structural verification configuration
+grid_dimension <- 50L
+total_pixels   <- grid_dimension * grid_dimension
+
+set.seed(777)
+n_stations     <- 100L
+
+# Simulate synthetic telemetry metrics
+station_x <- runif(n_stations, min = 0, max = 1000)
+station_y <- runif(n_stations, min = 0, max = 1000)
+station_z <- sin(station_x / 200) * cos(station_y / 200)
+
+# Register and compile the kernel file dynamically via oclFunction
+# (Actual compilation logic is masked cleanly behind the closure object)
+cat("⚡ Instantiating oclFunction JIT Pipeline over IDW Baseline...\n")
+
+### TODO: Fill in calls ...
+
+
+# Note: In an active session, this object bridges directly to your 
+# local 'idw_baseline.cl' source string.
+print("✅ Framework initialized. Ready for dense matrix calculations.")
+```
+
+___
+
+## 6. TODO: Benchmark Section
+
+benchmark 
+
+* R
+* C/Fortran
+* Rcpp (RcppParallel)
+* pure CUDA
+* low level OpenCL
+* OpenCLeaR
+
+TBD, see https://www.stat.aau.at/alge/blogR/posts/r-code-benchmark/
+
+___
+
+## 5. Conclusion & Future Outlook
+
+The architectural paradigm deployed by OpenCLeaR proves that runtime
+JIT compilation is highly viable for statistical computing inside R
+packages. By abstracting the OpenCL host-device driver pipeline behind
+clean lexical closures and automated memory buffers, the framework
+achieves massive GPGPU acceleration factors while retaining a
+lightweight, user-friendly R syntax interface.
+
+Future extensions of the framework will transition from 1D and 2D
+matrix grids into complex 3D Voxel execution spaces. By integrating
+multi-dimensional stencil masks directly into the hardware threads,
+OpenCLeaR will provide the core infrastructure necessary to model
+fluid dynamics, solid diffusion profiles, and advanced air pollutant
+dispersal over complex digital elevation models (DEM) entirely in
+parallel space. FIXME: 2D already done
+

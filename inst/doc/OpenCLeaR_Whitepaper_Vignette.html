@@ -12,7 +12,7 @@
 
 <meta name="author" content="OpenCLeaR Developer" />
 
-<meta name="date" content="2026-11-15" />
+<meta name="date" content="2026-11-16" />
 
 <title>OpenCLeaR: Architectural Internals and Runtime JIT Compilation</title>
 
@@ -343,7 +343,7 @@ Runtime JIT Compilation</h1>
 <h3 class="subtitle">Breaking the Static Compilation Barrier in Parallel
 R Packages</h3>
 <h4 class="author">OpenCLeaR Developer</h4>
-<h4 class="date">2026-11-15</h4>
+<h4 class="date">2026-11-16</h4>
 
 
 <div id="TOC">
@@ -351,16 +351,29 @@ R Packages</h3>
 <li><a href="#abstract" id="toc-abstract">Abstract</a></li>
 <li><a href="#introduction-historical-motivation" id="toc-introduction-historical-motivation">1. Introduction &amp;
 Historical Motivation</a></li>
-<li><a href="#the-oclfunction-pipeline-architecture" id="toc-the-oclfunction-pipeline-architecture">2. The oclFunction
-Pipeline Architecture</a>
+<li><a href="#the-hardware-api-barrier-massive-configuration-overhead-in-cuda-and-raw-opencl" id="toc-the-hardware-api-barrier-massive-configuration-overhead-in-cuda-and-raw-opencl">1.1.
+The Hardware-API Barrier: Massive Configuration Overhead in CUDA and Raw
+OpenCL</a>
+<ul>
+<li><a href="#the-cuda-memory-management-burden-cuidw.cu" id="toc-the-cuda-memory-management-burden-cuidw.cu">1.1.1 The CUDA
+Memory Management Burden (<code>cuIDW.cu</code>)</a></li>
+<li><a href="#the-raw-opencl-host-boilerplate-nightmare" id="toc-the-raw-opencl-host-boilerplate-nightmare">1.1.2. The Raw OpenCL
+Host Boilerplate Nightmare</a></li>
+</ul></li>
+<li><a href="#the-openclear-solution-automated-jit-abstraction" id="toc-the-openclear-solution-automated-jit-abstraction">1.2. The
+OpenCLeaR Solution: Automated JIT Abstraction</a></li>
+<li><a href="#the-oclfunction-pipeline-architecture" id="toc-the-oclfunction-pipeline-architecture">2. The
+<code>oclFunction</code> Pipeline Architecture</a>
 <ul>
 <li><a href="#signature-verification-and-compilation-hoisting" id="toc-signature-verification-and-compilation-hoisting">2.1. Signature
 Verification and Compilation Hoisting</a></li>
 <li><a href="#header-export-and-runtime-availability" id="toc-header-export-and-runtime-availability">2.2. Header Export and
 Runtime Availability</a></li>
+<li><a href="#todo-describe-the-included-inline-library-of-r-like-functions" id="toc-todo-describe-the-included-inline-library-of-r-like-functions">2.3.
+TODO: Describe the included inline library of R-like functions</a></li>
 </ul></li>
-<li><a href="#host-device-memory-marshalling-via-memory" id="toc-host-device-memory-marshalling-via-memory">3. Host-Device Memory
-Marshalling via Memory<T></a>
+<li><a href="#host-device-memory-marshalling-via-memory-templates" id="toc-host-device-memory-marshalling-via-memory-templates">3.
+Host-Device Memory Marshalling via Memory<T> templates</a>
 <ul>
 <li><a href="#zero-copy-fused-buffer-optimization" id="toc-zero-copy-fused-buffer-optimization">3.1. Zero-Copy Fused Buffer
 Optimization</a></li>
@@ -370,11 +383,11 @@ Register Array Caps for Linear Algebra</a></li>
 <li><a href="#minimal-validation-baseline-dynamic-idw" id="toc-minimal-validation-baseline-dynamic-idw">4. Minimal Validation
 Baseline: Dynamic IDW</a>
 <ul>
-<li><a href="#the-parallel-idw-compute-kernel-idw_baseline.cl" id="toc-the-parallel-idw-compute-kernel-idw_baseline.cl">4.1. The
-Parallel IDW Compute Kernel (idw_baseline.cl)</a></li>
-<li><a href="#executing-the-jit-blueprint-pipeline" id="toc-executing-the-jit-blueprint-pipeline">4.2. Executing the JIT
-Blueprint Pipeline</a></li>
+<li><a href="#executing-the-example" id="toc-executing-the-example">4.1.
+Executing the Example</a></li>
 </ul></li>
+<li><a href="#todo-benchmark-section" id="toc-todo-benchmark-section">6.
+TODO: Benchmark Section</a></li>
 <li><a href="#conclusion-future-outlook" id="toc-conclusion-future-outlook">5. Conclusion &amp; Future
 Outlook</a></li>
 </ul>
@@ -407,11 +420,12 @@ value <span class="math inline">\(\hat{z}(s_0)\)</span> at an unobserved
 location <span class="math inline">\(s_0\)</span> is determined by a
 linearly weighted combination of surrounding observations:</p>
 <p><span class="math display">\[\hat{z}(s_0) = \frac{\sum_{i=1}^{N} w_i
-z_i}{\sum_{i=1}^{N} w_i}, \quad \text{where } w_i = \frac{1}{d(s_0,
-s_i)^p}\]</span></p>
+z_i}{\sum_{i=1}^{N} w_i},
+\quad \text{where } w_i = \frac{1}{d(s_0, s_i)^p}\]</span></p>
 <p>Evaluating this expression across a massive target prediction matrix
-<span class="math inline">\(M\)</span> against <span class="math inline">\(N\)</span> tracking stations maps to an <span class="math inline">\(O(M \times N)\)</span> computational
-complexity.</p>
+<span class="math inline">\(M\)</span> against <span class="math inline">\(N\)</span> tracking stations maps to an <span class="math inline">\(O(M \times N)\)</span> computational complexity.
+Of course there is no need to search for a parallel solutiuon if you
+apply this only to small to medium sized setups.</p>
 <p>The early design phase of this framework faced a stark dilemma:
 forcing the user to pre-define all potential distance metrics and weight
 functions <span class="math inline">\(w_i\)</span> ahead of time, or
@@ -424,17 +438,227 @@ functions into the source code at runtime. 3. Automatically marshall R
 matrix memory structures directly into the physical host-device
 abstraction layer without manual user intervention.</p>
 <p>This architectural requirement led directly to the implementation of
-the <code>oclFunction</code> framework.</p>
+the <code>oclFunction</code> framework provided by
+<code>OpenCLeaR</code>.</p>
 <hr />
 </div>
+<div id="the-hardware-api-barrier-massive-configuration-overhead-in-cuda-and-raw-opencl" class="section level2">
+<h2>1.1. The Hardware-API Barrier: Massive Configuration Overhead in
+CUDA and Raw OpenCL</h2>
+<p>When moving CPU task from single-threading over multi-threading to
+dedicated hardware accelerators like GPUs, the programming overhead
+expands exponentially. The researcher is forced to leave the
+mathematical domain entirely and act as a low-level hardware
+orchestrator.</p>
+<div id="the-cuda-memory-management-burden-cuidw.cu" class="section level3">
+<h3>1.1.1 The CUDA Memory Management Burden (<code>cuIDW.cu</code>)</h3>
+<p>Even for a simple task like IDW interpolation, a native CUDA
+implementation via R’s <code>.C()</code> interface requires explicit
+hardware-level block configuration, manual host-to-device memory
+mirroring, and synchronous device cleanup to prevent devastating VRAM
+corruption and leaks. The following code is not completely shown – this
+is meant as asketch only:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co">// CUDA and R #include statements skipped here for smaller display</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>__global__ <span class="dt">void</span> IDWkernel<span class="op">(</span><span class="dt">double</span> <span class="op">*</span>d_x0<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>d_y0<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>d_z0<span class="op">,</span> <span class="dt">int</span> n0<span class="op">,</span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>                          <span class="dt">double</span> <span class="op">*</span>d_x<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>d_y<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>d_z<span class="op">,</span> <span class="dt">int</span> n<span class="op">,</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>                          <span class="dt">double</span> p</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>                          <span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  <span class="dt">int</span> i <span class="op">=</span> threadIdx<span class="op">.</span>x <span class="op">+</span> blockIdx<span class="op">.</span>x <span class="op">*</span> blockDim<span class="op">.</span>x<span class="op">;</span></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>  <span class="dt">double</span> wsum<span class="op">=</span><span class="fl">0.0</span><span class="op">;</span></span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  <span class="cf">if</span><span class="op">(</span>i<span class="op">&lt;</span>n0<span class="op">){</span></span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>    d_z0<span class="op">[</span>i<span class="op">]=</span><span class="fl">0.0</span><span class="op">;</span></span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>    <span class="cf">for</span><span class="op">(</span><span class="dt">int</span> j<span class="op">=</span><span class="dv">0</span><span class="op">;</span> j<span class="op">&lt;</span>n<span class="op">;</span> j<span class="op">++){</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>      <span class="dt">double</span> d<span class="op">=</span>sqrt<span class="op">((</span>d_x0<span class="op">[</span>i<span class="op">]-</span>d_x<span class="op">[</span>j<span class="op">])*(</span>d_x0<span class="op">[</span>i<span class="op">]-</span>d_x<span class="op">[</span>j<span class="op">])+(</span>d_y0<span class="op">[</span>i<span class="op">]-</span>d_y<span class="op">[</span>j<span class="op">])*(</span>d_y0<span class="op">[</span>i<span class="op">]-</span>d_y<span class="op">[</span>j<span class="op">]));</span></span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>      <span class="cf">if</span><span class="op">(</span>d<span class="op">&lt;=</span><span class="fl">1.0e-16</span><span class="op">){</span></span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>        d_z0<span class="op">[</span>i<span class="op">]=</span>d_z<span class="op">[</span>j<span class="op">];</span></span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>        wsum<span class="op">=</span><span class="fl">1.0</span><span class="op">;</span></span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a>        <span class="cf">break</span><span class="op">;</span></span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a>      <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a>        <span class="dt">double</span> w<span class="op">=</span><span class="fl">1.0</span><span class="op">/</span>exp<span class="op">((</span>p<span class="op">)*</span>log<span class="op">(</span>d<span class="op">));</span></span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a>        wsum<span class="op">+=</span>w<span class="op">;</span></span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a>        d_z0<span class="op">[</span>i<span class="op">]</span> <span class="op">+=</span> w<span class="op">*</span>d_z<span class="op">[</span>j<span class="op">];</span></span>
+<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a>      <span class="op">}</span></span>
+<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a>    <span class="op">}</span>  </span>
+<span id="cb1-22"><a href="#cb1-22" tabindex="-1"></a>    d_z0<span class="op">[</span>i<span class="op">]/=</span>wsum<span class="op">;</span></span>
+<span id="cb1-23"><a href="#cb1-23" tabindex="-1"></a>  <span class="op">}</span>  </span>
+<span id="cb1-24"><a href="#cb1-24" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb1-25"><a href="#cb1-25" tabindex="-1"></a><span class="co">// .C() Interface from R:</span></span>
+<span id="cb1-26"><a href="#cb1-26" tabindex="-1"></a><span class="at">extern</span> <span class="st">&quot;C&quot;</span> <span class="dt">void</span> cuIDW<span class="op">(</span><span class="dt">double</span> <span class="op">*</span>x0<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>y0<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>z0<span class="op">,</span> <span class="dt">int</span> <span class="op">*</span>n0<span class="op">,</span> </span>
+<span id="cb1-27"><a href="#cb1-27" tabindex="-1"></a>                      <span class="dt">double</span> <span class="op">*</span>x<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>y<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>z<span class="op">,</span> <span class="dt">int</span> <span class="op">*</span>n<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>p<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-28"><a href="#cb1-28" tabindex="-1"></a>  <span class="dt">int</span> jobs <span class="op">=</span> <span class="op">*</span>n0<span class="op">;</span> <span class="dt">cudaError_t</span> cudaStat<span class="op">;</span></span>
+<span id="cb1-29"><a href="#cb1-29" tabindex="-1"></a>  <span class="dt">double</span> <span class="op">*</span>d_x0<span class="op">,</span> <span class="op">*</span>d_y0<span class="op">,</span> <span class="op">*</span>d_z0<span class="op">,</span> <span class="op">*</span>d_x<span class="op">,</span> <span class="op">*</span>d_y<span class="op">,</span> <span class="op">*</span>d_z<span class="op">;</span> <span class="co">// GPU device pointers</span></span>
+<span id="cb1-30"><a href="#cb1-30" tabindex="-1"></a></span>
+<span id="cb1-31"><a href="#cb1-31" tabindex="-1"></a>  <span class="co">// THE CRITICAL OVERHEAD: Manual VRAM allocation for every single input layer</span></span>
+<span id="cb1-32"><a href="#cb1-32" tabindex="-1"></a>  cudaStat <span class="op">=</span> cudaMalloc<span class="op">((</span><span class="dt">void</span><span class="op">**)&amp;</span>d_x0<span class="op">,</span> <span class="op">*</span>n0 <span class="op">*</span> <span class="kw">sizeof</span><span class="op">(</span><span class="dt">double</span><span class="op">));</span></span>
+<span id="cb1-33"><a href="#cb1-33" tabindex="-1"></a>  cudaStat <span class="op">=</span> cudaMalloc<span class="op">((</span><span class="dt">void</span><span class="op">**)&amp;</span>d_z0<span class="op">,</span> <span class="op">*</span>n0 <span class="op">*</span> <span class="kw">sizeof</span><span class="op">(</span><span class="dt">double</span><span class="op">));</span></span>
+<span id="cb1-34"><a href="#cb1-34" tabindex="-1"></a>  cudaStat <span class="op">=</span> cudaMalloc<span class="op">((</span><span class="dt">void</span><span class="op">**)&amp;</span>d_x<span class="op">,</span>  <span class="op">*</span>n  <span class="op">*</span> <span class="kw">sizeof</span><span class="op">(</span><span class="dt">double</span><span class="op">));</span></span>
+<span id="cb1-35"><a href="#cb1-35" tabindex="-1"></a>  <span class="co">// ... [Repeated for all 6 sequential data buffers] ...</span></span>
+<span id="cb1-36"><a href="#cb1-36" tabindex="-1"></a></span>
+<span id="cb1-37"><a href="#cb1-37" tabindex="-1"></a>  <span class="co">// Synchronous Host-to-Device memory mirroring</span></span>
+<span id="cb1-38"><a href="#cb1-38" tabindex="-1"></a>  cudaStat <span class="op">=</span> cudaMemcpy<span class="op">(</span>d_x0<span class="op">,</span> x0<span class="op">,</span> <span class="op">*</span>n0 <span class="op">*</span> <span class="kw">sizeof</span><span class="op">(</span><span class="dt">double</span><span class="op">),</span> cudaMemcpyHostToDevice<span class="op">);</span></span>
+<span id="cb1-39"><a href="#cb1-39" tabindex="-1"></a>  cudaStat <span class="op">=</span> cudaMemcpy<span class="op">(</span>d_x<span class="op">,</span>  x<span class="op">,</span>  <span class="op">*</span>n  <span class="op">*</span> <span class="kw">sizeof</span><span class="op">(</span><span class="dt">double</span><span class="op">),</span> cudaMemcpyHostToDevice<span class="op">);</span></span>
+<span id="cb1-40"><a href="#cb1-40" tabindex="-1"></a></span>
+<span id="cb1-41"><a href="#cb1-41" tabindex="-1"></a>  <span class="co">// Explicit hardware grid execution geometry execution call, feed input pointers:</span></span>
+<span id="cb1-42"><a href="#cb1-42" tabindex="-1"></a>  IDWkernel<span class="op">&lt;&lt;&lt;(</span>jobs <span class="op">+</span> THREADS <span class="op">-</span> <span class="dv">1</span><span class="op">)</span> <span class="op">/</span> THREADS<span class="op">,</span> THREADS<span class="op">&gt;&gt;&gt;(</span>d_x0<span class="op">,</span> d_y0<span class="op">,</span> d_z0<span class="op">,</span> <span class="op">*</span>n0<span class="op">,</span> </span>
+<span id="cb1-43"><a href="#cb1-43" tabindex="-1"></a>                                                         d_x<span class="op">,</span> d_y<span class="op">,</span> d_z<span class="op">,</span> <span class="op">*</span>n<span class="op">,</span> <span class="op">*</span>p<span class="op">);</span></span>
+<span id="cb1-44"><a href="#cb1-44" tabindex="-1"></a>  cudaDeviceSynchronize<span class="op">();</span></span>
+<span id="cb1-45"><a href="#cb1-45" tabindex="-1"></a></span>
+<span id="cb1-46"><a href="#cb1-46" tabindex="-1"></a>  <span class="co">// Retrieve data back to CPU host and execute manual pointer garbage collection</span></span>
+<span id="cb1-47"><a href="#cb1-47" tabindex="-1"></a>  cudaStat <span class="op">=</span> cudaMemcpy<span class="op">(</span>z0<span class="op">,</span> d_z0<span class="op">,</span> <span class="op">*</span>n0 <span class="op">*</span> <span class="kw">sizeof</span><span class="op">(</span><span class="dt">double</span><span class="op">),</span> cudaMemcpyDeviceToHost<span class="op">);</span></span>
+<span id="cb1-48"><a href="#cb1-48" tabindex="-1"></a>  <span class="co">// take care freeing all unneeded memory in correct order:</span></span>
+<span id="cb1-49"><a href="#cb1-49" tabindex="-1"></a>  cudaFree<span class="op">(</span>d_z<span class="op">);</span> cudaFree<span class="op">(</span>d_x<span class="op">);</span> cudaFree<span class="op">(</span>d_z0<span class="op">);</span> cudaFree<span class="op">(</span>d_x0<span class="op">);</span> </span>
+<span id="cb1-50"><a href="#cb1-50" tabindex="-1"></a>  <span class="co">// ... repeat for remaining buffers.</span></span>
+<span id="cb1-51"><a href="#cb1-51" tabindex="-1"></a>  <span class="co">// We should better encapsulate all cuda* calls in error catching if-then-else</span></span>
+<span id="cb1-52"><a href="#cb1-52" tabindex="-1"></a>  <span class="co">// blocks returning error indications if needed.</span></span>
+<span id="cb1-53"><a href="#cb1-53" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+</div>
+<div id="the-raw-opencl-host-boilerplate-nightmare" class="section level3">
+<h3>1.1.2. The Raw OpenCL Host Boilerplate Nightmare</h3>
+<p>Operating raw OpenCL without a framework is even more severe. Because
+OpenCL comes without built-in automated runtime abstractions or
+expressive error logging, the researcher must manually implement
+structural diagnostic mapping, compile code buffers at runtime, query
+platform layers, and bind every single kernel argument by index:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co">// OpenCL and other #include statements skipped ...</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="dt">void</span> IDWoc<span class="op">(</span><span class="dt">double</span> <span class="op">*</span>x0<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>y0<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>z0<span class="op">,</span> <span class="dt">int</span> <span class="op">*</span>n0<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>x<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>y<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>z<span class="op">,</span> </span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>           <span class="dt">int</span> <span class="op">*</span>n<span class="op">,</span> <span class="dt">double</span> <span class="op">*</span>p<span class="op">,</span> <span class="op">...)</span> <span class="op">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>  <span class="co">// 1. Disk-I/O: Load kernel strings from separate .cl files manually</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>  <span class="dt">FILE</span> <span class="op">*</span>fp <span class="op">=</span> fopen<span class="op">(</span><span class="st">&quot;IDWkernel_double.cl&quot;</span><span class="op">,</span> <span class="st">&quot;r&quot;</span><span class="op">);</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>  source_str <span class="op">=</span> <span class="op">(</span><span class="dt">char</span><span class="op">*)</span>malloc<span class="op">(</span>MAX_SOURCE_SIZE<span class="op">);</span></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>  fread<span class="op">(</span>source_str<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> MAX_SOURCE_SIZE<span class="op">,</span> fp<span class="op">);</span> fclose<span class="op">(</span>fp<span class="op">);</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>  <span class="co">// 2. Hardware Query Layer: Enumerate platforms and explicit hardware contexts</span></span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>  <span class="co">// 2.a Allocate memory for returned list</span></span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>  cl_platform_id <span class="op">*</span>platforms <span class="op">=</span> <span class="op">(</span>cl_platform_id<span class="op">*)</span>malloc<span class="op">(</span>ret_num_platforms <span class="op">*</span> <span class="kw">sizeof</span><span class="op">(</span>cl_platform_id<span class="op">));</span></span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>  <span class="co">// 2.b. Query available hardware list:</span></span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>  clGetPlatformIDs<span class="op">(</span>ret_num_platforms<span class="op">,</span> platforms<span class="op">,</span> NULL<span class="op">);</span></span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a>  <span class="co">// 2.c Create OpenCL context foe selected device:</span></span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a>  cl_context context <span class="op">=</span> clCreateContext<span class="op">(</span>NULL<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="op">&amp;</span>device_id<span class="op">,</span> NULL<span class="op">,</span> NULL<span class="op">,</span> <span class="op">&amp;</span>ret<span class="op">);</span></span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a>  cl_command_queue command_queue <span class="op">=</span> clCreateCommandQueueWithProperties<span class="op">(</span>context<span class="op">,</span> </span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a>    device_id<span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="op">&amp;</span>ret<span class="op">);</span></span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a></span>
+<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a>  <span class="co">// 3. Memory stuff</span></span>
+<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a>  <span class="co">// 3.a Buffer Allocation</span></span>
+<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a>  cl_mem x0_mem_obj <span class="op">=</span> clCreateBuffer<span class="op">(</span>context<span class="op">,</span> CL_MEM_READ_ONLY<span class="op">,</span> <span class="op">*</span>n0 <span class="op">*</span> <span class="kw">sizeof</span><span class="op">(</span><span class="dt">double</span><span class="op">),</span> </span>
+<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a>                                     NULL<span class="op">,</span> <span class="op">&amp;</span>ret<span class="op">);</span></span>
+<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a>  <span class="co">// Skipped here: fill input variables like x0_mem_bj with data from *x0 ...   </span></span>
+<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a>  <span class="co">// 3.b Memory transfer</span></span>
+<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a>  clEnqueueWriteBuffer<span class="op">(</span>command_queue<span class="op">,</span> x0_mem_obj<span class="op">,</span> CL_TRUE<span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="op">*</span>n0 <span class="op">*</span> <span class="kw">sizeof</span><span class="op">(</span><span class="dt">double</span><span class="op">),</span> </span>
+<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a>                       x0<span class="op">,</span> <span class="dv">0</span><span class="op">,</span> NULL<span class="op">,</span> NULL<span class="op">);</span></span>
+<span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a>  <span class="co">// Repeat for remaining input variables                     </span></span>
+<span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a></span>
+<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a>  <span class="co">// 4. Manual index argument coupling (highly prone to segmentation faults)</span></span>
+<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a>  ret <span class="op">=</span> clSetKernelArg<span class="op">(</span>kernel<span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="kw">sizeof</span><span class="op">(</span>cl_mem<span class="op">),</span> <span class="op">(</span><span class="dt">void</span> <span class="op">*)&amp;</span>x0_mem_obj<span class="op">);</span></span>
+<span id="cb2-31"><a href="#cb2-31" tabindex="-1"></a>  ret <span class="op">=</span> clSetKernelArg<span class="op">(</span>kernel<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="kw">sizeof</span><span class="op">(</span>cl_mem<span class="op">),</span> <span class="op">(</span><span class="dt">void</span> <span class="op">*)&amp;</span>y0_mem_obj<span class="op">);</span></span>
+<span id="cb2-32"><a href="#cb2-32" tabindex="-1"></a>  <span class="co">// repaet for remaining 6 input variables ...</span></span>
+<span id="cb2-33"><a href="#cb2-33" tabindex="-1"></a>  <span class="co">// allocate and assign output variable:</span></span>
+<span id="cb2-34"><a href="#cb2-34" tabindex="-1"></a>  ret <span class="op">=</span> clSetKernelArg<span class="op">(</span>kernel<span class="op">,</span> <span class="dv">8</span><span class="op">,</span> <span class="kw">sizeof</span><span class="op">(</span>cl_mem<span class="op">),</span> <span class="op">(</span><span class="dt">void</span> <span class="op">*)&amp;</span>p_mem_obj<span class="op">);</span> </span>
+<span id="cb2-35"><a href="#cb2-35" tabindex="-1"></a>  </span>
+<span id="cb2-36"><a href="#cb2-36" tabindex="-1"></a>  <span class="co">// 5. Grid Execution and Manual Reference Count Cleaning</span></span>
+<span id="cb2-37"><a href="#cb2-37" tabindex="-1"></a>  <span class="dt">size_t</span> global_item_size <span class="op">=</span> next_power_of_2<span class="op">(*</span>n0<span class="op">);</span> <span class="dt">size_t</span> local_item_size <span class="op">=</span> next_power_of_2<span class="op">(</span><span class="dv">64</span><span class="op">);</span></span>
+<span id="cb2-38"><a href="#cb2-38" tabindex="-1"></a>  <span class="co">// setup execution grid and run kernel</span></span>
+<span id="cb2-39"><a href="#cb2-39" tabindex="-1"></a>  clEnqueueNDRangeKernel<span class="op">(</span>command_queue<span class="op">,</span> kernel<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> NULL<span class="op">,</span> <span class="op">&amp;</span>global_item_size<span class="op">,</span> <span class="op">&amp;</span>local_item_size<span class="op">,</span> <span class="dv">0</span><span class="op">,</span> NULL<span class="op">,</span> NULL<span class="op">);</span></span>
+<span id="cb2-40"><a href="#cb2-40" tabindex="-1"></a>  clEnqueueReadBuffer<span class="op">(</span>command_queue<span class="op">,</span> z0_mem_obj<span class="op">,</span> CL_TRUE<span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="op">*</span>n0 <span class="op">*</span> <span class="kw">sizeof</span><span class="op">(</span><span class="dt">double</span><span class="op">),</span> z0<span class="op">,</span> <span class="dv">0</span><span class="op">,</span> NULL<span class="op">,</span> NULL<span class="op">);</span></span>
+<span id="cb2-41"><a href="#cb2-41" tabindex="-1"></a>  <span class="co">// Release all intermediately created structures</span></span>
+<span id="cb2-42"><a href="#cb2-42" tabindex="-1"></a>  clReleaseKernel<span class="op">(</span>kernel<span class="op">);</span> </span>
+<span id="cb2-43"><a href="#cb2-43" tabindex="-1"></a>  clReleaseMemObject<span class="op">(</span>x0_mem_obj<span class="op">);</span> <span class="co">// Repeat for other variables ...</span></span>
+<span id="cb2-44"><a href="#cb2-44" tabindex="-1"></a>  clReleaseContext<span class="op">(</span>context<span class="op">);</span></span>
+<span id="cb2-45"><a href="#cb2-45" tabindex="-1"></a>  <span class="co">// In this shortened sketch we didnt encapsulate the cl* calls in apropriate </span></span>
+<span id="cb2-46"><a href="#cb2-46" tabindex="-1"></a>  <span class="co">// if-then-else blocks catching possible errors, which should be done!</span></span>
+<span id="cb2-47"><a href="#cb2-47" tabindex="-1"></a>  <span class="co">// Side-note: There is no standard error rporting other than integer numbers,</span></span>
+<span id="cb2-48"><a href="#cb2-48" tabindex="-1"></a>  <span class="co">// readable error statements need to be written yourself.</span></span>
+<span id="cb2-49"><a href="#cb2-49" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+</div>
+</div>
+<div id="the-openclear-solution-automated-jit-abstraction" class="section level2">
+<h2>1.2. The OpenCLeaR Solution: Automated JIT Abstraction</h2>
+<p><code>OpenCLeaR</code> entirely eradicates this hundreds-of-lines
+configuration layer. It synthesizes the performance of native OpenCL
+with the structural simplicity of standard R.</p>
+<p>By handling memory virtualization, index argument matching, platform
+selection, and build-log routing under the hood, the entire multi-tiered
+boilerplate collapses into a single declarative R block:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>idw_gpu <span class="ot">&lt;-</span> OpenCLeaR<span class="sc">::</span><span class="fu">oclFunction</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="at">signature      =</span> <span class="fu">signature</span>(<span class="at">x0=</span><span class="st">&quot;numeric&quot;</span>, <span class="at">y0=</span><span class="st">&quot;numeric&quot;</span>,</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>                             <span class="at">x=</span><span class="st">&quot;numeric&quot;</span>, <span class="at">y=</span><span class="st">&quot;numeric&quot;</span>, <span class="at">z=</span><span class="st">&quot;numeric&quot;</span>, <span class="at">p=</span><span class="st">&quot;numeric&quot;</span>),</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="at">kernel_file    =</span> <span class="st">&quot;./idw_kernel.cl&quot;</span>,</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="at">interface_file =</span> <span class="st">&quot;./idw_rcpp.cpp&quot;</span></span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>)</span></code></pre></div>
+<p>Execution reduces to a single, clean in-place statement:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>Z_grid <span class="ot">&lt;-</span> <span class="fu">idw_gpu</span>(x0, y0, x, y, z, <span class="at">p =</span> <span class="fl">2.0</span>)</span></code></pre></div>
+<p>It references the kernel file <code>idw_kernel.cl</code>:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>    __kernel <span class="dt">void</span> idw_kernel<span class="op">(</span>__global <span class="dt">const</span> real<span class="op">*</span> x0<span class="op">,</span> __global <span class="dt">const</span> real<span class="op">*</span> y0<span class="op">,</span> </span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>          __global <span class="dt">const</span> real<span class="op">*</span> x<span class="op">,</span>  __global <span class="dt">const</span> real<span class="op">*</span> y<span class="op">,</span>  __global <span class="dt">const</span> real<span class="op">*</span> z<span class="op">,</span> </span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>          <span class="dt">const</span> real p<span class="op">,</span> __global real<span class="op">*</span> z0<span class="op">,</span> <span class="dt">const</span> <span class="dt">int</span> n_known<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>      <span class="dt">int</span> i <span class="op">=</span> get_global_id<span class="op">(</span><span class="dv">0</span><span class="op">);</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>      real wsum <span class="op">=</span> <span class="dv">0</span><span class="er">.0</span><span class="op">;</span> z0<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> <span class="dv">0</span><span class="er">.0</span><span class="op">;</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>      <span class="cf">for</span><span class="op">(</span><span class="dt">int</span> j<span class="op">=</span><span class="dv">0</span><span class="op">;</span> j<span class="op">&lt;</span>n_known<span class="op">;</span> j<span class="op">++)</span> <span class="op">{</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>        real d <span class="op">=</span> sqrt<span class="op">((</span>x0<span class="op">[</span>i<span class="op">]-</span>x<span class="op">[</span>j<span class="op">])*(</span>x0<span class="op">[</span>i<span class="op">]-</span>x<span class="op">[</span>j<span class="op">])</span> <span class="op">+</span> <span class="op">(</span>y0<span class="op">[</span>i<span class="op">]-</span>y<span class="op">[</span>j<span class="op">])*(</span>y0<span class="op">[</span>i<span class="op">]-</span>y<span class="op">[</span>j<span class="op">]));</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>        <span class="cf">if</span><span class="op">(</span>d <span class="op">==</span> <span class="dv">0</span><span class="er">.0</span><span class="op">)</span> <span class="op">{</span> z0<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> z<span class="op">[</span>j<span class="op">];</span> wsum <span class="op">=</span> <span class="fl">1.0</span><span class="op">;</span> <span class="cf">break</span><span class="op">;</span> <span class="op">}</span></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a>        real w <span class="op">=</span> <span class="fl">1.0</span> <span class="op">/</span> pow<span class="op">(</span>d<span class="op">,</span> p<span class="op">);</span> wsum <span class="op">+=</span> w<span class="op">;</span> z0<span class="op">[</span>i<span class="op">]</span> <span class="op">+=</span> w <span class="op">*</span> z<span class="op">[</span>j<span class="op">];</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>      <span class="op">}</span></span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a>      z0<span class="op">[</span>i<span class="op">]</span> <span class="op">/=</span> wsum<span class="op">;</span></span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>    <span class="op">}</span></span></code></pre></div>
+<p>and a Rcpp interface <code>idw_rcpp.cpp</code>:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>NumericVector x0<span class="op">(</span>r_x0<span class="op">);</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>NumericVector y0<span class="op">(</span>r_y0<span class="op">);</span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>NumericVector x<span class="op">(</span>r_x<span class="op">);</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>NumericVector y<span class="op">(</span>r_y<span class="op">);</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>NumericVector z<span class="op">(</span>r_z<span class="op">);</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="dt">int</span> n0 <span class="op">=</span> x0<span class="op">.</span>size<span class="op">();</span></span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="dt">int</span> n <span class="op">=</span> x<span class="op">.</span>size<span class="op">();</span></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>NumericVector r_z0<span class="op">(</span>n0<span class="op">);</span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="co">// Allocate device memory utilizing the active device pointer</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a>Memory<span class="op">&lt;</span>real<span class="op">&gt;</span> gpu_x0<span class="op">(*</span>device<span class="op">,</span> n0<span class="op">);</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a>Memory<span class="op">&lt;</span>real<span class="op">&gt;</span> gpu_y0<span class="op">(*</span>device<span class="op">,</span> n0<span class="op">);</span></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a>Memory<span class="op">&lt;</span>real<span class="op">&gt;</span> gpu_z0<span class="op">(*</span>device<span class="op">,</span> n0<span class="op">);</span></span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a>Memory<span class="op">&lt;</span>real<span class="op">&gt;</span> gpu_x<span class="op">(*</span>device<span class="op">,</span> n<span class="op">);</span></span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a>Memory<span class="op">&lt;</span>real<span class="op">&gt;</span> gpu_y<span class="op">(*</span>device<span class="op">,</span> n<span class="op">);</span></span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a>Memory<span class="op">&lt;</span>real<span class="op">&gt;</span> gpu_z<span class="op">(*</span>device<span class="op">,</span> n<span class="op">);</span></span>
+<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a></span>
+<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a><span class="co">// High-performance element-wise buffer filling</span></span>
+<span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a><span class="cf">for</span><span class="op">(</span><span class="dt">int</span> i<span class="op">=</span><span class="dv">0</span><span class="op">;</span> i<span class="op">&lt;</span>n0<span class="op">;</span> <span class="op">++</span>i<span class="op">)</span> <span class="op">{</span> gpu_x0<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> x0<span class="op">[</span>i<span class="op">];</span> gpu_y0<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> y0<span class="op">[</span>i<span class="op">];</span> <span class="op">}</span></span>
+<span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a><span class="cf">for</span><span class="op">(</span><span class="dt">int</span> j<span class="op">=</span><span class="dv">0</span><span class="op">;</span> j<span class="op">&lt;</span>n<span class="op">;</span> <span class="op">++</span>j<span class="op">)</span>  <span class="op">{</span> gpu_x<span class="op">[</span>j<span class="op">]</span> <span class="op">=</span> x<span class="op">[</span>j<span class="op">];</span> gpu_y<span class="op">[</span>j<span class="op">]</span> <span class="op">=</span> y<span class="op">[</span>j<span class="op">];</span> gpu_z<span class="op">[</span>j<span class="op">]</span> <span class="op">=</span> z<span class="op">[</span>j<span class="op">];</span> <span class="op">}</span></span>
+<span id="cb6-22"><a href="#cb6-22" tabindex="-1"></a></span>
+<span id="cb6-23"><a href="#cb6-23" tabindex="-1"></a><span class="co">// Push buffers to the OpenCL device</span></span>
+<span id="cb6-24"><a href="#cb6-24" tabindex="-1"></a>gpu_x0<span class="op">.</span>write_to_device<span class="op">();</span> gpu_y0<span class="op">.</span>write_to_device<span class="op">();</span></span>
+<span id="cb6-25"><a href="#cb6-25" tabindex="-1"></a>gpu_x<span class="op">.</span>write_to_device<span class="op">();</span>  gpu_y<span class="op">.</span>write_to_device<span class="op">();</span> gpu_z<span class="op">.</span>write_to_device<span class="op">();</span></span>
+<span id="cb6-26"><a href="#cb6-26" tabindex="-1"></a></span>
+<span id="cb6-27"><a href="#cb6-27" tabindex="-1"></a><span class="co">// Enqueue and execute the JIT-compiled kernel</span></span>
+<span id="cb6-28"><a href="#cb6-28" tabindex="-1"></a>Kernel k<span class="op">(*</span>device<span class="op">,</span> n0<span class="op">,</span> <span class="st">&quot;idw_kernel&quot;</span><span class="op">,</span> gpu_x0<span class="op">,</span> gpu_y0<span class="op">,</span> gpu_z0<span class="op">,</span> </span>
+<span id="cb6-29"><a href="#cb6-29" tabindex="-1"></a>                                    gpu_x<span class="op">,</span> gpu_y<span class="op">,</span> gpu_z<span class="op">,</span> n0<span class="op">,</span> n<span class="op">,</span> as<span class="op">&lt;</span>real<span class="op">&gt;(</span>p<span class="op">));</span></span>
+<span id="cb6-30"><a href="#cb6-30" tabindex="-1"></a>k<span class="op">.</span>run<span class="op">();</span></span>
+<span id="cb6-31"><a href="#cb6-31" tabindex="-1"></a></span>
+<span id="cb6-32"><a href="#cb6-32" tabindex="-1"></a><span class="co">// Read result matrix back to host RAM</span></span>
+<span id="cb6-33"><a href="#cb6-33" tabindex="-1"></a>gpu_z0<span class="op">.</span>read_from_device<span class="op">();</span></span>
+<span id="cb6-34"><a href="#cb6-34" tabindex="-1"></a><span class="cf">for</span><span class="op">(</span><span class="dt">int</span> i<span class="op">=</span><span class="dv">0</span><span class="op">;</span> i<span class="op">&lt;</span>n0<span class="op">;</span> <span class="op">++</span>i<span class="op">)</span> r_z0<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> gpu_z0<span class="op">[</span>i<span class="op">];</span></span>
+<span id="cb6-35"><a href="#cb6-35" tabindex="-1"></a></span>
+<span id="cb6-36"><a href="#cb6-36" tabindex="-1"></a><span class="cf">return</span> r_z0<span class="op">;</span></span></code></pre></div>
+<p>This clean interface is achieved by using c++ <code>Device</code>,
+<code>Memory</code> und <code>Kernel</code> objects inherited from the
+ProjectPhysx OpenCL-Wrapper C++ header-only library available at <a href="https://github.com/ProjectPhysX/OpenCL-Wrapper" class="uri">https://github.com/ProjectPhysX/OpenCL-Wrapper</a> by Moritz
+Lehman <a href="mailto:moritz.lehmann@uni-bayreuth.de" class="email">moritz.lehmann@uni-bayreuth.de</a>. It is used here via a
+GitHub fork as in its origianl formit is not intended to be used via
+dynamic loading from whithin another application like R. It’s error
+handling and output behaviour had to be rewritten and some new methods
+and members had to be added to its core structure.</p>
+</div>
 <div id="the-oclfunction-pipeline-architecture" class="section level2">
-<h2>2. The oclFunction Pipeline Architecture</h2>
+<h2>2. The <code>oclFunction</code> Pipeline Architecture</h2>
 <p>The core operational unit of OpenCLeaR is the oclFunction runtime
 factory wrapper. It orchestrates a multi-layered compilation and
 execution stack that bridges three distinct environments:</p>
 <p>R Session (Interpreter) -&gt; Methods Signature Checking -&gt; Rcpp
 Native Host Gateway -&gt; Automated Memory Marshalling -&gt; OpenCL
 Driver JIT Engine -&gt; Physical Device (e.g. GPU Cores)</p>
+<p>TODO: Mention the inline::plugin mechanism implmented for package
+<code>inline</code> to be used here.</p>
+<p>TODO: Mention the need for delayed compilation via
+<code>inline</code> package at run time (JIT principle) to be able to
+use C** templates in combination with OpenCL-Wrappers
+<code>Memory</code> class.</p>
 <div id="signature-verification-and-compilation-hoisting" class="section level3">
 <h3>2.1. Signature Verification and Compilation Hoisting</h3>
 <p>When oclFunction is instantiated, it registers the target variable
@@ -448,6 +672,10 @@ lexical scope of the R function environment. If the function is called a
 second time within the same R session, the compilation phase is hoisted
 and skipped entirely, routing execution straight into the pre-compiled
 hardware registers.</p>
+<p>TODO: Explain how wrapping the oclfunction in a IIEF R function
+enables caching.</p>
+<p>TODO: Mention caching of OpenCL binaries created by the included
+<code>ocl_compiler</code>.</p>
 </div>
 <div id="header-export-and-runtime-availability" class="section level3">
 <h3>2.2. Header Export and Runtime Availability</h3>
@@ -456,21 +684,42 @@ natively on the chip (such as custom matrix decomposition routines or
 probability density curves), the package exports its internal core
 library (libkernel.cl) directly to the inst/include/ directory during
 installation.</p>
-<p>At runtime, the oclFunction factory strings these header components
+<p>At runtime, the oclFunction fabric strings these source components
 together on the host file system. This ensures that the JIT compiler has
 immediate access to the full mathematical portfolio of the package
 without requiring a local development toolchain on the client
 machine.</p>
+</div>
+<div id="todo-describe-the-included-inline-library-of-r-like-functions" class="section level3">
+<h3>2.3. TODO: Describe the included inline library of R-like
+functions</h3>
+<ul>
+<li>Mersenne Twister</li>
+<li>[dpqr]{unif|norm|binom|chisq|…} functions useable in OpenCL C
+kernels.</li>
+<li>discuss FP32/FP64 challenges</li>
+<li>discuss alternatives: R’s mathlib via package
+<code>opencltools</code>, initial steps already done:
+<code>ImportNmathKernels()</code>, problem: relies heavily on fp64
+(double)</li>
+<li>basic linalg routines (already done:
+<code>wls_gls_fit()</code>)</li>
+<li>eigenvalues/eigenvectors (TODO)</li>
+</ul>
+<p>TODO:Mention the testsuite to justify use of our own library
+functions…</p>
 <hr />
 </div>
 </div>
-<div id="host-device-memory-marshalling-via-memory" class="section level2">
-<h2>3. Host-Device Memory Marshalling via Memory<T></h2>
+<div id="host-device-memory-marshalling-via-memory-templates" class="section level2">
+<h2>3. Host-Device Memory Marshalling via Memory<T> templates</h2>
 <p>Transferring dense statistical matrices between the volatile host RAM
 and the high-speed global graphics memory (VRAM) is historically
 error-prone and fraught with alignment penalties. OpenCLeaR abstracts
 this process entirely through an automated C++ template layer named
 Memory<T>.</p>
+<p>TODO: Mention the abstract <code>real</code> data type which is used
+to adapt to <code>float</code> or <code>double</code> automatically.</p>
 <div id="zero-copy-fused-buffer-optimization" class="section level3">
 <h3>3.1. Zero-Copy Fused Buffer Optimization</h3>
 <p>On hardware architectures that feature unified host-device memory
@@ -482,7 +731,7 @@ profile of the active device. If a shared-memory layout is detected, it
 flags the memory assignment using the CL_MEM_USE_HOST_PTR attribute.
 This fuses the R numerical vector pointer directly with the hardware
 thread context, achieving a true Zero-Copy pipeline that eliminates I/O
-latency entirely.</p>
+latency entirely. FIXME: double check?</p>
 </div>
 <div id="private-register-array-caps-for-linear-algebra" class="section level3">
 <h3>3.2. Private Register Array Caps for Linear Algebra</h3>
@@ -493,82 +742,62 @@ on the chip.</p>
 <p>Because GPGPU register configurations must be strictly determined at
 compile time, OpenCLeaR marries dynamic spatial distance thresholds
 (e.g., searching within a localized geographic radius) with a static
-register array allocation cap (#define MAX_NEIGHBORS). This dual setup
-prevents Register Spilling into slow VRAM blocks and allows the hardware
-to execute heavy matrix operations natively within the local processor
-cores.</p>
+register array allocation cap (e.g. #define MAX_NEIGHBORS). This dual
+setup prevents Register Spilling into slow VRAM blocks and allows the
+hardware to execute heavy matrix operations natively within the local
+processor cores.</p>
 <hr />
 </div>
 </div>
 <div id="minimal-validation-baseline-dynamic-idw" class="section level2">
 <h2>4. Minimal Validation Baseline: Dynamic IDW</h2>
-<p>To demonstrate the structural purity of the pipeline, we establish a
-minimal validation baseline using an Inverse Distance Weighting (IDW)
-template kernel. This baseline validates that the memory streams are
-correctly synchronized without requiring complex linear algebra
-wrappers.</p>
-<div id="the-parallel-idw-compute-kernel-idw_baseline.cl" class="section level3">
-<h3>4.1. The Parallel IDW Compute Kernel (idw_baseline.cl)</h3>
-<p>This raw compute kernel represents the precise element-wise template
-mapped onto the 1D OpenCL execution grid:</p>
-<p>__kernel void idw_interpolation_1d( __global const real* obs_x,
-__global const real* obs_y, __global const real* obs_z, __global real*
-predicted_surface, const int num_obs, const real target_cell_size, const
-int grid_columns, const real power) { int thread_id = get_global_id(0);
-int row_idx = thread_id / grid_columns; int col_idx = thread_id %
-grid_columns;</p>
-<pre><code>real pred_x = col_idx * target_cell_size;
-real pred_y = row_idx * target_cell_size;
-
-real weight_sum = 0.0f;
-real value_sum  = 0.0f;
-
-for (int i = 0; i &lt; num_obs; ++i) {
-    real dx = pred_x - obs_x[i];
-    real dy = pred_y - obs_y[i];
-    real distance = sqrt(dx * dx + dy * dy);
-
-    if (distance == 0.0f) {
-        value_sum = obs_z[i];
-        weight_sum = 1.0f;
-        break;
-    }
-
-    real weight = 1.0f / pow(distance, power);
-    value_sum += obs_z[i] * weight;
-    weight_sum += weight;
-}
-
-predicted_surface[thread_id] = (weight_sum &gt; 0.0f) ? (value_sum / weight_sum) : 0.0f;</code></pre>
-<p>}</p>
-</div>
-<div id="executing-the-jit-blueprint-pipeline" class="section level3">
-<h3>4.2. Executing the JIT Blueprint Pipeline</h3>
+<p>To demonstrate the structural purity of the concept, we establish a
+minimal validation baseline using the Inverse Distance Weighting (IDW)
+kernel introduced above.</p>
+<div id="executing-the-example" class="section level3">
+<h3>4.1. Executing the Example</h3>
 <p>Through the abstraction layers provided by OpenCLeaR, launching this
 asynchronous GPGPU engine inside an R session is reduced to an
 intuitive, high-level interface call:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># Minimal structural verification configuration</span></span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>grid_dimension <span class="ot">&lt;-</span> <span class="dv">50</span><span class="dt">L</span></span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>total_pixels   <span class="ot">&lt;-</span> grid_dimension <span class="sc">*</span> grid_dimension</span>
-<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">777</span>)</span>
-<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>n_stations     <span class="ot">&lt;-</span> <span class="dv">100</span><span class="dt">L</span></span>
-<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a></span>
-<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="co"># Simulate synthetic telemetry metrics</span></span>
-<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>station_x <span class="ot">&lt;-</span> <span class="fu">runif</span>(n_stations, <span class="at">min =</span> <span class="dv">0</span>, <span class="at">max =</span> <span class="dv">1000</span>)</span>
-<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>station_y <span class="ot">&lt;-</span> <span class="fu">runif</span>(n_stations, <span class="at">min =</span> <span class="dv">0</span>, <span class="at">max =</span> <span class="dv">1000</span>)</span>
-<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>station_z <span class="ot">&lt;-</span> <span class="fu">sin</span>(station_x <span class="sc">/</span> <span class="dv">200</span>) <span class="sc">*</span> <span class="fu">cos</span>(station_y <span class="sc">/</span> <span class="dv">200</span>)</span>
-<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a></span>
-<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a><span class="co"># Register and compile the kernel file dynamically via oclFunction</span></span>
-<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="co"># (Actual compilation logic is masked cleanly behind the closure object)</span></span>
-<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;⚡ Instantiating oclFunction JIT Pipeline over IDW Baseline...</span><span class="sc">\n</span><span class="st">&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># Minimal structural verification configuration</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>grid_dimension <span class="ot">&lt;-</span> <span class="dv">50</span><span class="dt">L</span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>total_pixels   <span class="ot">&lt;-</span> grid_dimension <span class="sc">*</span> grid_dimension</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">777</span>)</span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>n_stations     <span class="ot">&lt;-</span> <span class="dv">100</span><span class="dt">L</span></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a></span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a><span class="co"># Simulate synthetic telemetry metrics</span></span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a>station_x <span class="ot">&lt;-</span> <span class="fu">runif</span>(n_stations, <span class="at">min =</span> <span class="dv">0</span>, <span class="at">max =</span> <span class="dv">1000</span>)</span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a>station_y <span class="ot">&lt;-</span> <span class="fu">runif</span>(n_stations, <span class="at">min =</span> <span class="dv">0</span>, <span class="at">max =</span> <span class="dv">1000</span>)</span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a>station_z <span class="ot">&lt;-</span> <span class="fu">sin</span>(station_x <span class="sc">/</span> <span class="dv">200</span>) <span class="sc">*</span> <span class="fu">cos</span>(station_y <span class="sc">/</span> <span class="dv">200</span>)</span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a></span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a><span class="co"># Register and compile the kernel file dynamically via oclFunction</span></span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a><span class="co"># (Actual compilation logic is masked cleanly behind the closure object)</span></span>
+<span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;⚡ Instantiating oclFunction JIT Pipeline over IDW Baseline...</span><span class="sc">\n</span><span class="st">&quot;</span>)</span></code></pre></div>
 <pre><code>## ⚡ Instantiating oclFunction JIT Pipeline over IDW Baseline...</code></pre>
-<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="co"># Note: In an active session, this object bridges directly to your </span></span>
-<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="co"># local &#39;idw_baseline.cl&#39; source string.</span></span>
-<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="fu">print</span>(<span class="st">&quot;✅ Framework initialized. Ready for dense matrix calculations.&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="do">### </span><span class="al">TODO</span><span class="do">: Fill in calls ...</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a></span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="co"># Note: In an active session, this object bridges directly to your </span></span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="co"># local &#39;idw_baseline.cl&#39; source string.</span></span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="fu">print</span>(<span class="st">&quot;✅ Framework initialized. Ready for dense matrix calculations.&quot;</span>)</span></code></pre></div>
 <pre><code>## [1] &quot;✅ Framework initialized. Ready for dense matrix calculations.&quot;</code></pre>
 <hr />
 </div>
+</div>
+<div id="todo-benchmark-section" class="section level2">
+<h2>6. TODO: Benchmark Section</h2>
+<p>benchmark</p>
+<ul>
+<li>R</li>
+<li>C/Fortran</li>
+<li>Rcpp (RcppParallel)</li>
+<li>pure CUDA</li>
+<li>low level OpenCL</li>
+<li>OpenCLeaR</li>
+</ul>
+<p>TBD, see <a href="https://www.stat.aau.at/alge/blogR/posts/r-code-benchmark/" class="uri">https://www.stat.aau.at/alge/blogR/posts/r-code-benchmark/</a></p>
+<hr />
 </div>
 <div id="conclusion-future-outlook" class="section level2">
 <h2>5. Conclusion &amp; Future Outlook</h2>
@@ -583,8 +812,8 @@ matrix grids into complex 3D Voxel execution spaces. By integrating
 multi-dimensional stencil masks directly into the hardware threads,
 OpenCLeaR will provide the core infrastructure necessary to model fluid
 dynamics, solid diffusion profiles, and advanced air pollutant dispersal
-over complex digital elevation models (DEM) entirely in parallel
-space.</p>
+over complex digital elevation models (DEM) entirely in parallel space.
+FIXME: 2D already done</p>
 </div>
 
 
