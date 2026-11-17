@@ -18,15 +18,15 @@ Environment e = Environment::global_env();
 std::vector<int> r_seed = e[".Random.seed"];
 int base_seed = r_seed[r_seed[1] + 1];
 
-// Create OpenCL variables (Input-Buffer auf der GPU)
+// Create OpenCL variables (input buffer on the GPU)
 Memory<real> Mean(*device, dim);
-Memory<real> Sigma_L(*device, dim * dim + 1); // +1 für das Dirty-Flag
+Memory<real> Sigma_L(*device, dim * dim + 1); // +1 for the dirty flag
 
-// fill GPU vars with input (Row-Major: Zeile i, Spalte j)
+// fill GPU vars with input (Row-Major: row i, column j)
 for (int i = 0; i < dim; ++i) {
   Mean[i] = (real)r_mean[i];
   for (int j = 0; j < dim; ++j) {
-    if (j >= i) { // Oberes Dreieck inkl. Diagonale (j >= i)
+    if (j >= i) { // upper triangle incl. diagonal (j >= i)
       Sigma_L[i * dim + j] = (real)r_cov(i, j);
     } else {
       Sigma_L[i * dim + j] = (real)0.0;
@@ -35,11 +35,10 @@ for (int i = 0; i < dim; ++i) {
 }
 Sigma_L[dim * dim] = (real)-1.0f; // mark dirty
 
-// WICHTIG: Input-Daten auf die GPU kopieren!
 Mean.write_to_device();
 Sigma_L.write_to_device();
 
-// Create OpenCL variables (Output-Buffer für r_n Vektoren der Länge dim)
+// Create OpenCL variables (output buffer for r_n vectors of length dim)
 Memory<real> Output(*device, r_n * dim);
 
 // create the kernel (inkl. dim als const int!)

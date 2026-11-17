@@ -2,7 +2,7 @@ source("setup.R", local = TRUE)
 
 if (!isTRUE(getOption("OpenCLeaR.initialized"))) exit_file("no OpenCL device available")
 
-# 📊 TEST D-FUNKTION (Dichte-Abgleich)
+#  TEST D FUNCTION (density adjustment)
 mu3 <- c(1, 2, 3)
 Sigma3 <- matrix(c(1,    0.5,  0.25,
                    0.5,  1,    0.5,
@@ -27,7 +27,7 @@ d_log_ocl <- dmvnormOCL(samples, mean = mu3, sigma = Sigma3, log = TRUE)
 d_raw_r   <- mvtnorm::dmvnorm(samples, mean = mu3, sigma = Sigma3, log = FALSE)
 d_raw_ocl <- dmvnormOCL(samples, mean = mu3, sigma = Sigma3, log = FALSE)
 
-# Einzelner Vektor (nicht als Matrix übergeben)
+# Single vector (not passed as a matrix)
 d_vec_r   <- mvtnorm::dmvnorm(samples[1, ], mean = mu3, sigma = Sigma3, log = TRUE)
 d_vec_ocl <- dmvnormOCL(samples[1, ], mean = mu3, sigma = Sigma3, log = TRUE)
 
@@ -40,11 +40,11 @@ expect_true(max_diff_d_raw < 1e-5)
 expect_true(abs(d_vec_r - d_vec_ocl) < 1e-5)
 
 # =========================================================================
-# 5. FEHLERBEHANDLUNG (Nicht positiv definite Matrix & Dimensionsfehler)
+# ERROR HANDLING (Non-positive definite matrix & dimensional errors)
 # =========================================================================
 Sigma_bad <- matrix(c(1, 2, 2, 1), 2, 2) # Eigenwerte: 3 und -1 -> nicht positiv definit!
 expect_true(is.nan(dmvnormOCL(c(0, 0), mean = c(0, 0), sigma = Sigma_bad)))
 
-# Dimensions-Mismatch wirft weiterhin einen echten Fehler
+# Dimension mismatch should throw a real error
 
 expect_error(dmvnormOCL(c(0, 0, 0), mean = c(0, 0), sigma = diag(2)))

@@ -7,7 +7,7 @@ if (getRversion() >= "2.15.1") {
 ##' @name dmvnormOCL
 ##' @param x      vector or matrix of quantiles (rows are observations, columns are dimensions).
 ##' @param mean   mean vector parameter (default: rep(0, ncol(x))).
-##' @param sigma  covariance matrix parameter (default: diag(ncol(x))).
+##' @param sigma  covariance matrix parameter (default: diag(ncol(x))). Maximimum dimension supported: 64 times 64.
 ##' @param log    logical; if TRUE, probabilities p are given as log(p).
 ##' @param ...    arguments passed through to \code{\link{oclFunction}}
 ##' @return A numeric vector of densities of length nrow(x).

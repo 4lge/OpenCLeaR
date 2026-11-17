@@ -8,7 +8,7 @@ Sigma3 <- matrix(c(1,    0.5,  0.25,
                    0.25, 0.5,  1), nrow = 3, ncol = 3)
 
 # =========================================================================
-# 4. TEST QMVNORM (Alle 3 tail-Modi + Randwerte p=0, p=1 + dim=1)
+# TEST QMVNORM (All 3 tail modes + boundary values ​​p=0, p=1 + dim=1)
 # =========================================================================
 for (t_mode in c("lower.tail", "upper.tail", "both.tails")) {
     probs <- if (t_mode == "both.tails") c(0.50, 0.90, 0.95) else c(0.25, 0.90, 0.95)
@@ -21,13 +21,13 @@ for (t_mode in c("lower.tail", "upper.tail", "both.tails")) {
     }
 }
 
-# Randwerte p = 0 und p = 1
+# Marginal values ​​p = 0 and p = 1
 expect_equal(as.numeric(qmvnormOCL(0, tail = "both.tails", mean = mu3, sigma = Sigma3)), 0)
 expect_equal(as.numeric(qmvnormOCL(0, tail = "lower.tail", mean = mu3, sigma = Sigma3)), -Inf)
 expect_equal(as.numeric(qmvnormOCL(1, tail = "lower.tail", mean = mu3, sigma = Sigma3)), Inf)
 
 # =========================================================================
-# 5. FEHLERBEHANDLUNG (Nicht positiv definite Matrix & Dimensionsfehler)
+# ERROR HANDLING (Non-positive definite matrix & dimensional errors)
 # =========================================================================
 Sigma_bad <- matrix(c(1, 2, 2, 1), 2, 2) # Eigenwerte: 3 und -1 -> nicht positiv definit!
 expect_true(is.nan(as.numeric(qmvnormOCL(0.95, mean = c(0, 0), sigma = Sigma_bad))))

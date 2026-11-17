@@ -6,7 +6,7 @@ if (getRversion() >= "2.15.1") {
 ##' @name rmvnormOCL
 ##' @param n      count of random vectors to generate.
 ##' @param mean   mean vector parameter.
-##' @param sigma  covariance matrix parameter.
+##' @param sigma  covariance matrix parameter. Maximimum dimension supported: 64 times 64.
 ##' @param ...    arguments passed through to \code{\link{oclFunction}}
 ##' @return A matrix of random vectors (n x length(mean)).
 ##' @export

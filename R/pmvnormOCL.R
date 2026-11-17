@@ -8,7 +8,7 @@ if (getRversion() >= "2.15.1") {
 ##' @param lower   vector of lower integration limits (length dim, can contain -Inf).
 ##' @param upper   vector of upper integration limits (length dim, can contain Inf).
 ##' @param mean    mean vector parameter (default: rep(0, length(lower))).
-##' @param sigma   covariance matrix parameter (default: diag(length(lower))).
+##' @param sigma   covariance matrix parameter (default: diag(length(lower))). Maximimum dimension supported: 64 times 64.
 ##' @param n       number of Monte Carlo samples (default: 1e6).
 ##' @param ...     arguments passed through to \code{\link{oclFunction}}
 ##' @return Estimated probability with attributes \code{error} (MC standard error) and \code{samples}.

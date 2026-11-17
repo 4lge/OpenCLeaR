@@ -9,6 +9,6 @@ kernel void mvnorm_cdf_mc(global real* output, const int seed,
   // Initialize Mersenne Twister state
   INIT_MT(seed);
   
-  real ws[64]; // Array für die Spalten-Akkumulation
+  real ws[64]; // Array for column accumulation
   output[gid] = pmvnorm(lower, upper, mu, Sigma_L, dim, n_per_thread, ws);
 }

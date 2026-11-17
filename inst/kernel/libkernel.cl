@@ -1542,7 +1542,7 @@ static inline int ls_poly_fit(const real *x_data, const real *y_data, int m, int
     return 0; 
 }
 
-// --- Compact Cholesky & Multivariate Normal Distribution ---
+// --- Compact Cholesky function & Multivariate Normal Distribution ---
 
 // =========================================================================
 // COMPACT MVN WITH DIRTY-FLAG (memory size: dim * dim + 1)
@@ -1563,9 +1563,11 @@ static inline int ls_poly_fit(const real *x_data, const real *y_data, int m, int
  * Sets flag to 1.0 on success.
  */
 
-// 1. Define implementation once as a generic macro. This is due to
-// the necessity to call this OpenCL function with __global (via the
-// kernel) and __private (within larger OpenCL functions) arguments!
+// Define implementation once as a generic macro. This is due to the
+// necessity to call this OpenCL function with __global (via the
+// kernel) and in other places with __private (within larger OpenCL
+// functions) arguments!
+// This repeats for the remaining RMV functions
 #define DEFINE_CORE_CHOLESKY_COMPACT(ADDR_SPACE) \
 __attribute__((overloadable)) \
 static inline int core_cholesky_compact(ADDR_SPACE real *A, int dim) { \
@@ -1679,17 +1681,17 @@ DEFINE_DMVNORM(__global,  __private, __private, __private)
 // =========================================================================
 
 /**
- * Schätzt P(lower <= X <= upper) für X ~ MVN(mu, Sigma) direkt im Device-Code.
- * Verwendet spaltenweise Berechnung ohne festen Dimensions-Puffer (beliebiges dim)
- * und bricht verworfene Stichproben per Early-Exit sofort ab.
+ * Estimates P(lower <= X <= upper) for X ~ MVN(mu, Sigma) directly in the device code.
+ * Uses column-by-column calculation without a fixed dimension buffer (arbitrary dim)
+ * and cancels rejected samples immediately via early exit.
  *
- * @param lower     Untere Integrationsgrenzen [dim] (darf -INFINITY enthalten)
- * @param upper     Obere Integrationsgrenzen [dim] (darf +INFINITY enthalten)
- * @param mu        Mittelwertsvektor [dim]
- * @param Sigma_L   Kompakte Kovarianz-/Cholesky-Matrix [dim * dim + 1]
- * @param dim       Dimension
- * @param n_samples Anzahl der Monte-Carlo-Stichproben innerhalb dieses Threads
- * @param workspace Temporärer Puffer der Länge [dim] (im __private oder __global Speicher)
+ * @param lower Lower integration limits [dim] (may contain -INFINITY)
+ * @param upper Upper integration limits [dim] (may contain +INFINITY)
+ * @param mu mean vector [dim]
+ * @param Sigma_L Compact Covariance/Cholesky Matrix [dim * dim + 1]
+ * @param dim dimension
+ * @param n_samples Number of Monte Carlo samples within this thread
+ * @param workspace Temporary buffer of length [dim] (in __private or __global storage)
  */
 #define DEFINE_PMVNORM_INTERNAL(BOUND_AS, MU_AS, SIGMA_AS, WS_AS) \
 __attribute__((overloadable)) \
@@ -1713,11 +1715,11 @@ static inline real pmvnorm_internal(BOUND_AS const real *lower, BOUND_AS const r
                 diag_sq -= l_jk * l_jk; \
             } \
             real l_jj = sqrt(fmax(diag_sq, (real)0.0f)); \
-            /* Komponente j ist nach Spalte j komplett fertig berechnet! */ \
+            /* Component j is completely calculated after column j! */ \
             real x_j = workspace[j] + l_jj * z_j; \
             if (x_j < lower[j] || x_j > upper[j]) { \
                 inside = 0; \
-                break; /* Early-Exit: Rest der Spalten muss nicht mehr berechnet werden! */ \
+                break; /* Early exit: Rest of the columns no longer need to be calculated! */ \
             } \
             for (int i = j + 1; i < dim; ++i) { \
                 workspace[i] += Sigma_L[i * dim + j] * z_j; \
@@ -1730,20 +1732,20 @@ static inline real pmvnorm_internal(BOUND_AS const real *lower, BOUND_AS const r
     return (real)hits / (real)n_samples; \
 }
 
-// Wichtigste Adressraum-Kombinationen für OpenCL 1.2 instanziieren
+// Instantiate key address space combinations for OpenCL 1.2
 DEFINE_PMVNORM_INTERNAL(__private, __private, __private, __private)
 DEFINE_PMVNORM_INTERNAL(__global,  __global,  __global,  __private)
 DEFINE_PMVNORM_INTERNAL(__private, __global,  __global,  __private)
 DEFINE_PMVNORM_INTERNAL(__global,  __private, __private, __private)
 DEFINE_PMVNORM_INTERNAL(__private, __private, __global,  __private)
 
-// Komfort-Makro passend zu rnorm / rmvnorm (versteckt &idx und mt)
+// macro matching rnorm / rmvnorm (hides &idx and mt)
 #define pmvnorm(lower, upper, mu, Sigma_L, dim, n_samples, workspace) \
     pmvnorm_internal((lower), (upper), (mu), (Sigma_L), (dim), (n_samples), (workspace), &idx, mt)
 
 
 // =========================================================================
-// MULTIVARIATE NORMAL QUANTILE (qmvnorm - 100% OpenCL, kompatibel zu mvtnorm)
+// MULTIVARIATE NORMAL QUANTILE (qmvnorm - 100% OpenCL, compatible with mvtnorm)
 // tail_mode: 0 = "lower.tail", 1 = "upper.tail", 2 = "both.tails"
 // =========================================================================
 
@@ -1757,7 +1759,7 @@ static inline real qmvnorm_internal(real p, MU_AS const real *mu, SIGMA_AS real 
     if (p == (real)0.0f) return (tail_mode == 2) ? (real)0.0f : (real)-INFINITY; \
     if (p == (real)1.0f) return (real)INFINITY; \
     if (core_cholesky_compact(Sigma_L, dim) != 0) return (real)NAN; \
-    /* 1. Sicheres Suchintervall aus min/max(mu) und max(sd) bestimmen */ \
+    /* 1. Determine safe search interval from min/max(mu) and max(sd) */ \
     real min_mu = mu[0]; \
     real max_mu = mu[0]; \
     real max_abs_mu = fabs(mu[0]); \
@@ -1780,7 +1782,7 @@ static inline real qmvnorm_internal(real p, MU_AS const real *mu, SIGMA_AS real 
         low  = min_mu - z_abs * max_sd; \
         high = max_mu + z_abs * max_sd; \
     } \
-    /* 2. Bisektion auf der GPU (18 Schritte) */ \
+    /* 2. Bisection on the GPU (18 steps) */ \
     for (int iter = 0; iter < 18; ++iter) { \
         real mid = (real)0.5f * (low + high); \
         for (int i = 0; i < dim; ++i) { \
@@ -1796,7 +1798,7 @@ static inline real qmvnorm_internal(real p, MU_AS const real *mu, SIGMA_AS real 
             } \
         } \
         real est_p = pmvnorm_internal(ws_lower, ws_upper, mu, Sigma_L, dim, n_samples, ws_pmv, idx, mt); \
-        /* Achtung: bei upper.tail (tail_mode == 1) ist est_p monoton FALLEND in mid! */ \
+        /* Attention: with upper.tail (tail_mode == 1) est_p is monotonically FALLING in mid! */ \
         if (tail_mode == 1) { \
             if (est_p > p) low = mid; \
             else           high = mid; \

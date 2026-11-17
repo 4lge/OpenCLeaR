@@ -14,7 +14,7 @@ if (getRversion() >= "2.15.1") {
 ##'               \code{"upper.tail"} (gives \eqn{q} such that \eqn{P(X \ge \mu - q) = p}), or 
 ##'               \code{"both.tails"} (gives \eqn{q} such that \eqn{P(|X - \mu| \le q) = p}).
 ##' @param mean   mean vector parameter (default: 0).
-##' @param sigma  covariance matrix parameter (default: 1).
+##' @param sigma  covariance matrix parameter (default: 1). Maximimum dimension supported: 64 times 64.
 ##' @param n      total number of Monte Carlo samples across device threads (default: 1e6).
 ##' @param ...    arguments passed through to \code{\link{oclFunction}}
 ##' @return A numeric scalar representing the estimated equicoordinate quantile.
