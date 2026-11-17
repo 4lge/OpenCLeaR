@@ -171,7 +171,9 @@ static inline int core_cholesky(const real *Sigma, int m, real *L);
 static inline int wls_gls_fit(const real *A_in, const real *b_in, int m, int n, const real *Sigma, const real *weights, real *x_out, real *workspace_A_tilde, real *workspace_b_tilde, real *workspace_L, real *workspace_col, real *workspace_R, real *workspace_qty);
 static inline int ls_poly_fit(const real *x_data, const real *y_data, int m, int degree, real *a_out, real *total_workspace);
 
-
+// --- Multivariate Normal --- Note: it expectsthe lower triangle cholesky part L of the covariance matrix!!
+static inline real dmvnorm(const real *x, const real *mu, const real *L, int dim);
+static inline void rmvnorm_internal(__private const real *mu, __private const real *L, int dim, real *out_vector, __private int* idx, __private uint* mt) {
 
 
 static inline uint mt_rand(__private uint* state, __private int* idx, __private uint* mt) {
@@ -1532,3 +1534,100 @@ static inline int ls_poly_fit(const real *x_data, const real *y_data, int m, int
 
     return 0; 
 }
+
+
+// =========================================================================
+// MULTIVARIATE NORMAL DISTRIBUTION (MVN)
+// =========================================================================
+
+/**
+ * Generiert eine Stichprobe einer multivariaten Normalverteilung.
+ * Verwendet Ihre bestehende 'rnorm'-Makrofunktion sowie ein bereitgestelltes L.
+ *
+ * @param mu         Mittelwertsvektor der Länge [dim].
+ * @param L          Untere Dreiecksmatrix aus der Cholesky-Zerlegung (Größe: dim * dim, Row-Major).
+ * @param dim        Anzahl der Dimensionen.
+ * @param out_vector Ziel-Array der Länge [dim] für das Ergebnis.
+ */
+static inline void rmvnorm_internal(__private const real *mu, __private const real *L, int dim, real *out_vector, __private int* idx, __private uint* mt) {
+    // 1. Erzeuge standardnormalverteilten Vektor Z ~ N(0, I)
+    // Wir nutzen direkt Ihr vorhandenes rnorm()-Makro/Infrastruktur
+    real z[64]; // Statischer Puffer (ausreichend für gängige dimensionale Größen auf der GPU)
+    for (int i = 0; i < dim; i++) {
+        z[i] = rnorm_internal(0.0f, 1.0f, idx, mt);
+    }
+
+    // 2. Transformiere: X = mu + L * Z
+    for (int i = 0; i < dim; i++) {
+        real sum = mu[i];
+        for (int j = 0; j <= i; j++) { // Da L eine untere Dreiecksmatrix ist, reicht j <= i
+            sum += L[i * dim + j] * z[j];
+        }
+        out_vector[i] = sum;
+    }
+}
+// Makro-Wrapper passend zu Ihren anderen Verteilungen
+#define rmvnorm(mu, L, dim, out_vector) rmvnorm_internal((mu), (L), (dim), (out_vector), &idx, mt)
+
+
+/**
+ * Berechnet die Wahrscheinlichkeitsdichte (PDF) einer multivariaten Normalverteilung.
+ *
+ * @param x          Der Vektor, an dem die Dichte evaluiert werden soll (Länge dim).
+ * @param mu         Mittelwertsvektor (Länge dim).
+ * @param L          Untere Dreiecksmatrix der Cholesky-Zerlegung von Sigma (Größe: dim * dim, Row-Major).
+ * @param dim        Anzahl der Dimensionen.
+ * @return           Dichtewert an der Stelle x.
+ */
+static inline real dmvnorm(const real *x, const real *mu, const real *L, int dim) {
+    // 1. Berechne die Determinante von Sigma über L: det(Sigma) = det(L)^2
+    // Die Determinante einer Dreiecksmatrix ist das Produkt ihrer Diagonalelemente.
+    real log_det_sigma = 0.0f;
+    for (int i = 0; i < dim; i++) {
+        real l_diag = L[i * dim + i];
+        if (l_diag <= 0.0f) return 0.0f; // Ungültige Kovarianzmatrix
+        log_det_sigma += 2.0f * log(l_diag);
+    }
+
+    // 2. Löse das System L * z = (x - mu) mittels Vorwärtssubstitution (Inversion-Ersatz)
+    // Das transformiert die Daten zurück in den Standardraum, um die Quadrate zu summieren.
+    real z[64];
+    for (int i = 0; i < dim; i++) {
+        real sum = x[i] - mu[i];
+        for (int j = 0; j < i; j++) {
+            sum -= L[i * dim + j] * z[j];
+        }
+        z[i] = sum / L[i * dim + i];
+    }
+
+    // 3. Berechne den Mahalanobis-Abstand: z^T * z
+    real mahalanobis = 0.0f;
+    for (int i = 0; i < dim; i++) {
+        mahalanobis += z[i] * z[i];
+    }
+
+    // 4. Zusammensetzen im stabilen Log-Raum zur Vermeidung von Unter-/Überläufen
+    real log_pdf = -0.5f * ((real)dim * log(2.0f * (real)M_PI) + log_det_sigma + mahalanobis);
+
+    return exp(log_pdf);
+}
+
+/* // Beispielhafter Ablauf innerhalb eines Kernels: */
+/* real Sigma[9] = { 4.0f, 1.0f, 0.5f, */
+/*                   1.0f, 3.0f, 0.2f, */
+/*                   0.5f, 0.2f, 2.0f }; // Ihre Kovarianzmatrix (3x3) */
+/* real L[9]; */
+/* real mu[3] = {0.0f, 1.0f, -0.5f}; */
+/* real sample[3]; */
+
+/* // 1. Cholesky-Zerlegung einmalig durchführen */
+/* int res = core_cholesky(Sigma, 3, L); */
+
+/* if (res == 0) { */
+/*     // 2. Beliebig oft rmvnorm zur Simulation aufrufen */
+/*     rmvnorm(mu, L, 3, sample); */
+
+/*     // 3. Oder die exakte Dichte eines Vektors berechnen */
+/*     real dichte = dmvnorm(sample, mu, L, 3); */
+/* } */
+
