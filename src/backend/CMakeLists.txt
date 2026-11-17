@@ -363,7 +363,7 @@ ENDIF()
 ADD_CUSTOM_COMMAND(TARGET ocl_compiler POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/bin"
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:ocl_compiler> "${CMAKE_CURRENT_SOURCE_DIR}/../../inst/bin/"
-    COMMENT "📦 Kompiliere ocl_compiler mit R-Toolchain und kopiere nach inst/bin/"
+    COMMENT " Compile ocl_compiler with R toolchain and copy to inst/bin/"
 )
 
 # Fix "not terminated with a newline" warnings in R CMD check

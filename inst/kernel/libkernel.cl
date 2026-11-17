@@ -171,9 +171,16 @@ static inline int core_cholesky(const real *Sigma, int m, real *L);
 static inline int wls_gls_fit(const real *A_in, const real *b_in, int m, int n, const real *Sigma, const real *weights, real *x_out, real *workspace_A_tilde, real *workspace_b_tilde, real *workspace_L, real *workspace_col, real *workspace_R, real *workspace_qty);
 static inline int ls_poly_fit(const real *x_data, const real *y_data, int m, int degree, real *a_out, real *total_workspace);
 
-// --- Multivariate Normal --- Note: it expectsthe lower triangle cholesky part L of the covariance matrix!!
-static inline real dmvnorm(const real *x, const real *mu, const real *L, int dim);
-static inline void rmvnorm_internal(__private const real *mu, __private const real *L, int dim, real *out_vector, __private int* idx, __private uint* mt) {
+// --- Multivariate Normal --- Note: it saves the lower triangle
+// --- cholesky part of L without diagonale into the covariance
+// --- matrix!!
+__attribute__((overloadable)) static inline int core_cholesky_compact(__private real *A, int dim);
+__attribute__((overloadable)) static inline int core_cholesky_compact(__global real *A, int dim);
+
+__attribute__((overloadable)) static inline int rmvnorm_internal(__private const real *mu, __private real *Sigma_L, int dim, __private real *out_vector, __private int* idx, __private uint* mt);
+__attribute__((overloadable)) static inline int rmvnorm_internal(__global const real *mu, __global real *Sigma_L, int dim, __global real *out_vector, __private int* idx, __private uint* mt);
+__attribute__((overloadable)) static inline int rmvnorm_internal(__global const real *mu, __global real *Sigma_L, int dim, __private real *out_vector, __private int* idx, __private uint* mt);
+__attribute__((overloadable)) static inline int rmvnorm_internal(__private const real *mu, __global real *Sigma_L, int dim, __private real *out_vector, __private int* idx, __private uint* mt);
 
 
 static inline uint mt_rand(__private uint* state, __private int* idx, __private uint* mt) {
@@ -1535,99 +1542,275 @@ static inline int ls_poly_fit(const real *x_data, const real *y_data, int m, int
     return 0; 
 }
 
+// --- Compact Cholesky & Multivariate Normal Distribution ---
 
 // =========================================================================
-// MULTIVARIATE NORMAL DISTRIBUTION (MVN)
+// COMPACT MVN WITH DIRTY-FLAG (memory size: dim * dim + 1)
+// Layout of A:
+//   [0 .. dim*dim - 1] :
+//     Upper triangle + diagonal = sigma,
+//     strictly lower triangle = L
+//     [dim*dim] : status flag (1.0 = L is current, <= 0.0 = dirty / recalculate)
+// =========================================================================
+
+ 
+// Auxiliary macro: Mark as dirty if sigma has been changed
+#define MARK_SIGMA_DIRTY(A, dim) ((A)[(dim) * (dim)] = (real)-1.0f)
+
+/**
+ * dense implementation of core_cholesky:  
+ * Recalculates L in the lower triangle only if the flag at A[dim*dim] <= 0.
+ * Sets flag to 1.0 on success.
+ */
+
+// 1. Define implementation once as a generic macro. This is due to
+// the necessity to call this OpenCL function with __global (via the
+// kernel) and __private (within larger OpenCL functions) arguments!
+#define DEFINE_CORE_CHOLESKY_COMPACT(ADDR_SPACE) \
+__attribute__((overloadable)) \
+static inline int core_cholesky_compact(ADDR_SPACE real *A, int dim) { \
+    if (A[dim * dim] > (real)0.0f) return 0; \
+    for (int i = 0; i < dim; i++) { \
+        for (int j = 0; j < i; j++) { \
+            real sum = A[j * dim + i]; \
+            for (int k = 0; k < j; k++) sum -= A[i * dim + k] * A[j * dim + k]; \
+            real diag_sq = A[j * dim + j]; \
+            for (int k = 0; k < j; k++) { \
+                real l_jk = A[j * dim + k]; \
+                diag_sq -= l_jk * l_jk; \
+            } \
+            if (diag_sq <= (real)GPGPU_EPSILON) return -1; \
+            A[i * dim + j] = sum / sqrt(diag_sq); \
+        } \
+        real diag_sq_i = A[i * dim + i]; \
+        for (int k = 0; k < i; k++) { \
+            real l_ik = A[i * dim + k]; \
+            diag_sq_i -= l_ik * l_ik; \
+        } \
+        if (diag_sq_i <= (real)GPGPU_EPSILON) return -1; \
+    } \
+    A[dim * dim] = (real)1.0f; \
+    return 0; \
+}
+
+// 2. Create both variants with a one-liner (also __local if necessary)
+DEFINE_CORE_CHOLESKY_COMPACT(__private)
+DEFINE_CORE_CHOLESKY_COMPACT(__global)
+
+  
+/**
+ * Generates X ~ MVN(mu, Sigma). Automatically creates cholesky factor
+ * of Sigma if necessary, that's why it's called Sigma_L and is one
+ * element larger than dim^2 wich serves as dirty flag.
+ */
+
+
+#define DEFINE_RMVNORM_INTERNAL(MU_AS, SIGMA_AS, OUT_AS) \
+__attribute__((overloadable)) \
+static inline int rmvnorm_internal(MU_AS const real *mu, SIGMA_AS real *Sigma_L, int dim, \
+                                   OUT_AS real *out_vector, __private int* idx, __private uint* mt) { \
+    if (core_cholesky_compact(Sigma_L, dim) != 0) return -1; \
+    for (int i = 0; i < dim; i++) out_vector[i] = mu[i]; \
+    for (int j = 0; j < dim; j++) { \
+        real z_j = rnorm_internal((real)0.0f, (real)1.0f, idx, mt); \
+        real diag_sq = Sigma_L[j * dim + j]; \
+        for (int k = 0; k < j; k++) { \
+            real l_jk = Sigma_L[j * dim + k]; \
+            diag_sq -= l_jk * l_jk; \
+        } \
+        real l_jj = sqrt(fmax(diag_sq, (real)0.0f)); \
+        out_vector[j] += l_jj * z_j; \
+        for (int i = j + 1; i < dim; i++) { \
+            out_vector[i] += Sigma_L[i * dim + j] * z_j; \
+        } \
+    } \
+    return 0; \
+}
+
+// Instantiate all required combinations:
+DEFINE_RMVNORM_INTERNAL(__private, __private, __private)
+DEFINE_RMVNORM_INTERNAL(__global,  __global,  __global)
+DEFINE_RMVNORM_INTERNAL(__global,  __global,  __private)
+DEFINE_RMVNORM_INTERNAL(__private, __global,  __private)
+
+#define rmvnorm(mu, Sigma_L, dim, out_vector)                           \
+    rmvnorm_internal((mu), (Sigma_L), (dim), (out_vector), &idx, mt)
+  
+/**
+ * Calculates density (PDF). Automatically creates cholesky factor of
+ * Sigma once if necessary.
+ */
+#define DEFINE_DMVNORM(X_AS, MU_AS, SIGMA_AS, WS_AS) \
+__attribute__((overloadable)) \
+static inline real dmvnorm(X_AS const real *x, MU_AS const real *mu, SIGMA_AS real *Sigma_L, \
+                           int dim, int log_pdf, WS_AS real *workspace) { \
+    if (core_cholesky_compact(Sigma_L, dim) != 0) return (real)NAN; \
+    real log_det_sigma = (real)0.0f; \
+    for (int i = 0; i < dim; ++i) { \
+        real diag_sq = Sigma_L[i * dim + i]; \
+        for (int k = 0; k < i; ++k) { \
+            real l_ik = Sigma_L[i * dim + k]; \
+            diag_sq -= l_ik * l_ik; \
+        } \
+        if (diag_sq <= (real)GPGPU_EPSILON) return log_pdf ? (real)-INFINITY : (real)0.0f; \
+        real l_ii = sqrt(diag_sq); \
+        log_det_sigma += log(diag_sq); \
+        real sum = x[i] - mu[i]; \
+        for (int j = 0; j < i; ++j) { \
+            sum -= Sigma_L[i * dim + j] * workspace[j]; \
+        } \
+        workspace[i] = sum / l_ii; \
+    } \
+    real mahalanobis = (real)0.0f; \
+    for (int i = 0; i < dim; ++i) { \
+        mahalanobis += workspace[i] * workspace[i]; \
+    } \
+    real res = (real)-0.5f * ((real)dim * log((real)2.0f * (real)M_PI) + log_det_sigma + mahalanobis); \
+    return log_pdf ? res : exp(res); \
+}
+
+DEFINE_DMVNORM(__private, __private, __private, __private)
+DEFINE_DMVNORM(__global,  __global,  __global,  __private)
+DEFINE_DMVNORM(__private, __global,  __global,  __private)
+DEFINE_DMVNORM(__global,  __private, __private, __private)
+
+// =========================================================================
+// MULTIVARIATE NORMAL CDF (pmvnorm via Device-Level Monte Carlo)
 // =========================================================================
 
 /**
- * Generiert eine Stichprobe einer multivariaten Normalverteilung.
- * Verwendet Ihre bestehende 'rnorm'-Makrofunktion sowie ein bereitgestelltes L.
+ * Schätzt P(lower <= X <= upper) für X ~ MVN(mu, Sigma) direkt im Device-Code.
+ * Verwendet spaltenweise Berechnung ohne festen Dimensions-Puffer (beliebiges dim)
+ * und bricht verworfene Stichproben per Early-Exit sofort ab.
  *
- * @param mu         Mittelwertsvektor der Länge [dim].
- * @param L          Untere Dreiecksmatrix aus der Cholesky-Zerlegung (Größe: dim * dim, Row-Major).
- * @param dim        Anzahl der Dimensionen.
- * @param out_vector Ziel-Array der Länge [dim] für das Ergebnis.
+ * @param lower     Untere Integrationsgrenzen [dim] (darf -INFINITY enthalten)
+ * @param upper     Obere Integrationsgrenzen [dim] (darf +INFINITY enthalten)
+ * @param mu        Mittelwertsvektor [dim]
+ * @param Sigma_L   Kompakte Kovarianz-/Cholesky-Matrix [dim * dim + 1]
+ * @param dim       Dimension
+ * @param n_samples Anzahl der Monte-Carlo-Stichproben innerhalb dieses Threads
+ * @param workspace Temporärer Puffer der Länge [dim] (im __private oder __global Speicher)
  */
-static inline void rmvnorm_internal(__private const real *mu, __private const real *L, int dim, real *out_vector, __private int* idx, __private uint* mt) {
-    // 1. Erzeuge standardnormalverteilten Vektor Z ~ N(0, I)
-    // Wir nutzen direkt Ihr vorhandenes rnorm()-Makro/Infrastruktur
-    real z[64]; // Statischer Puffer (ausreichend für gängige dimensionale Größen auf der GPU)
-    for (int i = 0; i < dim; i++) {
-        z[i] = rnorm_internal(0.0f, 1.0f, idx, mt);
-    }
-
-    // 2. Transformiere: X = mu + L * Z
-    for (int i = 0; i < dim; i++) {
-        real sum = mu[i];
-        for (int j = 0; j <= i; j++) { // Da L eine untere Dreiecksmatrix ist, reicht j <= i
-            sum += L[i * dim + j] * z[j];
-        }
-        out_vector[i] = sum;
-    }
-}
-// Makro-Wrapper passend zu Ihren anderen Verteilungen
-#define rmvnorm(mu, L, dim, out_vector) rmvnorm_internal((mu), (L), (dim), (out_vector), &idx, mt)
-
-
-/**
- * Berechnet die Wahrscheinlichkeitsdichte (PDF) einer multivariaten Normalverteilung.
- *
- * @param x          Der Vektor, an dem die Dichte evaluiert werden soll (Länge dim).
- * @param mu         Mittelwertsvektor (Länge dim).
- * @param L          Untere Dreiecksmatrix der Cholesky-Zerlegung von Sigma (Größe: dim * dim, Row-Major).
- * @param dim        Anzahl der Dimensionen.
- * @return           Dichtewert an der Stelle x.
- */
-static inline real dmvnorm(const real *x, const real *mu, const real *L, int dim) {
-    // 1. Berechne die Determinante von Sigma über L: det(Sigma) = det(L)^2
-    // Die Determinante einer Dreiecksmatrix ist das Produkt ihrer Diagonalelemente.
-    real log_det_sigma = 0.0f;
-    for (int i = 0; i < dim; i++) {
-        real l_diag = L[i * dim + i];
-        if (l_diag <= 0.0f) return 0.0f; // Ungültige Kovarianzmatrix
-        log_det_sigma += 2.0f * log(l_diag);
-    }
-
-    // 2. Löse das System L * z = (x - mu) mittels Vorwärtssubstitution (Inversion-Ersatz)
-    // Das transformiert die Daten zurück in den Standardraum, um die Quadrate zu summieren.
-    real z[64];
-    for (int i = 0; i < dim; i++) {
-        real sum = x[i] - mu[i];
-        for (int j = 0; j < i; j++) {
-            sum -= L[i * dim + j] * z[j];
-        }
-        z[i] = sum / L[i * dim + i];
-    }
-
-    // 3. Berechne den Mahalanobis-Abstand: z^T * z
-    real mahalanobis = 0.0f;
-    for (int i = 0; i < dim; i++) {
-        mahalanobis += z[i] * z[i];
-    }
-
-    // 4. Zusammensetzen im stabilen Log-Raum zur Vermeidung von Unter-/Überläufen
-    real log_pdf = -0.5f * ((real)dim * log(2.0f * (real)M_PI) + log_det_sigma + mahalanobis);
-
-    return exp(log_pdf);
+#define DEFINE_PMVNORM_INTERNAL(BOUND_AS, MU_AS, SIGMA_AS, WS_AS) \
+__attribute__((overloadable)) \
+static inline real pmvnorm_internal(BOUND_AS const real *lower, BOUND_AS const real *upper, \
+                                    MU_AS const real *mu, SIGMA_AS real *Sigma_L, \
+                                    int dim, int n_samples, WS_AS real *workspace, \
+                                    __private int* idx, __private uint* mt) { \
+    if (n_samples <= 0) return (real)NAN; \
+    if (core_cholesky_compact(Sigma_L, dim) != 0) return (real)NAN; \
+    int hits = 0; \
+    for (int s = 0; s < n_samples; ++s) { \
+        for (int i = 0; i < dim; ++i) { \
+            workspace[i] = mu[i]; \
+        } \
+        int inside = 1; \
+        for (int j = 0; j < dim; ++j) { \
+            real z_j = rnorm_internal((real)0.0f, (real)1.0f, idx, mt); \
+            real diag_sq = Sigma_L[j * dim + j]; \
+            for (int k = 0; k < j; ++k) { \
+                real l_jk = Sigma_L[j * dim + k]; \
+                diag_sq -= l_jk * l_jk; \
+            } \
+            real l_jj = sqrt(fmax(diag_sq, (real)0.0f)); \
+            /* Komponente j ist nach Spalte j komplett fertig berechnet! */ \
+            real x_j = workspace[j] + l_jj * z_j; \
+            if (x_j < lower[j] || x_j > upper[j]) { \
+                inside = 0; \
+                break; /* Early-Exit: Rest der Spalten muss nicht mehr berechnet werden! */ \
+            } \
+            for (int i = j + 1; i < dim; ++i) { \
+                workspace[i] += Sigma_L[i * dim + j] * z_j; \
+            } \
+        } \
+        if (inside) { \
+            hits++; \
+        } \
+    } \
+    return (real)hits / (real)n_samples; \
 }
 
-/* // Beispielhafter Ablauf innerhalb eines Kernels: */
-/* real Sigma[9] = { 4.0f, 1.0f, 0.5f, */
-/*                   1.0f, 3.0f, 0.2f, */
-/*                   0.5f, 0.2f, 2.0f }; // Ihre Kovarianzmatrix (3x3) */
-/* real L[9]; */
-/* real mu[3] = {0.0f, 1.0f, -0.5f}; */
-/* real sample[3]; */
+// Wichtigste Adressraum-Kombinationen für OpenCL 1.2 instanziieren
+DEFINE_PMVNORM_INTERNAL(__private, __private, __private, __private)
+DEFINE_PMVNORM_INTERNAL(__global,  __global,  __global,  __private)
+DEFINE_PMVNORM_INTERNAL(__private, __global,  __global,  __private)
+DEFINE_PMVNORM_INTERNAL(__global,  __private, __private, __private)
+DEFINE_PMVNORM_INTERNAL(__private, __private, __global,  __private)
 
-/* // 1. Cholesky-Zerlegung einmalig durchführen */
-/* int res = core_cholesky(Sigma, 3, L); */
+// Komfort-Makro passend zu rnorm / rmvnorm (versteckt &idx und mt)
+#define pmvnorm(lower, upper, mu, Sigma_L, dim, n_samples, workspace) \
+    pmvnorm_internal((lower), (upper), (mu), (Sigma_L), (dim), (n_samples), (workspace), &idx, mt)
 
-/* if (res == 0) { */
-/*     // 2. Beliebig oft rmvnorm zur Simulation aufrufen */
-/*     rmvnorm(mu, L, 3, sample); */
 
-/*     // 3. Oder die exakte Dichte eines Vektors berechnen */
-/*     real dichte = dmvnorm(sample, mu, L, 3); */
-/* } */
+// =========================================================================
+// MULTIVARIATE NORMAL QUANTILE (qmvnorm - 100% OpenCL, kompatibel zu mvtnorm)
+// tail_mode: 0 = "lower.tail", 1 = "upper.tail", 2 = "both.tails"
+// =========================================================================
 
+#define DEFINE_QMVNORM_INTERNAL(MU_AS, SIGMA_AS, WS_AS) \
+__attribute__((overloadable)) \
+static inline real qmvnorm_internal(real p, MU_AS const real *mu, SIGMA_AS real *Sigma_L, \
+                                    int dim, int tail_mode, int n_samples, \
+                                    WS_AS real *ws_lower, WS_AS real *ws_upper, WS_AS real *ws_pmv, \
+                                    __private int* idx, __private uint* mt) { \
+    if (p < (real)0.0f || p > (real)1.0f || dim <= 0 || n_samples <= 0) return (real)NAN; \
+    if (p == (real)0.0f) return (tail_mode == 2) ? (real)0.0f : (real)-INFINITY; \
+    if (p == (real)1.0f) return (real)INFINITY; \
+    if (core_cholesky_compact(Sigma_L, dim) != 0) return (real)NAN; \
+    /* 1. Sicheres Suchintervall aus min/max(mu) und max(sd) bestimmen */ \
+    real min_mu = mu[0]; \
+    real max_mu = mu[0]; \
+    real max_abs_mu = fabs(mu[0]); \
+    real max_sd = (real)0.0f; \
+    for (int i = 0; i < dim; ++i) { \
+        if (mu[i] < min_mu) min_mu = mu[i]; \
+        if (mu[i] > max_mu) max_mu = mu[i]; \
+        if (fabs(mu[i]) > max_abs_mu) max_abs_mu = fabs(mu[i]); \
+        real sd = sqrt(fmax(Sigma_L[i * dim + i], (real)GPGPU_EPSILON)); \
+        if (sd > max_sd) max_sd = sd; \
+    } \
+    real p_uni = (tail_mode == 2) ? ((real)0.5f + (real)0.5f * pow(p, (real)1.0f / (real)dim)) \
+                                  : pow(p, (real)1.0f / (real)dim); \
+    real z_abs = fabs(qnorm(p_uni, (real)0.0f, (real)1.0f)) + (real)2.5f; \
+    real low, high; \
+    if (tail_mode == 2) { \
+        low  = (real)0.0f; \
+        high = max_abs_mu + z_abs * max_sd; \
+    } else { \
+        low  = min_mu - z_abs * max_sd; \
+        high = max_mu + z_abs * max_sd; \
+    } \
+    /* 2. Bisektion auf der GPU (18 Schritte) */ \
+    for (int iter = 0; iter < 18; ++iter) { \
+        real mid = (real)0.5f * (low + high); \
+        for (int i = 0; i < dim; ++i) { \
+            if (tail_mode == 0) {        /* lower.tail: P(X <= q) = p */ \
+                ws_lower[i] = (real)-INFINITY; \
+                ws_upper[i] = mid; \
+            } else if (tail_mode == 1) { /* upper.tail: P(X >= q) = p */ \
+                ws_lower[i] = mid; \
+                ws_upper[i] = (real)INFINITY; \
+            } else {                     /* both.tails: P(-q <= X <= q) = p */ \
+                ws_lower[i] = -mid; \
+                ws_upper[i] = mid; \
+            } \
+        } \
+        real est_p = pmvnorm_internal(ws_lower, ws_upper, mu, Sigma_L, dim, n_samples, ws_pmv, idx, mt); \
+        /* Achtung: bei upper.tail (tail_mode == 1) ist est_p monoton FALLEND in mid! */ \
+        if (tail_mode == 1) { \
+            if (est_p > p) low = mid; \
+            else           high = mid; \
+        } else { \
+            if (est_p < p) low = mid; \
+            else           high = mid; \
+        } \
+    } \
+    return (real)0.5f * (low + high); \
+}
+
+DEFINE_QMVNORM_INTERNAL(__private, __private, __private)
+DEFINE_QMVNORM_INTERNAL(__global,  __global,  __private)
+DEFINE_QMVNORM_INTERNAL(__private, __global,  __private)
+
+#define qmvnorm(p, mu, Sigma_L, dim, tail_mode, n_samples, ws_l, ws_u, ws_p) \
+    qmvnorm_internal((p), (mu), (Sigma_L), (dim), (tail_mode), (n_samples), (ws_l), (ws_u), (ws_p), &idx, mt)
