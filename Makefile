@@ -17,7 +17,7 @@ clean:
 	rm -f vignettes/*.html vignettes/*.R
 
 dist-clean: clean
-	rm vignettes/*log vignettes/*tex vignettes/*zip vignettes/*bak vignettes/*cl vignettes/*cpp 
+	rm -f vignettes/*log vignettes/*tex vignettes/*zip vignettes/*bak vignettes/*cl vignettes/*cpp 
 	find . -name \*SFConflict\* -delete
 	find . -name \*.orig -delete
 	find . -name \*.rej -delete
