@@ -24,7 +24,7 @@ URL: https://github.com/4lge/OpenCLeaR
 BugReports: https://github.com/4lge/OpenCLeaR/issues
 LinkingTo: Rcpp
 Imports: Rcpp, inline, methods
-SystemRequirements: OpenCL, CMake
+SystemRequirements: CMake (>= 3.10), OpenCL
 Encoding: UTF-8
 License: MIT + file LICENSE
 Config/roxygen2/version: 8.0.0
@@ -33,4 +33,4 @@ Config/testthat/edition: 3
 RoxygenNote: 7.3.3
 NeedsCompilation: yes
 Packaged: 2026-10-13 10:50:43 UTC; agebhard
-SystemRequirements: CMake (>= 3.10), OpenCL
+
