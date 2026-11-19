@@ -20,7 +20,7 @@ pmvnormOCL(
 
 \item{mean}{mean vector parameter (default: rep(0, length(lower))).}
 
-\item{sigma}{covariance matrix parameter (default: diag(length(lower))).}
+\item{sigma}{covariance matrix parameter (default: diag(length(lower))). Maximimum dimension supported: 64 times 64.}
 
 \item{n}{number of Monte Carlo samples (default: 1e6).}
 

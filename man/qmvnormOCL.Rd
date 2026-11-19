@@ -23,7 +23,7 @@ qmvnormOCL(
 
 \item{mean}{mean vector parameter (default: 0).}
 
-\item{sigma}{covariance matrix parameter (default: 1).}
+\item{sigma}{covariance matrix parameter (default: 1). Maximimum dimension supported: 64 times 64.}
 
 \item{n}{total number of Monte Carlo samples across device threads (default: 1e6).}
 

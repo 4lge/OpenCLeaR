@@ -477,3 +477,16 @@ Contributions, suggestions, and issues are welcome! Feel free to open a pull req
 MIT License. See `LICENSE` and `LICENSE.note` for details.
 
 
+## Portability Note: 64-Bit Integers (`long long`) & Private Memory on Apple Silicon (macOS Metal)
+
+When writing OpenCL kernels intended to run seamlessly across desktop/server GPUs (NVIDIA, AMD, Intel) and **Apple Silicon (M1–M4)**, two hardware/compiler restrictions in Apple's OpenCL-over-Metal backend (`cl2Metal`) can cause pipeline creation to fail silently without a compiler syntax error:
+
+1. **Avoid `long long` (64-bit integer arithmetic) in device code:**
+   Although OpenCL 1.2 specifies 64-bit integers, Apple's `cl2Metal` translator rejects several 64-bit integer operations (such as 64-bit modulo `%`, division, or complex buffer offset indexing using `long long`) during pipeline compilation.
+   * **Symptom:** `UNSUPPORTED (log once): createKernel: newComputePipelineState failed` followed by `OpenCL error: There is no OpenCL kernel with name "..."`.
+   * **Fix:** Use `int` or `uint` for buffer offsets and loop indices (sufficient for up to $2^{32} - 1 \approx 4.29 \times 10^9$ elements).
+
+2. **Keep thread-private (`__private`) memory compact (`#define USE_FAST_RNG`):**
+   Apple Silicon GPUs enforce a strict per-thread `__private` memory and register budget (roughly 4 KB including call stack). The default Mersenne Twister (`MT19937`) state alone occupies **2,500 bytes** (`uint mt[624]`) per thread, which—combined with local arrays—can exceed the pipeline budget in complex kernels.
+   * **Fix:** Define `#define USE_FAST_RNG` at the top of your kernel (or before loading `libkernel.cl`). Through OpenCLeaR's `INIT_RNG` / `RNG_ARGS` abstraction, all random number generators (`runif`, `rnorm`, `rgamma`, `rmvnorm`, etc.) automatically switch to a **16-byte Xorshift128** state without changing a single function call in your kernel code.
+

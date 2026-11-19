@@ -158,6 +158,10 @@ inlineCxxPluginDouble <- function(...) {
 ##' @param debug Logical value. If \code{TRUE}, the complete with
 ##' @param math_lib Logical value. If \code{TRUE}, the mathematical library libkernel.cl is loaded.
 ##' @param force_float Logical value. If \code{TRUE}, execution is forced to FP32 eben on FP64 capable hardware.
+##' @param RNGkind character, chooses random number genreator from
+##'   \code{c("Mersenne-Twister", "Xorshift128","nmath")}, "nmath" not yet active,
+##'   default "Mersenne-Twister". Has only effect if math_lib is active and used
+##'   math library honors the resulting defines.
 ##' @param ... additional arguments, passed to \code{inline::cxxfunction}.
 ##' @return A R function to access your CL kernel via your Rcpp interface.
 ##' @examples
@@ -205,7 +209,7 @@ inlineCxxPluginDouble <- function(...) {
 ##'     gpu_x0.write_to_device(); gpu_y0.write_to_device();
 ##'     gpu_x.write_to_device(); gpu_y.write_to_device(); gpu_z.write_to_device();
 ##'
-##'     Kernel k(*device, n0, \"idw_kernel\", gpu_x0, gpu_y0, gpu_z0, 
+##'     Kernel k(*device, n0, \"idw_kernel\", gpu_x0, gpu_y0, gpu_z0,
 ##'              gpu_x, gpu_y, gpu_z, n0, n, as<real>(p));
 ##'     k.run();
 ##'     gpu_z0.read_from_device();
@@ -215,7 +219,7 @@ inlineCxxPluginDouble <- function(...) {
 ##'"
 ##'
 ##' idw_gpu <- inlineCL(
-##'     signature = signature(r_x0="numeric", r_y0="numeric", 
+##'     signature = signature(r_x0="numeric", r_y0="numeric",
 ##'                           r_x="numeric", r_y="numeric", r_z="numeric", p="numeric"),
 ##'     kernel_file = kernel_file,
 ##'     interface_file = interface_file
@@ -305,7 +309,13 @@ inlineCxxPluginDouble <- function(...) {
 ##' }
 ##' }
 ##' @export
-inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math_lib = TRUE, force_float = FALSE, ...) {
+inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math_lib = TRUE, RNGkind = "Mersenne-Twister", force_float = FALSE, ...) {
+    RNGkind <- match.arg(RNGkind, choices = c("Mersenne-Twister", "Xorshift128"))
+    rng_define <- switch(RNGkind,
+                         "Mersenne-Twister" = "",
+                         "Xorshift128"      = "#define USE_FAST_RNG\n",
+                         "nmath"            = ""
+                         )
 
     ## We wake up the backend so that the real hardware information is available
     tryCatch({
@@ -387,6 +397,7 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         } else {
             ## use a math library from central package storage
             math_lib_injection <- paste0(
+                rng_define,
                 "    Rcpp::Function sys_file(\"system.file\");\n",
                 "    std::string pkg_kernel_dir = Rcpp::as<std::string>(sys_file(\"kernel\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
                 "    std::string math_lib_file = pkg_kernel_dir + \"/\" +\"", math_lib,"\";\n",
@@ -500,6 +511,10 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
 ##' be searched in local directory, otherwise in subdirectory "interface"
 ##' of installed library.
 ##' @param math_lib Logical. If TRUE, inject the mathematical kernel library.
+##' @param RNGkind character, chooses random number genreator from
+##'   \code{c("Mersenne-Twister", "Xorshift128","nmath")}, "nmath" not yet active,
+##'   default "Mersenne-Twister". Has only effect if math_lib is active and used
+##'   math library honors the resulting defines.
 ##' @param force_float Logical. If TRUE, forces single-precision calculations.
 ##' @param verbose Logical. Enable verbose compiler outputs.
 ##' @param debug Logical. Export raw compiled source string for debugging.
@@ -604,10 +619,10 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
 ##'}
 ##'
 ##' @export
-oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE, force_float = FALSE, verbose = FALSE, debug = FALSE, cache = TRUE) {
+oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE, RNGkind = "Mersenne-Twister", force_float = FALSE, verbose = FALSE, debug = FALSE, cache = TRUE) {
     ## handle cached version
     kernel_base_name <- tools::file_path_sans_ext(basename(kernel_file))
-    
+
     ## Hide local state via lexical scoping for fast hot-path checks
     compiled_func    <- NULL
     last_device_id   <- NULL
@@ -645,7 +660,7 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
                             fp64_suffix,
                             prec_suffix,
                             "_ocl_internal")
-        
+
         cache_env <- asNamespace("OpenCLeaR")$.OpenCLeaR_Env
 
         ## Check if a device or mode change happened
@@ -680,11 +695,12 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
                                              kernel_file    = kernel_file,
                                              interface_file = interface_file,
                                              math_lib       = math_lib,
+                                             RNGkind        = RNGkind,
                                              force_float    = force_float,
                                              verbose        = verbose,
                                              debug          = debug
                                          )
-            
+
             last_cache_key   <<- cache_key
             last_device_id   <<- current_id
             last_fp64_state  <<- current_fp64

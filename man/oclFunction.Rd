@@ -9,6 +9,7 @@ oclFunction(
   kernel_file,
   interface_file,
   math_lib = TRUE,
+  RNGkind = "Mersenne-Twister",
   force_float = FALSE,
   verbose = FALSE,
   debug = FALSE,
@@ -29,6 +30,11 @@ be searched in local directory, otherwise in subdirectory "interface"
 of installed library.}
 
 \item{math_lib}{Logical. If TRUE, inject the mathematical kernel library.}
+
+\item{RNGkind}{character, chooses random number genreator from
+\code{c("Mersenne-Twister", "Xorshift128","nmath")}, "nmath" not yet active,
+default "Mersenne-Twister". Has only effect if math_lib is active and used
+math library honors the resulting defines.}
 
 \item{force_float}{Logical. If TRUE, forces single-precision calculations.}
 

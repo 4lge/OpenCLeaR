@@ -12,7 +12,7 @@
 #endif
 #else
 #define GPGPU_EPSILON 1e-6f
-#define GPGPU_SAFE_MAX 1e-37f
+#define GPGPU_SAFE_MAX 1e-35f
 #ifndef M_PI
 #define M_PI 3.1415926536f
 #endif
@@ -35,101 +35,177 @@ __attribute__((overloadable)) static inline real cos(int x)    { return cos((rea
 __attribute__((overloadable)) static inline real tan(int x)    { return tan((real)x); }
 // LIST NEEDS TO BE CONTINUED ...
 
-// RNG initialization and seed setting
-#define INIT_MT(seed) \
-  uint mt[624]; \
-  int idx = 624; \
-  mt[0] = (seed) + get_global_id(0); \
-  for (int i = 1; i < 624; ++i) { \
-    mt[i] = (181243 * (mt[i - 1] ^ (mt[i - 1] >> 30)) + i); \
-  }
+
+// =========================================================================
+// GENERATOR-AGNOSTISCHES RNG-INTERFACE (INIT_RNG & RNG_ARGS)
+// =========================================================================
+
+#ifdef USE_FAST_RNG
+// use XOR Shift to save memory per thread 
+
+static inline void init_xorshift128(__private uint4* state, uint seed) {
+    uint s = seed + 0x9E3779B9u;
+    s = (s ^ (s >> 16)) * 0x85EBCA6Bu;
+    s = (s ^ (s >> 13)) * 0xC2B2AE35u;
+    uint x = (s ^ (s >> 16)) | 1u;
+    uint y = x * 1664525u + 1013904223u;
+    uint z = y * 1664525u + 1013904223u;
+    uint w = z * 1664525u + 1013904223u;
+    *state = (uint4)(x, y, z, w);
+}
+
+#define INIT_RNG(seed) \
+    uint4 fast_rng_state; \
+    int idx = 0; \
+    init_xorshift128(&fast_rng_state, (uint)((seed) + get_global_id(0)))
+
+static inline real rand_01(__private uint4* rng_state) {
+    __private uint4* state = (__private uint4*)rng_state;
+    uint t = (*state).x;
+    uint s = (*state).w;
+    (*state).x = (*state).y;
+    (*state).y = (*state).z;
+    (*state).z = s;
+    t ^= t << 11;
+    t ^= t >> 8;
+    (*state).w = t ^ s ^ (s >> 19);
+    return ((real)((*state).w >> 8) + (real)0.5f) * ((real)1.0f / (real)16777216.0f);
+}
+
+// this will be appended to the internal RNG calls 
+#define RNG_PROTOTYPE __private uint4* rng_state
+#define RNG_01_ARGS   rng_state
+#define RNG_ARGS      &fast_rng_state
+#else
+
+// use Mersenne Twister, if we can afford the 624 elements in memory
+
+#define INIT_RNG(seed) \
+    uint mt[624]; \
+    int idx = 624; \
+    mt[0] = (seed) + get_global_id(0); \
+    for (int i = 1; i < 624; ++i) { \
+        mt[i] = (181243 * (mt[i - 1] ^ (mt[i - 1] >> 30)) + i); \
+    }
+
+
+static inline uint mt_rand(__private uint* state, __private int* idx, __private uint* mt) {
+    if (*idx >= 624) {
+        for (int i = 0; i < 624; ++i) {
+            uint temp = mt[i] ^ (mt[(i + 1) % 624] >> 1);
+            temp ^= (temp >> 1) ^ ((temp & 1) ? 0x8EB8B000 : 0);
+            mt[i] = mt[(i + 397) % 624] ^ temp;
+        }
+        *idx = 0;
+    }
+    uint x = mt[*idx];
+    x ^= (x >> 11);
+    x ^= (x << 7) & 0x9D2C5680;
+    x ^= (x << 15) & 0xEFC60000;
+    x ^= (x >> 18);
+    (*idx)++;
+    return x;
+}
+
+// MT scaled to [0,1]
+static inline real rand_01(__private int* idx, __private uint* mt) {
+    return (real)mt_rand(&mt[0], &idx[0], mt) / 4294967296.0f;
+}
+
+// this will be appended to the internal RNG calls 
+#define RNG_PROTOTYPE __private int* idx, __private uint* mt
+#define RNG_01_ARGS   &idx[0], mt
+#define RNG_ARGS      &idx, mt
+
+#endif
+
+
+// Optionaler Alias für Übergangszeit
+#define INIT_MT(seed) INIT_RNG(seed)
+
 
 
 // =========================================================================
 // CENTRAL FORWARD DECLARATIONS (Verhindert Reihenfolge-Fehler)
 // =========================================================================
 
-// --- Mersenne Twister RNG ---
-static inline uint mt_rand(__private uint* state, __private int* idx, __private uint* mt);
-static inline real mt_rand_01(__private int* idx, __private uint* mt);
-
 // --- Normal Distribution ---
 static inline real dnorm(real x, real mean, real sd);
 static inline real pnorm(real x, real mean, real sd);
 static inline real qnorm(real p, real mu, real sigma);
-static inline real rnorm_internal(__private real mu, __private real sigma, __private int* idx, __private uint* mt);
+static inline real rnorm_internal(__private real mu, __private real sigma, RNG_PROTOTYPE);
 
 // --- Uniform Distribution ---
 static inline real dunif(real x, real min, real max);
 static inline real punif(real q, real min, real max);
 static inline real qunif(real p, real min, real max);
-static inline real runif_internal(real min, real max, __private int* idx, __private uint* mt);
+static inline real runif_internal(real min, real max, RNG_PROTOTYPE);
 
 // --- Poisson Distribution ---
 static inline real dpois(real x, real lambda);
 static inline real ppois(real q, real lambda);
 static inline int qpois(real p, real lambda);
-static inline int rpois_internal(real lambda, __private int* idx, __private uint* mt);
+static inline int rpois_internal(real lambda, RNG_PROTOTYPE);
 
 // --- Binomial Distribution ---
 static inline real dbinom(real x, int n, real p);
 static inline real pbinom(real q, int n, real p);
 static inline int qbinom(real prob, int n, real p);
-static inline int rbinom_internal(int n, real p, __private int* idx, __private uint* mt);
+static inline int rbinom_internal(int n, real p, RNG_PROTOTYPE);
 
 // --- Exponential Distribution ---
 static inline real dexp(real x, real rate);
 static inline real pexp(real q, real rate);
 static inline real qexp(real p, real rate);
-static inline real rexp_internal(real rate, __private int* idx, __private uint* mt);
+static inline real rexp_internal(real rate, RNG_PROTOTYPE);
 
 // --- Geometric Distribution ---
 static inline real dgeom(real x, real prob);
 static inline real pgeom(real q, real prob);
 static inline int qgeom(real p, real prob);
-static inline int rgeom_internal(real prob, __private int* idx, __private uint* mt);
+static inline int rgeom_internal(real prob, RNG_PROTOTYPE);
 
 // --- Negative Binomial Distribution ---
 static inline real dnbinom(real x, int size, real prob);
 static inline real pnbinom(real q, int size, real prob);
 static inline int qnbinom(real p, int size, real prob);
-static inline int rnbinom_internal(int size, real prob, __private int* idx, __private uint* mt);
+static inline int rnbinom_internal(int size, real prob, RNG_PROTOTYPE);
 
 // --- Hypergeometric Distribution ---
 static inline real dhyper(real x, int m, int n, int k);
 static inline real phyper(real q, int m, int n, int k);
 static inline int qhyper(real p, int m, int n, int k);
-static inline int rhyper_internal(int m, int n, int k, __private int* idx, __private uint* mt);
+static inline int rhyper_internal(int m, int n, int k, RNG_PROTOTYPE);
 
 // --- Gamma Distribution ---
 static inline real dgamma(real x, real shape, real rate);
 static inline real pgamma(real q, real shape, real rate);
 static inline real qgamma(real p, real shape, real rate);
-static inline real rgamma_internal(real shape, real rate, __private int* idx, __private uint* mt);
+static inline real rgamma_internal(real shape, real rate, RNG_PROTOTYPE);
 
 // --- Weibull Distribution ---
 static inline real dweibull(real x, real shape, real scale);
 static inline real pweibull(real q, real shape, real scale);
 static inline real qweibull(real p, real shape, real scale);
-static inline real rweibull_internal(real shape, real scale, __private int* idx, __private uint* mt);
+static inline real rweibull_internal(real shape, real scale, RNG_PROTOTYPE);
 
 // --- Chi-Squared Distribution ---
 static inline real dchisq(real x, int df);
 static inline real pchisq(real q, int df);
 static inline real qchisq(real p, int df);
-static inline real rchisq_internal(int df, __private int* idx, __private uint* mt);
+static inline real rchisq_internal(int df, RNG_PROTOTYPE);
 
 // --- Student-t Distribution ---
 static inline real dt(real x, int df);
 static inline real pt(real q, int df);
 static inline real qt(real p, int df);
-static inline real rt_internal(int df, __private int* idx, __private uint* mt);
+static inline real rt_internal(int df, RNG_PROTOTYPE);
 
 // --- Inverse Gamma Distribution ---
 static inline real dinvgamma(const real x, const real shape, const real rate);
 static inline real pinvgamma(const real x, const real shape, const real rate);
 static inline real qinvgamma(const real p, const real shape, const real rate);
-static inline real rinvgamma_internal(const real shape, const real rate, __private int* idx, __private uint* mt);
+static inline real rinvgamma_internal(const real shape, const real rate, RNG_PROTOTYPE);
 
 
 // --- Beta Distribution ---
@@ -137,31 +213,31 @@ static inline real core_incomplete_beta(real x, real a, real b);
 static inline real dbeta(real x, real shape1, real shape2);
 static inline real pbeta(real q, real shape1, real shape2);
 static inline real qbeta(real p, real shape1, real shape2);
-static inline real rbeta_internal(real shape1, real shape2, __private int* idx, __private uint* mt);
+static inline real rbeta_internal(real shape1, real shape2, RNG_PROTOTYPE);
 
 // --- F Distribution ---
 static inline real df(real x, int df1, int df2);
 static inline real pf(real q, int df1, int df2);
 static inline real qf(real p, int df1, int df2);
-static inline real rf_internal(int df1, int df2, __private int* idx, __private uint* mt);
+static inline real rf_internal(int df1, int df2, RNG_PROTOTYPE);
 
 // --- Log-Normal Distribution ---
 static inline real dlnorm(real x, real meanlog, real sdlog);
 static inline real plnorm(real q, real meanlog, real sdlog);
 static inline real qlnorm(real p, real meanlog, real sdlog);
-static inline real rlnorm_internal(real meanlog, real sdlog, __private int* idx, __private uint* mt);
+static inline real rlnorm_internal(real meanlog, real sdlog, RNG_PROTOTYPE);
 
 // --- Cauchy Distribution ---
 static inline real dcauchy(real x, real location, real scale);
 static inline real pcauchy(real q, real location, real scale);
 static inline real qcauchy(real p, real location, real scale);
-static inline real rcauchy_internal(real location, real scale, __private int* idx, __private uint* mt);
+static inline real rcauchy_internal(real location, real scale, RNG_PROTOTYPE);
 
 // --- Logistic Distribution ---
 static inline real dlogis(real x, real location, real scale);
 static inline real plogis(real q, real location, real scale);
 static inline real qlogis(real p, real location, real scale);
-static inline real rlogis_internal(real location, real scale, __private int* idx, __private uint* mt);
+static inline real rlogis_internal(real location, real scale, RNG_PROTOTYPE);
 
 // --- Model Fitting Lin-Alg Workspace ---
 static inline int core_qr_ls_solve(const real *A_in, const real *b_in, int m, int n, real *x, real *R, real *qty);
@@ -177,38 +253,11 @@ static inline int ls_poly_fit(const real *x_data, const real *y_data, int m, int
 __attribute__((overloadable)) static inline int core_cholesky_compact(__private real *A, int dim);
 __attribute__((overloadable)) static inline int core_cholesky_compact(__global real *A, int dim);
 
-__attribute__((overloadable)) static inline int rmvnorm_internal(__private const real *mu, __private real *Sigma_L, int dim, __private real *out_vector, __private int* idx, __private uint* mt);
-__attribute__((overloadable)) static inline int rmvnorm_internal(__global const real *mu, __global real *Sigma_L, int dim, __global real *out_vector, __private int* idx, __private uint* mt);
-__attribute__((overloadable)) static inline int rmvnorm_internal(__global const real *mu, __global real *Sigma_L, int dim, __private real *out_vector, __private int* idx, __private uint* mt);
-__attribute__((overloadable)) static inline int rmvnorm_internal(__private const real *mu, __global real *Sigma_L, int dim, __private real *out_vector, __private int* idx, __private uint* mt);
+__attribute__((overloadable)) static inline int rmvnorm_internal(__private const real *mu, __private real *Sigma_L, int dim, __private real *out_vector, RNG_PROTOTYPE);
+__attribute__((overloadable)) static inline int rmvnorm_internal(__global const real *mu, __global real *Sigma_L, int dim, __global real *out_vector, RNG_PROTOTYPE);
+__attribute__((overloadable)) static inline int rmvnorm_internal(__global const real *mu, __global real *Sigma_L, int dim, __private real *out_vector, RNG_PROTOTYPE);
+__attribute__((overloadable)) static inline int rmvnorm_internal(__private const real *mu, __global real *Sigma_L, int dim, __private real *out_vector, RNG_PROTOTYPE);
 
-
-static inline uint mt_rand(__private uint* state, __private int* idx, __private uint* mt) {
-  if (*idx >= 624) {
-    // Twist the state array
-    for (int i = 0; i < 624; ++i) {
-      uint temp = mt[i] ^ (mt[(i + 1) % 624] >> 1);
-      temp ^= (temp >> 1) ^ ((temp & 1) ? 0x8EB8B000 : 0);
-      mt[i] = mt[(i + 397) % 624] ^ temp;
-    }
-    *idx = 0;
-  }
-  uint x = mt[*idx];
-  x ^= (x >> 11);
-  x ^= (x << 7) & 0x9D2C5680;
-  x ^= (x << 15) & 0xEFC60000;
-  x ^= (x >> 18);
-  (*idx)++;
-  return x;
-}
-
-
-
-// Mersenne Twister scaled to [0,1]
-static inline real mt_rand_01(__private int* idx, __private uint* mt) {
-  // divide by 4294967295+1 to get into [0,1)
-  return (real)mt_rand(&mt[0], &idx[0], mt) / 4294967296.0f;
-}
 
 
 // =========================================================================
@@ -298,10 +347,10 @@ static inline real qnorm(real p, real mu, real sigma) {
 
 // RNG
 static inline real rnorm_internal(__private real mu, __private real sigma,
-                                  __private int* idx, __private uint* mt) {
+                                  RNG_PROTOTYPE) {
   // Since 'mt' and 'idx' are already pointers, we pass them DIRECTLY!
-  real u1 = mt_rand_01(&idx[0], mt);
-  real u2 = mt_rand_01(&idx[0], mt);
+  real u1 = rand_01( RNG_01_ARGS );
+  real u2 = rand_01( RNG_01_ARGS );
   // symmetrically mix both branches based on thread id. 
   if(get_global_id(0) % 2 == 1)
     return mu + sigma * sqrt((real)-2.0f * log(u1)) *
@@ -310,7 +359,7 @@ static inline real rnorm_internal(__private real mu, __private real sigma,
     return mu + sigma * sqrt((real)-2.0f * log(u1)) *
            sin((real)2.0f * (real)M_PI * u2); 
 }
-#define rnorm(mu, sigma) rnorm_internal((mu), (sigma), &idx, mt)
+#define rnorm(mu, sigma) rnorm_internal((mu), (sigma), RNG_ARGS)
 
 
 // =========================================================================
@@ -337,12 +386,12 @@ static inline real qunif(real p, real min, real max) {
 }
 
 // RNG
-static inline real runif_internal(real min, real max, __private int* idx, __private uint* mt) {
+static inline real runif_internal(real min, real max, RNG_PROTOTYPE) {
   if (min >= max) return (real)NAN;
-  // mt_rand_01 liefert eine Zahl in [0,1)
-  return min + mt_rand_01(idx, mt) * (max - min);
+  // rand_01 liefert eine Zahl in [0,1)
+  return min + rand_01(RNG_01_ARGS) * (max - min);
 }
-#define runif(min, max) runif_internal((min), (max), &idx, mt)
+#define runif(min, max) runif_internal((min), (max), RNG_ARGS)
 
 
 // =========================================================================
@@ -398,7 +447,7 @@ static inline int qpois(real p, real lambda) {
 }
 
 // Internal RNG function (Knuth method for small lambda, inversion for large lambda)
-static inline int rpois_internal(real lambda, __private int* idx, __private uint* mt) {
+static inline int rpois_internal(real lambda, RNG_PROTOTYPE) {
   if (lambda < (real)0.0f) return (real)NAN;
   
   // Einfache Knuth-Methode für die Simulation
@@ -408,14 +457,14 @@ static inline int rpois_internal(real lambda, __private int* idx, __private uint
   
   do {
     k++;
-    p *= mt_rand_01(idx, mt);
+    p *= rand_01(RNG_01_ARGS);
   } while (p > L && k < 100000);
   
   return k - 1;
 }
 
 // The macro hides the MT variables again
-#define rpois(lambda) rpois_internal((lambda), &idx, mt)
+#define rpois(lambda) rpois_internal((lambda), RNG_ARGS)
 
 // =========================================================================
 // binomial distribution
@@ -465,21 +514,21 @@ static inline int qbinom(real prob, int n, real p) {
 }
 
 // Internal RNG function (coin toss method for small n, inversion for large n)
-static inline int rbinom_internal(int n, real p, __private int* idx, __private uint* mt) {
+static inline int rbinom_internal(int n, real p, RNG_PROTOTYPE) {
   if (p < (real)0.0f || p > (real)1.0f || n < 0) return (real)NAN;
   
   int successes = 0;
   
   // For small to medium n we directly simulate the individual tests (Bernoulli)
   for (int i = 0; i < n; ++i) {
-    if (mt_rand_01(idx, mt) <= p) {
+    if (rand_01(RNG_01_ARGS) <= p) {
       successes++;
     }
   }
   return successes;
 }
 
-#define rbinom(size, prob) rbinom_internal((size), (prob), &idx, mt)
+#define rbinom(size, prob) rbinom_internal((size), (prob), RNG_ARGS)
 
 // =========================================================================
 // exponential distribution
@@ -505,14 +554,14 @@ static inline real qexp(real p, real rate) {
 }
 
 // Internal RNG function (inversion method)
-static inline real rexp_internal(real rate, __private int* idx, __private uint* mt) {
+static inline real rexp_internal(real rate, RNG_PROTOTYPE) {
   if (rate <= (real)0.0f) return (real)NAN;
-  // Since mt_rand_01 is in [0,1), 1.0 - u is in (0,1], making log() safe against -Inf
-  real u = mt_rand_01(idx, mt);
+  // Since rand_01 is in [0,1), 1.0 - u is in (0,1], making log() safe against -Inf
+  real u = rand_01(RNG_01_ARGS);
   return -log((real)1.0f - u) / rate;
 }
 
-#define rexp(rate) rexp_internal((rate), &idx, mt)
+#define rexp(rate) rexp_internal((rate), RNG_ARGS)
 
 // =========================================================================
 // geometric distribution
@@ -559,17 +608,17 @@ static inline int qgeom(real p, real prob) {
 }
 
 // Internal RNG function (Inversion method via continuous exponential)
-static inline int rgeom_internal(real prob, __private int* idx, __private uint* mt) {
+static inline int rgeom_internal(real prob, RNG_PROTOTYPE) {
   if (prob <= (real)0.0f || prob > (real)1.0f) return (real)NAN;
   if (prob == (real)1.0f) return (real)0.0f;
   
-  real u = mt_rand_01(idx, mt);
+  real u = rand_01(RNG_01_ARGS);
   // floor(log(1-u) / log(1-prob)) simulates exactly the number of failures
   return (int)(floor(log((real)1.0f - u) / log((real)1.0f - prob)));
 }
 
 // 🎯 The macro hides the MT variables for the kernel call
-#define rgeom(prob) rgeom_internal((prob), &idx, mt)
+#define rgeom(prob) rgeom_internal((prob), RNG_ARGS)
 
 
 // =========================================================================
@@ -617,10 +666,10 @@ static inline int qnbinom(real p, int size, real prob) {
 }
 
 // Internal RNG function (Gamma-Poisson mixture method)
-static inline int rnbinom_internal(int size, real prob, __private int* idx, __private uint* mt) {
+static inline int rnbinom_internal(int size, real prob, RNG_PROTOTYPE) {
   if (prob <= (real)0.0f || prob > (real)1.0f || size <= 0) return (real)NAN;
   
-  real u = mt_rand_01(idx, mt);
+  real u = rand_01(RNG_01_ARGS);
   real sum = (real)0.0f;
   int k = 0;
   while (k < 100000) {
@@ -631,7 +680,7 @@ static inline int rnbinom_internal(int size, real prob, __private int* idx, __pr
   return k;
 }
 
-#define rnbinom(size, prob) rnbinom_internal((size), (prob), &idx, mt)
+#define rnbinom(size, prob) rnbinom_internal((size), (prob), RNG_ARGS)
 
 // =========================================================================
 // hypergeometric distribution
@@ -678,12 +727,12 @@ static inline int qhyper(real p, int m, int n, int k) {
 }
 
 // Internal RNG function (Stochastic simulation of drawing without replacement)
-static inline int rhyper_internal(int m, int n, int k, __private int* idx, __private uint* mt) {
+static inline int rhyper_internal(int m, int n, int k, RNG_PROTOTYPE) {
   int successes = 0;
   
   for (int i = 0; i < k; ++i) {
     real p = (real)m / (real)(m + n);
-    if (mt_rand_01(idx, mt) <= p) {
+    if (rand_01(RNG_01_ARGS) <= p) {
       successes++;
       m--;
     } else {
@@ -693,7 +742,7 @@ static inline int rhyper_internal(int m, int n, int k, __private int* idx, __pri
   return successes;
 }
 
-#define rhyper(m, n, k) rhyper_internal((m), (n), (k), &idx, mt)
+#define rhyper(m, n, k) rhyper_internal((m), (n), (k), RNG_ARGS)
 
 // =========================================================================
 // gamma distribution
@@ -756,7 +805,7 @@ static inline real qgamma(real p, real shape, real rate) {
 }
 
 // RNG
-static inline real rgamma_internal(real shape, real rate, __private int* idx, __private uint* mt) {
+static inline real rgamma_internal(real shape, real rate, RNG_PROTOTYPE) {
   if (shape <= (real)0.0f || rate <= (real)0.0f) return (real)NAN;
   
   real d_shape = shape;
@@ -765,7 +814,7 @@ static inline real rgamma_internal(real shape, real rate, __private int* idx, __
 
   //  recursion-free Ahrens-Dieter step for shape < 1
   if (d_shape < (real)1.0f) {
-    real u = mt_rand_01(idx, mt);
+    real u = rand_01(RNG_01_ARGS);
     if (u <= (real)0.0f) u = (real)GPGPU_SAFE_MAX;
     adjustment = pow(u, (real)1.0f / d_shape);
     d_shape += (real)1.0f; // Switches to the Marsaglia-Tsang base
@@ -780,8 +829,8 @@ static inline real rgamma_internal(real shape, real rate, __private int* idx, __
       return d * scale * adjustment; 
     }
     
-    real u1 = mt_rand_01(idx, mt);
-    real u2 = mt_rand_01(idx, mt);
+    real u1 = rand_01(RNG_01_ARGS);
+    real u2 = rand_01(RNG_01_ARGS);
     if (u1 <= (real)0.0f) u1 = (real)GPGPU_SAFE_MAX;
     
     real z = sqrt((real)-2.0f * log(u1)) * cos((real)2.0f * (real)M_PI * u2);
@@ -793,7 +842,7 @@ static inline real rgamma_internal(real shape, real rate, __private int* idx, __
     if (v <= (real)0.0f || isnan(v) || isinf(v)) continue;
     
     v = v * v * v;
-    real u = mt_rand_01(idx, mt);
+    real u = rand_01(RNG_01_ARGS);
     if (u <= (real)0.0f) u = (real)GPGPU_SAFE_MAX;
     
     if (u < (real)1.0f - (real)0.0331f * z * z * z * z) {
@@ -805,7 +854,7 @@ static inline real rgamma_internal(real shape, real rate, __private int* idx, __
   }
 }
 
-#define rgamma(shape, rate) rgamma_internal((shape), (rate), &idx, mt)
+#define rgamma(shape, rate) rgamma_internal((shape), (rate), RNG_ARGS)
 
 // =========================================================================
 // weibull distribution
@@ -839,15 +888,15 @@ static inline real qweibull(real p, real shape, real scale) {
 }
 
 // Internal RNG function (Inversion method)
-static inline real rweibull_internal(real shape, real scale, __private int* idx, __private uint* mt) {
+static inline real rweibull_internal(real shape, real scale, RNG_PROTOTYPE) {
   if (shape <= (real)0.0f || scale <= (real)0.0f) return (real)NAN;
-  real u = mt_rand_01(idx, mt);
+  real u = rand_01(RNG_01_ARGS);
   // Since u is in [0,1), 1.0 - u is in (0,1], absolutely safe for the logarithm
   return scale * pow(-log((real)1.0f - u), (real)1.0f / shape);
 }
 
 // 🎯 The macro hides the MT variables for the kernel call
-#define rweibull(shape, scale) rweibull_internal((shape), (scale), &idx, mt)
+#define rweibull(shape, scale) rweibull_internal((shape), (scale), RNG_ARGS)
 
 // =========================================================================
 // chi-squared distribution
@@ -873,12 +922,12 @@ static inline real qchisq(real p, int df) {
 }
 
 // Internal RNG function (via Gamma transformation)
-static inline real rchisq_internal(int df, __private int* idx, __private uint* mt) {
+static inline real rchisq_internal(int df, RNG_PROTOTYPE) {
   if (df <= 0) return (real)NAN;
-  return rgamma_internal(df * (real)0.5f, (real)0.5f, idx, mt);
+  return rgamma_internal(df * (real)0.5f, (real)0.5f, RNG_01_ARGS);
 }
 
-#define rchisq(df) rchisq_internal((df), &idx, mt)
+#define rchisq(df) rchisq_internal((df), RNG_ARGS)
 
 
 
@@ -912,13 +961,13 @@ static inline real qinvgamma(const real p, const real shape, const real rate) {
 
 // RNG: rinvgamma(alpha, beta) = 1 / rgamma(alpha, beta)
 // Uses your existing rgamma(shape, rate)
-static inline real rinvgamma_internal(const real shape, const real rate, __private int* idx, __private uint* mt) {
+static inline real rinvgamma_internal(const real shape, const real rate, RNG_PROTOTYPE) {
   // Hier rgamma_internal direkt aufrufen und die MT-Zeiger bitscharf weiterreichen!
-  real g = rgamma_internal(shape, rate, idx, mt);
+  real g = rgamma_internal(shape, rate, RNG_01_ARGS);
   if (g <= (real)0.0f) return (real)1e10f; // Schutzwall vor Division durch 0
   return (real)1.0f / g;
 }
-#define rinvgamma(shape, rate) rinvgamma_internal((shape), (rate), &idx, mt)
+#define rinvgamma(shape, rate) rinvgamma_internal((shape), (rate), RNG_ARGS)
 
 // =========================================================================
 // beta distribution & student-t distribution (stabilized via continued fractions)
@@ -1076,14 +1125,14 @@ static inline real qbeta(real p, real shape1, real shape2) {
 }
 
 // Internal RNG function (Stochastic mixture via two Gamma variables)
-static inline real rbeta_internal(real shape1, real shape2, __private int* idx, __private uint* mt) {
+static inline real rbeta_internal(real shape1, real shape2, RNG_PROTOTYPE) {
   if (shape1 <= (real)0.0f || shape2 <= (real)0.0f) return (real)NAN;
-  real y1 = rgamma_internal(shape1, (real)1.0f, idx, mt);
-  real y2 = rgamma_internal(shape2, (real)1.0f, idx, mt);
+  real y1 = rgamma_internal(shape1, (real)1.0f, RNG_01_ARGS);
+  real y2 = rgamma_internal(shape2, (real)1.0f, RNG_01_ARGS);
   if (y1 + y2 == (real)0.0f) return (real)0.0f;
   return y1 / (y1 + y2);
 }
-#define rbeta(shape1, shape2) rbeta_internal((shape1), (shape2), &idx, mt)
+#define rbeta(shape1, shape2) rbeta_internal((shape1), (shape2), RNG_ARGS)
 
 
 // Student-t Probability Density Function (PDF)
@@ -1129,18 +1178,18 @@ static inline real qt(real p, int df) {
 }
 
 // Internal RNG function (Stochastic mixture: Z / sqrt(V / df))
-static inline real rt_internal(int df, __private int* idx, __private uint* mt) {
+static inline real rt_internal(int df, RNG_PROTOTYPE) {
   if (df <= 0) return (real)NAN;
   
-  real u1 = mt_rand_01(idx, mt);
-  real u2 = mt_rand_01(idx, mt);
+  real u1 = rand_01(RNG_01_ARGS);
+  real u2 = rand_01(RNG_01_ARGS);
   real z = sqrt((real)-2.0f * log(u1)) * cos((real)2.0f * (real)M_PI * u2);
   
-  real v = rchisq_internal(df, idx, mt);
+  real v = rchisq_internal(df, RNG_01_ARGS);
   
   return z / sqrt(v / (real)df);
 }
-#define rt(df) rt_internal((df), &idx, mt)
+#define rt(df) rt_internal((df), RNG_ARGS)
 
 
 // =========================================================================
@@ -1194,16 +1243,16 @@ static inline real qf(real p, int df1, int df2) {
 }
 
 // Internal RNG function (Stochastic quotient of two chi-squared variables)
-static inline real rf_internal(int df1, int df2, __private int* idx, __private uint* mt) {
+static inline real rf_internal(int df1, int df2, RNG_PROTOTYPE) {
   if (df1 <= 0 || df2 <= 0) return (real)NAN;
   
-  real v1 = rchisq_internal(df1, idx, mt);
-  real v2 = rchisq_internal(df2, idx, mt);
+  real v1 = rchisq_internal(df1, RNG_01_ARGS);
+  real v2 = rchisq_internal(df2, RNG_01_ARGS);
   
   if (v2 == (real)0.0f) return (real)INFINITY;
   return (v1 / (real)df1) / (v2 / (real)df2);
 }
-#define rf(df1, df2) rf_internal((df1), (df2), &idx, mt)
+#define rf(df1, df2) rf_internal((df1), (df2), RNG_ARGS)
 
 
 // =========================================================================
@@ -1235,12 +1284,12 @@ static inline real qlnorm(real p, real meanlog, real sdlog) {
 }
 
 // Internal RNG function (via exponentiated Normal distribution)
-static inline real rlnorm_internal(real meanlog, real sdlog, __private int* idx, __private uint* mt) {
+static inline real rlnorm_internal(real meanlog, real sdlog, RNG_PROTOTYPE) {
   if (sdlog <= (real)0.0f) return (real)NAN;
   
   // Generate standard normally distributed pair (Box-Muller)
-  real u1 = mt_rand_01(idx, mt);
-  real u2 = mt_rand_01(idx, mt);
+  real u1 = rand_01(RNG_01_ARGS);
+  real u2 = rand_01(RNG_01_ARGS);
   real z = sqrt((real)-2.0f * log(u1)) * cos((real)2.0f * (real)M_PI * u2);
   
   // Transformieren zu log-normal
@@ -1248,7 +1297,7 @@ static inline real rlnorm_internal(real meanlog, real sdlog, __private int* idx,
   return exp(y);
 }
 
-#define rlnorm(meanlog, sdlog) rlnorm_internal((meanlog), (sdlog), &idx, mt)
+#define rlnorm(meanlog, sdlog) rlnorm_internal((meanlog), (sdlog), RNG_ARGS)
 
 // =========================================================================
 // cauchy distribution
@@ -1276,14 +1325,14 @@ static inline real qcauchy(real p, real location, real scale) {
 }
 
 // Internal RNG function (via Inversion method)
-static inline real rcauchy_internal(real location, real scale, __private int* idx, __private uint* mt) {
+static inline real rcauchy_internal(real location, real scale, RNG_PROTOTYPE) {
   if (scale <= (real)0.0f) return (real)NAN;
-  real u = mt_rand_01(idx, mt);
-  // Since mt_rand_01 lies in the interval [0, 1), this is mathematically absolutely stable
+  real u = rand_01(RNG_01_ARGS);
+  // Since rand_01 lies in the interval [0, 1), this is mathematically absolutely stable
   return location + scale * tan((real)M_PI * (u - (real)0.5f));
 }
 
-#define rcauchy(location, scale) rcauchy_internal((location), (scale), &idx, mt)
+#define rcauchy(location, scale) rcauchy_internal((location), (scale), RNG_ARGS)
 
 // =========================================================================
 // logistic distribution
@@ -1315,16 +1364,16 @@ static inline real qlogis(real p, real location, real scale) {
 }
 
 // Internal RNG function (via Inversion method)
-static inline real rlogis_internal(real location, real scale, __private int* idx, __private uint* mt) {
+static inline real rlogis_internal(real location, real scale, RNG_PROTOTYPE) {
   if (scale <= (real)0.0f) return (real)NAN;
-  real u = mt_rand_01(idx, mt);
+  real u = rand_01(RNG_01_ARGS);
   // Since u is in [0, 1), 1-u > 0, log() is safely protected from -Inf errors
   if (u == (real)0.0f) u = (real)1e-7f; 
   return location + scale * log(u / ((real)1.0f - u));
 }
 
 // 🎯 The macro hides the MT variables for the kernel call
-#define rlogis(location, scale) rlogis_internal((location), (scale), &idx, mt)
+#define rlogis(location, scale) rlogis_internal((location), (scale), RNG_ARGS)
 
 
 // some linear algebra for model fitting
@@ -1610,11 +1659,11 @@ DEFINE_CORE_CHOLESKY_COMPACT(__global)
 #define DEFINE_RMVNORM_INTERNAL(MU_AS, SIGMA_AS, OUT_AS) \
 __attribute__((overloadable)) \
 static inline int rmvnorm_internal(MU_AS const real *mu, SIGMA_AS real *Sigma_L, int dim, \
-                                   OUT_AS real *out_vector, __private int* idx, __private uint* mt) { \
+                                   OUT_AS real *out_vector, RNG_PROTOTYPE) { \
     if (core_cholesky_compact(Sigma_L, dim) != 0) return -1; \
     for (int i = 0; i < dim; i++) out_vector[i] = mu[i]; \
     for (int j = 0; j < dim; j++) { \
-        real z_j = rnorm_internal((real)0.0f, (real)1.0f, idx, mt); \
+        real z_j = rnorm_internal((real)0.0f, (real)1.0f, RNG_01_ARGS); \
         real diag_sq = Sigma_L[j * dim + j]; \
         for (int k = 0; k < j; k++) { \
             real l_jk = Sigma_L[j * dim + k]; \
@@ -1636,7 +1685,7 @@ DEFINE_RMVNORM_INTERNAL(__global,  __global,  __private)
 DEFINE_RMVNORM_INTERNAL(__private, __global,  __private)
 
 #define rmvnorm(mu, Sigma_L, dim, out_vector)                           \
-    rmvnorm_internal((mu), (Sigma_L), (dim), (out_vector), &idx, mt)
+    rmvnorm_internal((mu), (Sigma_L), (dim), (out_vector), RNG_ARGS)
   
 /**
  * Calculates density (PDF). Automatically creates cholesky factor of
@@ -1698,7 +1747,7 @@ __attribute__((overloadable)) \
 static inline real pmvnorm_internal(BOUND_AS const real *lower, BOUND_AS const real *upper, \
                                     MU_AS const real *mu, SIGMA_AS real *Sigma_L, \
                                     int dim, int n_samples, WS_AS real *workspace, \
-                                    __private int* idx, __private uint* mt) { \
+                                    RNG_PROTOTYPE) { \
     if (n_samples <= 0) return (real)NAN; \
     if (core_cholesky_compact(Sigma_L, dim) != 0) return (real)NAN; \
     int hits = 0; \
@@ -1708,7 +1757,7 @@ static inline real pmvnorm_internal(BOUND_AS const real *lower, BOUND_AS const r
         } \
         int inside = 1; \
         for (int j = 0; j < dim; ++j) { \
-            real z_j = rnorm_internal((real)0.0f, (real)1.0f, idx, mt); \
+            real z_j = rnorm_internal((real)0.0f, (real)1.0f, RNG_01_ARGS); \
             real diag_sq = Sigma_L[j * dim + j]; \
             for (int k = 0; k < j; ++k) { \
                 real l_jk = Sigma_L[j * dim + k]; \
@@ -1741,7 +1790,7 @@ DEFINE_PMVNORM_INTERNAL(__private, __private, __global,  __private)
 
 // macro matching rnorm / rmvnorm (hides &idx and mt)
 #define pmvnorm(lower, upper, mu, Sigma_L, dim, n_samples, workspace) \
-    pmvnorm_internal((lower), (upper), (mu), (Sigma_L), (dim), (n_samples), (workspace), &idx, mt)
+    pmvnorm_internal((lower), (upper), (mu), (Sigma_L), (dim), (n_samples), (workspace), RNG_ARGS)
 
 
 // =========================================================================
@@ -1754,7 +1803,7 @@ __attribute__((overloadable)) \
 static inline real qmvnorm_internal(real p, MU_AS const real *mu, SIGMA_AS real *Sigma_L, \
                                     int dim, int tail_mode, int n_samples, \
                                     WS_AS real *ws_lower, WS_AS real *ws_upper, WS_AS real *ws_pmv, \
-                                    __private int* idx, __private uint* mt) { \
+                                    RNG_PROTOTYPE) { \
     if (p < (real)0.0f || p > (real)1.0f || dim <= 0 || n_samples <= 0) return (real)NAN; \
     if (p == (real)0.0f) return (tail_mode == 2) ? (real)0.0f : (real)-INFINITY; \
     if (p == (real)1.0f) return (real)INFINITY; \
@@ -1797,7 +1846,7 @@ static inline real qmvnorm_internal(real p, MU_AS const real *mu, SIGMA_AS real 
                 ws_upper[i] = mid; \
             } \
         } \
-        real est_p = pmvnorm_internal(ws_lower, ws_upper, mu, Sigma_L, dim, n_samples, ws_pmv, idx, mt); \
+        real est_p = pmvnorm_internal(ws_lower, ws_upper, mu, Sigma_L, dim, n_samples, ws_pmv, RNG_01_ARGS); \
         /* Attention: with upper.tail (tail_mode == 1) est_p is monotonically FALLING in mid! */ \
         if (tail_mode == 1) { \
             if (est_p > p) low = mid; \
@@ -1815,4 +1864,4 @@ DEFINE_QMVNORM_INTERNAL(__global,  __global,  __private)
 DEFINE_QMVNORM_INTERNAL(__private, __global,  __private)
 
 #define qmvnorm(p, mu, Sigma_L, dim, tail_mode, n_samples, ws_l, ws_u, ws_p) \
-    qmvnorm_internal((p), (mu), (Sigma_L), (dim), (tail_mode), (n_samples), (ws_l), (ws_u), (ws_p), &idx, mt)
+    qmvnorm_internal((p), (mu), (Sigma_L), (dim), (tail_mode), (n_samples), (ws_l), (ws_u), (ws_p), RNG_ARGS)

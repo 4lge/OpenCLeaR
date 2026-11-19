@@ -11,7 +11,7 @@ dmvnormOCL(x, mean = NULL, sigma = NULL, log = FALSE, ...)
 
 \item{mean}{mean vector parameter (default: rep(0, ncol(x))).}
 
-\item{sigma}{covariance matrix parameter (default: diag(ncol(x))).}
+\item{sigma}{covariance matrix parameter (default: diag(ncol(x))). Maximimum dimension supported: 64 times 64.}
 
 \item{log}{logical; if TRUE, probabilities p are given as log(p).}
 

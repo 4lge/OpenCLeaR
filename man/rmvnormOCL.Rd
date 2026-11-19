@@ -11,7 +11,7 @@ rmvnormOCL(n, mean, sigma, ...)
 
 \item{mean}{mean vector parameter.}
 
-\item{sigma}{covariance matrix parameter.}
+\item{sigma}{covariance matrix parameter. Maximimum dimension supported: 64 times 64.}
 
 \item{...}{arguments passed through to \code{\link{oclFunction}}}
 }

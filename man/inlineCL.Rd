@@ -10,6 +10,7 @@ inlineCL(
   interface_file,
   debug = FALSE,
   math_lib = TRUE,
+  RNGkind = "Mersenne-Twister",
   force_float = FALSE,
   ...
 )
@@ -24,6 +25,11 @@ inlineCL(
 \item{debug}{Logical value. If \code{TRUE}, the complete with}
 
 \item{math_lib}{Logical value. If \code{TRUE}, the mathematical library libkernel.cl is loaded.}
+
+\item{RNGkind}{character, chooses random number genreator from
+\code{c("Mersenne-Twister", "Xorshift128","nmath")}, "nmath" not yet active,
+default "Mersenne-Twister". Has only effect if math_lib is active and used
+math library honors the resulting defines.}
 
 \item{force_float}{Logical value. If \code{TRUE}, execution is forced to FP32 eben on FP64 capable hardware.}
 
@@ -80,7 +86,7 @@ cpp_src <- "
     gpu_x0.write_to_device(); gpu_y0.write_to_device();
     gpu_x.write_to_device(); gpu_y.write_to_device(); gpu_z.write_to_device();
 
-    Kernel k(*device, n0, \"idw_kernel\", gpu_x0, gpu_y0, gpu_z0, 
+    Kernel k(*device, n0, \"idw_kernel\", gpu_x0, gpu_y0, gpu_z0,
              gpu_x, gpu_y, gpu_z, n0, n, as<real>(p));
     k.run();
     gpu_z0.read_from_device();
@@ -90,7 +96,7 @@ cpp_src <- "
 "
 
 idw_gpu <- inlineCL(
-    signature = signature(r_x0="numeric", r_y0="numeric", 
+    signature = signature(r_x0="numeric", r_y0="numeric",
                           r_x="numeric", r_y="numeric", r_z="numeric", p="numeric"),
     kernel_file = kernel_file,
     interface_file = interface_file
