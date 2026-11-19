@@ -33,3 +33,4 @@ Config/testthat/edition: 3
 RoxygenNote: 7.3.3
 NeedsCompilation: yes
 Packaged: 2026-10-13 10:50:43 UTC; agebhard
+SystemRequirements: CMake (>= 3.10), OpenCL

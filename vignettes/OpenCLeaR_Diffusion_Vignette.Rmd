@@ -365,7 +365,7 @@ Before executing the interactive visual framing script, we perform a non-interru
 
 ```{r test_gpu_run}
 # Configure meteorological baseline parameters
-iterations <- 2000L
+iterations <- 20000L
 diff_coeff <- 1.5      
 wind_x     <- 4.0      # Dominant westerly breeze profile
 wind_y     <- 0.5      

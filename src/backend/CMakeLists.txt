@@ -302,6 +302,11 @@ add_custom_command(TARGET BACKEND POST_BUILD
 set(COMPILER_SOURCE_PATH "${EXTERNAL_LIB_LOCATION}/OpenCL-Wrapper/ocl_compiler.cpp")
 set_source_files_properties(${COMPILER_SOURCE_PATH} PROPERTIES GENERATED TRUE)
 
+# Abwärtskompatibler Linker-Pfad (ersetzt target_link_directories für CMake < 3.13)
+link_directories(${CMAKE_CURRENT_BINARY_DIR}/lib)
+
+
+
 #2. Declare the executable target
 ADD_EXECUTABLE(ocl_compiler ${COMPILER_SOURCE_PATH})
 
@@ -346,7 +351,6 @@ TARGET_INCLUDE_DIRECTORIES(ocl_compiler PRIVATE
 )
 
 # 6. Link linker directory and libraries
-target_link_directories(ocl_compiler PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/lib)
 
 IF(WIN32)
   TARGET_LINK_LIBRARIES(ocl_compiler PRIVATE OpenCL_Local)
