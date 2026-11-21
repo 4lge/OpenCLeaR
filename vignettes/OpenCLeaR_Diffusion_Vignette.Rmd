@@ -567,3 +567,10 @@ if (exists("final_scene")) {
   cat("⚠️ Active scene graph allocation missing in global R memory context.")
 }
 ```
+
+
+```{r file_cleanup}
+CleanCLCache()
+if(file.exists("./diffusion.cl")) file.remove("./diffusion.cl")
+if(file.exists("./diffusion.cpp")) file.remove("./diffusion.cpp")
+```

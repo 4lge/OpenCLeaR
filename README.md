@@ -1,72 +1,93 @@
 # 📦 OpenCLeaR: OpenCL Easy Access from R
 
-An **R package** that simplifies writing parallel algorithms in OpenCL accessible from R.
-It makes use of **CMake**, **Rcpp** and **OpenCL-Wrapper** (at least a fork of it) to ease 
-platform-independent compilation and linkage to **OpenCL**. The whole package is a fork of the
-**rcpp-cmake-template** package described 
-[here](https://medium.com/@mail_17803/building-hardware-accelerated-r-packages-with-rcpp-and-cmake-a-practical-template-114d13b08a97)
-and available at [GitHUB](https://github.com/jmaerte/cmake-rcpp-template).
+An **R package** designed to simplify writing high-performance
+parallel algorithms in OpenCL directly from an active R interpreter
+session. It orchestrates **CMake**, **Rcpp**, and a specialized fork
+of **OpenCL-Wrapper** to deliver platform-independent Just-In-Time
+(JIT) compilation and runtime execution grids.
 
+OpenCLeaR removes the rigid barriers of traditional ahead-of-time
+(AOT) package compilation. It allows developers to inject dynamic
+mathematical functions, custom probability densities, or complex
+neighborhood stencil masks straight into hardware-parallelized GPGPU
+execution planes at runtime.
+
+The underlying codebase is a fork of the **rcpp-cmake-template**
+package outlined on Medium (see
+`https://medium.com/@mail_17803/building-hardware-accelerated-r-packages-with-rcpp-and-cmake-a-practical-template-114d13b08a97`)
+and hosted at GitHub
+(`https://github.com/jmaerte/cmake-rcpp-template`).
 
 ___
 
 ## ✨ Highlights
 
-- ✅ Platform-independent configuration and linkage with **CMake**,
-  this is inherited from **rcpp-cmake-template** package as upstream
-  dependency.
-- ✅ Easy access to OpenCL via C++ interface taken from (a fork of)
-  **OpenCL-Wrapper**.
-- ✅ Functionality accessible via **inline** package using the provided plugin.
-- ✅ Simple Rcpp integration to access the OpenCL backend.
-- ✅ OpenCL kernels have access to a kernel library providing some
-  alternatives to R/Rcpp functions. (currently restricted to a
-  collection of r|d|p<distribution> functions like rnorm, dnorm, pnorm
-  etc)
-
+- ✅ **Dynamic JIT Compilation Pipeline:** Compile arbitrary OpenCL C
+  kernel strings at runtime using an automated host-interface gateway
+  powered by `oclFunction()`. This functionality is made accessible via the 
+  **inline** package using the provided plugin and provides simple Rcpp 
+   ntegration to access the OpenCL backend.
+- ✅ **Platform-Independent Topologies:** Platform-independent
+  configuration and linkage is achieved using **CMake**, this is
+  inherited from **rcpp-cmake-template** package as upstream
+  dependency. It is tested across Linux, macOS and Windows platforms
+  and makes OpenCL platforms based on NVIDIA CUDA, AMD ROCm, Intel
+  oneAPI (CPU & GPU), Apple OpenCL Framework (macOS Apple
+  Silicon/Intel), and headless Portable Compute Layers (PoCL) useable.
+- ✅ **C++ Abstraction of low level OpenCL wrk:** Easy access to
+  lowlevel OpenCL interface is available via a C++ interface taken
+  from (a fork of) **OpenCL-Wrapper** featuring `Device`, `Memory` and
+  `Kernel` classes.
+- ✅ **Built-in OpenCL C Library:** OpenCL kernels have optional
+  access to a kernel library providing some alternatives to R/Rcpp
+  functions. This currently covers a collection of r|d|p<distribution>
+  functions like rnorm, dnorm, pnorm, qmvnorm ... Some linear algebra
+  functions are also available enabling full Generalized Least Squares
+  (`wls_gls_fit`) and Cholesky decomposition workflows.
+- ✅ **Persistent Binary Cache Management:** Utilizes scoped
+  Immediately Invoked Function Expression (IIFE) closure patterns to
+  cache compiled device binaries within the active R session,
+  eliminating compilation overhead across iterative operations. OpenCL
+  binaries are also cached in a subdirectory structure located at
+  `.cl_cache` in the working directory.
+- ✅**Modern C++20 Compliance:** Fully engineered for modern
+  toolchains (GCC >= 14, MSVC) via explicit `[this]` lambda
+  init-captures inside the host memory layers, guaranteeing clean,
+  warning-free CRAN package checks. But it also detects and works on older 
+  setups like legacy OSX 10.11 to 10.13 using decade old NVidia hardware.
 ___
 
 ## 📁 Project Structure
 
-```
+```text
 OpenCLeaR
-│	# Package metadata files
-|	# configure and configure.win handle the installation
-|
-├──	src
-│	│   # *.cpp define the Rcpp interface and device management functions
-│	│
-│	└──	backend
-│		│   # A standard CMake project
-|		|
-|		├──	include
-│		|	|	# public headers; should not include external
-|		|	└──	# library headers; otherwise Rcpp needs to link too.
-|		|
-|		|
-|		├──	src
-|		|	|	# *.cpp define the actual implementation of functionality
-|		|	|
-|		|	└──	internal
-|		|		| 	# Some internal header files that may 
-|		|		└──	# include external library headers.
-|		|
-|		└──	lib
-|			└──	# Some external library headers.
-|	
-├──	R
-|	└──	# Caller scripts for the Rcpp functions and other R functions, especially oclFunctions.
-|
-├──	man
-|	└──	# Documentation goes here
-|
-└──	inst
-	| 	# The library features the possibility to load external
-	└──	# resources from this folder.
-        ├── kernel
-        |   # OpenCL kernels for oclFunctions
-        └── interface
-            # Rcpp interface bodies for oclFunctions
+│   # Package metadata files; configure scripts manage environment setup
+│
+├── src
+│   │   # *.cpp scripts defining the Rcpp host-device interface layer
+│   │
+│   └── backend
+│       │   # A standalone, modular CMake abstraction project
+│       │
+│       ├── include
+│       │   └── # Public abstract headers mapped cleanly to Rcpp signatures
+│       │
+│       ├── src
+│       │   └── internal  # Private implementation headers managing core mechanics
+│       │
+│       └── lib
+│           └── # Embedded Khronos OpenCL C++ binding headers
+│   
+├── R
+│   └── # User-facing caller scripts and cached IIFE oclFunction wrappers
+│
+├── vignettes
+│   └── # High-density profiling guides tracking MCMC and Geostatistical speedups
+│
+└── inst
+    └── # Runtime compute templates exported directly to the client session
+        ├── kernel     # Core OpenCL C template kernels (e.g., kriging, variography)
+        └── interface  # Lightweight Rcpp execution body fragments
 
 ```
 
@@ -147,7 +168,10 @@ provided a functional OpenCL ICD runtime is installed.
 ___
 ## 📦 Installation & System Prerequisites
 
-Since **OpenCLeaR** compiles custom C++ extensions and links into hardware-level OpenCL drivers on the fly, a few system-level development tools and runtimes must be installed before installing the R package.
+Since **OpenCLeaR** compiles custom C++ extensions and links into
+hardware-level OpenCL drivers on the fly, a few system-level
+development tools and runtimes must be installed before installing the
+R package.
 
 ### 1. System Prerequisites
 
@@ -160,10 +184,17 @@ sudo apt update
 sudo apt install build-essential cmake opencl-headers
 ```
 
-To enable hardware execution, set up the official package repository for your hardware vendor to pull the correct OpenCL ICD runtime:
+To enable hardware-level execution, fetch the production-ready compute
+runtimes matching your silicon:
+
+##### ▪ NVIDIA CUDA OpenCL (GeForce, RTX, Tesla, Quadro)
 
 ##### ▪ NVIDIA CUDA OpenCL (GeForce, RTX, Tesla)
-Do not install the stripped-down Ubuntu upstream drivers. Set up the official NVIDIA network repository to get the full deployment kit containing development headers and the runtime ICD:
+
+Do not install the stripped-down Ubuntu upstream drivers. Set up the
+official NVIDIA network repository to get the full deployment kit
+containing development headers and the runtime ICD:
+
 ```bash
 # 1. Install the repository architecture requirements
 sudo apt install coreutils
@@ -180,7 +211,10 @@ sudo apt install cuda-drivers-target-opencl opencl-icd-loaders
 ```
 
 ##### ▪ AMD ROCm OpenCL (Radeon GPUs, Ryzen APUs / Strix Halo)
-To prevent driver signature and scheduling mismatches, hook up the official AMD package manager structures:
+
+To prevent driver signature and scheduling mismatches, hook up the
+official AMD package manager structures:
+
 ```bash
 # 1. Download and map the AMD repository signing key
 sudo mkdir -p /etc/apt/keyrings
@@ -198,7 +232,10 @@ sudo apt install rocm-opencl-runtime
 ```
 
 ##### ▪ Intel oneAPI (Core/Xeon CPUs & Arc/Iris Graphics)
-To tap into official Intel compute runtime pipelines without cloning multi-gigabyte heavy SDK stacks, set up the dedicated network repo:
+
+To tap into official Intel compute runtime pipelines without cloning
+multi-gigabyte heavy SDK stacks, set up the dedicated network repo:
+
 ```bash
 # 1. Download the Intel package signing credentials
 wget -O- https://intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | gpg --dearmor | sudo tee /usr/share/keyrings/intel-sw-products.gpg > /dev/null
@@ -212,13 +249,18 @@ sudo apt install intel-oneapi-runtime-opencl
 ```
 
 ##### ▪ PoCL (Headless Server / Hardware-Independent CPU Fallback)
-If you operate in pure sandbox virtualizations or non-accelerated CI runners without access to physical silicon, run the Portable Compute Layer vendor package:
+
+If you operate in pure sandbox virtualizations or non-accelerated CI
+runners without access to physical silicon, run the Portable Compute
+Layer vendor package:
+
 ```bash
 sudo apt install pocl-opencl-icd
 ```
 
 #### 🍏 macOS
-You can set up the build chain either via **Homebrew** or **MacPorts**:
+You can set up the build chain either via **Homebrew** or
+**MacPorts**:
 
 ##### Using Homebrew:
 1. Install the Xcode command-line compiler tools:
@@ -239,12 +281,20 @@ You can set up the build chain either via **Homebrew** or **MacPorts**:
    ```bash
    sudo port install cmake
    ```
-*(Note: No separate OpenCL driver installation is required. macOS automatically provides the system-wide Apple OpenCL Framework, though Intel-based CPU execution is filtered out for stability on newer OS versions)*.
+
+*(Note: No separate OpenCL driver installation is required. macOS
+automatically provides the system-wide Apple OpenCL Framework, though
+Intel-based CPU execution is filtered out for stability on newer OS
+versions)*.
 
 #### 🪟 Windows
+
 1. Download and install **Rtools** matching your specific R version.
 2. Download and install **CMake** (ensure it is added to your system `PATH` during installation).
-3. Ensure an OpenCL ICD provider is active (e.g., via NVIDIA CUDA or Intel oneAPI). If no hardware driver is present at compile time, OpenCLeaR safely falls back to compiling via its bundled static Khronos ICD loader.
+3. Ensure an OpenCL ICD provider is active (e.g., via NVIDIA CUDA or
+   Intel oneAPI). If no hardware driver is present at compile time,
+   OpenCLeaR safely falls back to compiling via its bundled static
+   Khronos ICD loader.
 
 Note that you can efficiently use **Scoop**, an `apt` or `port` like installer, under Windows too. 
 
@@ -262,7 +312,9 @@ ___
 
 ### 2. Installing the R Package
 
-Once your system tools (**CMake** and compiler) are verified, open your R session and run the installation pipeline via the `remotes` package:
+Once your system tools (**CMake** and compiler) are verified, open
+your R session and run the installation pipeline via the `remotes`
+package:
 
 ```r
 # Install the remotes manager if not already installed
@@ -281,7 +333,8 @@ When running long-running OpenCL kernels or large memory allocations
 on AMD hardware under Linux (especially recent RDNA 3 / 3.5 APUs such
 as Ryzen AI / Strix Point / Strix Halo using `amdgpu` and ROCm),
 default driver watchdogs and memory caps may trigger GPU ring timeouts
-or allocation errors:
+or allocation errors. Consider applying the following system
+adjustments:
 
 1. **Kernel & Firmware Version (RDNA 3.5 / Strix):** Use **Linux
    kernel >= 6.19** together with up-to-date `linux-firmware`
@@ -301,8 +354,9 @@ or allocation errors:
    
 3. **Unlock Full Unified Memory on APUs (Optional):** To allow OpenCL
    buffers to utilize more than the default shared system memory (GTT)
-   limit on APUs with large RAM, set the TTM page limits (in 4 KB
-   pages; e.g., `25165824` for 96 GB) in the kernel command line:
+   limit on APUs configured with large physical RAM pools, append the
+   TTM page constraints (calculated in 4 KB pages; e.g., `25165824`
+   for 96 GB systems) to your kernel boot parameters:
 
    ```text 
     ttm.pages_limit=25165824 ttm.page_pool_size=25165824 
@@ -311,6 +365,39 @@ or allocation errors:
    *(Note: Modern kernels use `ttm.*` instead of the deprecated
    `amdttm.*` or `amdgpu.gttsize` parameters).*
 
+### 4. Portability Note: 64-Bit Integers (`long long`) & Private Memory on Apple Silicon (macOS Metal)
+
+When writing OpenCL kernels intended to run seamlessly across
+desktop/server GPUs (NVIDIA, AMD, Intel) and **Apple Silicon
+(M1–M4)**, two hardware/compiler restrictions in Apple's
+OpenCL-over-Metal backend (`cl2Metal`) can cause pipeline creation to
+fail silently without a compiler syntax error:
+
+1. **Avoid `long long` (64-bit integer arithmetic) in device code:**
+   Although OpenCL 1.2 specifies 64-bit integers, Apple's `cl2Metal`
+   translator rejects several 64-bit integer operations (such as
+   64-bit modulo `%`, division, or complex buffer offset indexing
+   using `long long`) during pipeline compilation.
+   * **Symptom:** `UNSUPPORTED (log once): createKernel:
+     newComputePipelineState failed` followed by `OpenCL error: There
+     is no OpenCL kernel with name "..."`.
+   * **Fix:** Use `int` or `uint` for buffer offsets and loop indices
+     (sufficient for up to $2^{32} - 1 \approx 4.29 \times 10^9$
+     elements).
+
+2. **Keep thread-private (`__private`) memory compact (`RNGkind =
+   "Xorshift128"`):** Apple Silicon GPUs enforce a strict per-thread
+   `__private` memory and register budget (roughly 4 KB including call
+   stack). The default Mersenne Twister (`MT19937`) state alone
+   occupies **2,500 bytes** (`uint mt[624]`) per thread,
+   which—combined with local arrays—can exceed the pipeline budget in
+   complex kernels.
+   * **Fix:** Use `RNGkind = "Xorshift128"` in your `oclFunction()`
+     call. Through OpenCLeaR's `INIT_RNG` / `RNG_ARGS` abstraction,
+     all random number generators (`runif`, `rnorm`, `rgamma`,
+     `rmvnorm`, etc.) automatically switch to a **16-byte
+     Xorshift128** state without changing a single function call in
+     your kernel code.
 
 ## 🧪 Example Use Case: Inverse Distance Weighting (IDW)
 
@@ -370,7 +457,7 @@ Memory<real> gpu_x(*device, n);
 Memory<real> gpu_y(*device, n);
 Memory<real> gpu_z(*device, n);
 
-// High-performance element-wise buffer filling
+// Populate host memory structures
 for(int i=0; i<n0; ++i) { gpu_x0[i] = x0[i]; gpu_y0[i] = y0[i]; }
 for(int j=0; j<n; ++j)  { gpu_x[j] = x[j]; gpu_y[j] = y[j]; gpu_z[j] = z[j]; }
 
@@ -379,7 +466,8 @@ gpu_x0.write_to_device(); gpu_y0.write_to_device();
 gpu_x.write_to_device();  gpu_y.write_to_device(); gpu_z.write_to_device();
 
 // Enqueue and execute the JIT-compiled kernel
-Kernel k(*device, n0, "idw_kernel", gpu_x0, gpu_y0, gpu_z0, gpu_x, gpu_y, gpu_z, n0, n, as<real>(p));
+Kernel k(*device, n0, "idw_kernel", gpu_x0, gpu_y0, gpu_z0,
+         gpu_x, gpu_y, gpu_z, n0, n, as<real>(p));
 k.run();
 
 // Read result matrix back to host RAM
@@ -389,7 +477,7 @@ for(int i=0; i<n0; ++i) r_z0[i] = gpu_z0[i];
 return r_z0;
 ```
 
-### 3. Generating and Executing the Cached R Interface
+### 3. Encapsulating the Persistent Functional Cache in R
 
 In R, you stitch both files together using `oclFunction()`. The call
 pattern utilizes an **Evaluate-in-Place** pipeline via a double
@@ -470,23 +558,12 @@ Look into the provided vignettes ...
 
 ## 🧑‍💻 Contributions
 
-Contributions, suggestions, and issues are welcome! Feel free to open a pull request or issue.
+Contributions, suggestions, and issues are welcome! Feel free to open
+a pull request or issue.
 
 ## 📄 License
 
 MIT License. See `LICENSE` and `LICENSE.note` for details.
 
 
-## Portability Note: 64-Bit Integers (`long long`) & Private Memory on Apple Silicon (macOS Metal)
-
-When writing OpenCL kernels intended to run seamlessly across desktop/server GPUs (NVIDIA, AMD, Intel) and **Apple Silicon (M1–M4)**, two hardware/compiler restrictions in Apple's OpenCL-over-Metal backend (`cl2Metal`) can cause pipeline creation to fail silently without a compiler syntax error:
-
-1. **Avoid `long long` (64-bit integer arithmetic) in device code:**
-   Although OpenCL 1.2 specifies 64-bit integers, Apple's `cl2Metal` translator rejects several 64-bit integer operations (such as 64-bit modulo `%`, division, or complex buffer offset indexing using `long long`) during pipeline compilation.
-   * **Symptom:** `UNSUPPORTED (log once): createKernel: newComputePipelineState failed` followed by `OpenCL error: There is no OpenCL kernel with name "..."`.
-   * **Fix:** Use `int` or `uint` for buffer offsets and loop indices (sufficient for up to $2^{32} - 1 \approx 4.29 \times 10^9$ elements).
-
-2. **Keep thread-private (`__private`) memory compact (`#define USE_FAST_RNG`):**
-   Apple Silicon GPUs enforce a strict per-thread `__private` memory and register budget (roughly 4 KB including call stack). The default Mersenne Twister (`MT19937`) state alone occupies **2,500 bytes** (`uint mt[624]`) per thread, which—combined with local arrays—can exceed the pipeline budget in complex kernels.
-   * **Fix:** Define `#define USE_FAST_RNG` at the top of your kernel (or before loading `libkernel.cl`). Through OpenCLeaR's `INIT_RNG` / `RNG_ARGS` abstraction, all random number generators (`runif`, `rnorm`, `rgamma`, `rmvnorm`, etc.) automatically switch to a **16-byte Xorshift128** state without changing a single function call in your kernel code.
 
