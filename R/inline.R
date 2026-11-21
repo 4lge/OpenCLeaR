@@ -310,12 +310,9 @@ inlineCxxPluginDouble <- function(...) {
 ##' }
 ##' @export
 inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math_lib = TRUE, RNGkind = "Mersenne-Twister", force_float = FALSE, ...) {
+    ## choosen RNG, create build_opts to be passed to ocl_compiler
     RNGkind <- match.arg(RNGkind, choices = c("Mersenne-Twister", "Xorshift128"))
-    rng_define <- switch(RNGkind,
-                         "Mersenne-Twister" = "",
-                         "Xorshift128"      = "#define USE_FAST_RNG\n",
-                         "nmath"            = ""
-                         )
+    build_opt_str <- if (RNGkind == "Xorshift128") "-D USE_FAST_RNG" else "";
 
     ## We wake up the backend so that the real hardware information is available
     tryCatch({
@@ -379,6 +376,7 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
     } else {
         chosen_plugin <- "OpenCLeaRFloat"
     }
+
     ## =========================================================================
     ## mathematical library injection (unified syntax: local vs. package repo)
     ## =========================================================================
@@ -397,7 +395,6 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         } else {
             ## use a math library from central package storage
             math_lib_injection <- paste0(
-                rng_define,
                 "    Rcpp::Function sys_file(\"system.file\");\n",
                 "    std::string pkg_kernel_dir = Rcpp::as<std::string>(sys_file(\"kernel\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
                 "    std::string math_lib_file = pkg_kernel_dir + \"/\" +\"", math_lib,"\";\n",
@@ -434,6 +431,8 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         "    device->set_kernel_path(kernel_dir);\n",
         "    device->set_kernel_file(\"", kernel_file, "\");\n",
         "    device->set_kernel_name(\"", kernel_file, "\");\n",
+	## add build options, currently used for RNGkind
+	"    device->set_build_options(\"", build_opt_str, "\");\n",
         "    device->initialize_binary_cache_path();\n",
         if (isTRUE(force_float)) {
             "    device->info.is_fp64_capable = 0;\n"
@@ -628,6 +627,7 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
     last_device_id   <- NULL
     last_fp64_state  <- NULL
     last_force_float <- NULL
+    last_rng_kind    <- NULL
     last_cache_key   <- NULL
 
     ## The final wrapper function
@@ -649,6 +649,7 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
 
         fp64_suffix <- if(isTRUE(getOption("OpenCLeaR.has_fp64"))) "_fp64" else "_fp32"
         prec_suffix <- if (force_float) "_force_float" else "_no_force_float"
+	rng_suffix  <- if (RNGkind == "Xorshift128") "_xor" else "_mt"
 
         ## Unique cache key for this specific device compilation
         cache_key <- paste0(".",
@@ -659,6 +660,7 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
                             dev_info$Index,
                             fp64_suffix,
                             prec_suffix,
+			    rng_suffix,
                             "_ocl_internal")
 
         cache_env <- asNamespace("OpenCLeaR")$.OpenCLeaR_Env
@@ -669,10 +671,12 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
         if (isTRUE(force_float)) current_fp64 <- FALSE
 
         need_state_update <- is.null(compiled_func) ||
-            (cache_key != last_cache_key) ||
-            (current_id != last_device_id) ||
-            (current_fp64 != last_fp64_state) ||
-            (force_float != last_force_float)
+            !identical(cache_key, last_cache_key) ||
+            !identical(current_id, last_device_id) ||
+            !identical(current_fp64, last_fp64_state) ||
+            !identical(force_float, last_force_float) ||
+            !identical(RNGkind, last_rng_kind)
+
 
         if (need_state_update) {
             ## Check whether we already have something in cache for this hardware
@@ -684,6 +688,7 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
                     last_device_id   <<- current_id
                     last_fp64_state  <<- current_fp64
                     last_force_float <<- force_float
+		    last_rng_kind    <<- RNGkind
                     return(compiled_func(...))
                 }
             }
