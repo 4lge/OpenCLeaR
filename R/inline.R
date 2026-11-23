@@ -148,6 +148,43 @@ inlineCxxPluginDouble <- function(...) {
     return(settings)
 }
 
+## helper function for inlineCL:
+
+.resolve_math_lib_files <- function(math_lib) {
+    if (isFALSE(math_lib) || is.null(math_lib) || length(math_lib) == 0L) {
+        return(character(0))
+    }
+    if (isTRUE(math_lib)) {
+        math_lib <- "libkernel.cl"
+    }
+    if (!is.character(math_lib)) {
+        stop(" [OpenCLeaR] 'math_lib' must be logical or a character vector of .cl library specifications.")
+    }
+    vapply(math_lib, function(entry) {
+        if (grepl("::", entry, fixed = TRUE)) {
+            parts <- strsplit(entry, "::", fixed = TRUE)[[1L]]
+            if (length(parts) != 2L || !nzchar(parts[1L]) || !nzchar(parts[2L])) {
+                stop(paste0(" [OpenCLeaR] Invalid package math_lib specification: ", entry))
+            }
+            pkg_file <- system.file("kernel", parts[2L], package = parts[1L])
+            if (!nzchar(pkg_file) || !file.exists(pkg_file)) {
+                stop(paste0(" [OpenCLeaR] Math library '", parts[2L], "' not found in package '", parts[1L], "'."))
+            }
+            normalizePath(pkg_file, winslash = "/")
+        } else if (startsWith(entry, "./") || startsWith(entry, ".\\") || startsWith(entry, "../")) {
+            if (!file.exists(entry)) {
+                stop(paste0(" [OpenCLeaR] Specified local math library not found: ", entry))
+            }
+            normalizePath(entry, winslash = "/")
+        } else {
+            pkg_file <- system.file("kernel", entry, package = "OpenCLeaR")
+            if (!nzchar(pkg_file) || !file.exists(pkg_file)) {
+                stop(paste0(" [OpenCLeaR] Math library not found in package repository: ", entry))
+            }
+            normalizePath(pkg_file, winslash = "/")
+        }
+    }, character(1L), USE.NAMES = FALSE)
+}
 
 
 ##' Generic GPGPU JIT compiled function for OpenCL access
@@ -156,7 +193,11 @@ inlineCxxPluginDouble <- function(...) {
 ##' @param kernel_file A (TODO: R-string or a) path to a *.cl file containing the GPU kernel
 ##' @param interface_file A (TODO: R string or a) path to a file containing the Rcpp execution code
 ##' @param debug Logical value. If \code{TRUE}, the complete with
-##' @param math_lib Logical value. If \code{TRUE}, the mathematical library libkernel.cl is loaded.
+##' @param math_lib Logical value or character vector. If \code{TRUE}, \code{"libkernel.cl"} is loaded.
+##'   If a character vector (e.g., \code{c("libkernel.cl", "./mylib.cl", "otherpkg::extra.cl")}),
+##'   each entry is resolved in order (package kernel directory, local path starting with \code{"./"},
+##'   or \code{"pkg::file.cl"} from another package's \code{kernel} directory) and concatenated
+##'   before injection.
 ##' @param force_float Logical value. If \code{TRUE}, execution is forced to FP32 eben on FP64 capable hardware.
 ##' @param RNGkind character, chooses random number genreator from
 ##'   \code{c("Mersenne-Twister", "Xorshift128","nmath")}, "nmath" not yet active,
@@ -307,6 +348,60 @@ inlineCxxPluginDouble <- function(...) {
 ##'
 ##'image(x,y,res)
 ##' }
+##' # show usage og "math_lib" argument, featuring several library files
+##' # concatenated to each other:
+##' 
+##' if (EnsureOpenclInitialized()) {
+##'   ActivateDevice(0)
+##'   
+##' ## 1. Create your own small OpenCL helper library locally
+##'   writeLines("
+##'   inline real add_scaled_normal(real x, real scale, RNG_PROTOTYPE) {
+##'       return x + scale * rnorm_internal((real)0.0f, (real)1.0f, RNG_01_ARGS);
+##'   }
+##'   ", "./custom_math.cl")
+##'   
+##'   
+##' ## 2. Kernel uses functions from libkernel.cl AND ./custom_math.cl
+##'   writeLines("
+##'   __kernel void test_multi_lib(__global const real* x, __global real* out,
+##'                                const int n, const real scale, const int seed) {
+##'       int i = get_global_id(0);
+##'       if (i >= n) return;
+##'       INIT_RNG(seed + i);
+##'       out[i] = add_scaled_normal(x[i], scale, RNG_ARGS);
+##'   }
+##'   ", "./test_multi_lib.cl")
+##'   
+##'   writeLines("
+##'   NumericVector rx(x);
+##'   int n = rx.size();
+##'   Memory<real> gx(*device, n), gout(*device, n);
+##'   for (int i = 0; i < n; ++i) gx[i] = rx[i];
+##'   gx.write_to_device();
+##'   Kernel k(*device, n, \"test_multi_lib\", gx, gout, n, as<real>(scale), as<int>(seed));
+##'   k.run();
+##'   gout.read_from_device();
+##'   NumericVector res(n);
+##'   for (int i = 0; i < n; ++i) res[i] = gout[i];
+##'   return res;
+##'   ", "./test_multi_lib.cpp")
+##'   
+##' # 3. Integrate both libraries in an orderly manner
+##'   sim_fn <- oclFunction(
+##'     signature      = signature(x = "numeric", scale = "numeric", seed = "integer"),
+##'     kernel_file    = "./test_multi_lib.cl",
+##'     interface_file = "./test_multi_lib.cpp",
+##'     math_lib       = c("libkernel.cl", "./custom_math.cl"),
+##'     RNGkind        = "Xorshift128"
+##'   )
+##'   
+##'   print(sim_fn(1:5, scale = 0.1, seed = 42L))
+##'   
+##'   ## Clean up
+##'   unlink(c("./custom_math.cl", "./test_multi_lib.cl", "./test_multi_lib.cpp"))
+##'   CleanCLCache()
+##' }
 ##' }
 ##' @export
 inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math_lib = TRUE, RNGkind = "Mersenne-Twister", force_float = FALSE, ...) {
@@ -380,44 +475,51 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
     ## =========================================================================
     ## mathematical library injection (unified syntax: local vs. package repo)
     ## =========================================================================
-    if (is.character(math_lib)) {
-        is_local_math <- startsWith(math_lib, "./") || startsWith(math_lib, ".\\")
-        if (is_local_math) {
-            ## use a locally stored math library
-            if (file.exists(math_lib)) {
-                abs_math_path <- normalizePath(math_lib, winslash = "/")
-                math_lib_injection <- paste0(
-                    "    device->set_math_library_path(\"", abs_math_path, "\");\n"
-                )
-            } else {
-                stop(paste0(" [OpenCLeaR] Specified local math library not found: ", math_lib))
-            }
-        } else {
-            ## use a math library from central package storage
-            math_lib_injection <- paste0(
-                "    Rcpp::Function sys_file(\"system.file\");\n",
-                "    std::string pkg_kernel_dir = Rcpp::as<std::string>(sys_file(\"kernel\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
-                "    std::string math_lib_file = pkg_kernel_dir + \"/\" +\"", math_lib,"\";\n",
-                "    if (!std::ifstream(math_lib_file).good()) {\n",
-                "        Rcpp::stop(\" [OpenCLeaR] Math library not found in package repository: \" + math_lib_file);\n",
-                "    }\n",
-                "    device->set_math_library_path(math_lib_file);\n"
-            )
-        }
-    } else if (isTRUE(math_lib)) {
-        ## default: use libkernel.cl from installed package:
-        math_lib_injection <- paste0(
-            "    Rcpp::Function sys_file(\"system.file\");\n",
-            "    std::string pkg_kernel_dir = Rcpp::as<std::string>(sys_file(\"kernel\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
-            "    std::string math_lib_file = pkg_kernel_dir + \"/libkernel.cl\";\n",
-            "    device->set_math_library_path(math_lib_file);\n"
-        )
-    } else {
-        ## no math lib:
-        math_lib_injection <- "    device->set_math_library_path(\"\");\n"
-    }
+    resolved_libs <- .resolve_math_lib_files(math_lib)
 
-    ## DIE ABSOLUTE REIHENFOLGEN-ABSICHERUNG:
+    ## 1. Delete outdated disk .bin files if a math_lib is newer
+    stale_removed <- FALSE
+    if (length(resolved_libs) > 0L && dir.exists("./.cl_cache")) {
+      k_base <- tools::file_path_sans_ext(basename(kernel_file))
+      stale_bins <- list.files("./.cl_cache", pattern = paste0("^", k_base, "_.*\\.bin$"),
+                               recursive = TRUE, full.names = TRUE)
+      if (length(stale_bins) > 0L) {
+        lib_newest <- max(file.info(resolved_libs)$mtime, na.rm = TRUE)
+        bin_oldest <- min(file.info(stale_bins)$mtime, na.rm = TRUE)
+        if (is.finite(lib_newest) && is.finite(bin_oldest) && lib_newest >= bin_oldest) {
+          unlink(stale_bins)
+          stale_removed <- TRUE
+        }
+      }
+    }
+    
+    if (length(resolved_libs) == 0L) {
+      ## no math lib:
+      math_lib_injection <- "    device->set_math_library_path(\"\");\n"
+    } else if (length(resolved_libs) == 1L) {
+      math_lib_injection <- paste0(
+        "    device->set_math_library_path(\"", resolved_libs[1L], "\");\n"
+      )
+    } else {
+      ## Concatenate multiple math libraries in exact user-specified order
+      combined_blocks <- vapply(resolved_libs, function(lib_path) {
+        lines <- readLines(lib_path, warn = FALSE)
+        paste0("// --- BEGIN MATH_LIB: ", basename(lib_path), " ---\n",
+               paste(lines, collapse = "\n"),
+               "\n// --- END MATH_LIB: ", basename(lib_path), " ---")
+      }, character(1L))
+      combined_code <- paste(combined_blocks, collapse = "\n\n")
+      lib_mtimes <- as.character(as.integer(file.info(resolved_libs)$mtime))
+      bundle_id <- sprintf("%x", sum(utf8ToInt(paste(resolved_libs, lib_mtimes, collapse = "|"))) %% 2147483647L)
+      bundle_path <- normalizePath(file.path(tempdir(), paste0("openclear_mathlib_", bundle_id, ".cl")),
+                                   winslash = "/", mustWork = FALSE)
+      writeLines(combined_code, bundle_path)
+      math_lib_injection <- paste0(
+        "    device->set_math_library_path(\"", bundle_path, "\");\n"
+      )
+    }
+    
+    ## ensure correct sequence :
     full_cl_code <- paste0(
         "    Rcpp::Function system_file(\"system.file\");\n",
         "    std::string compiler_dir = Rcpp::as<std::string>(system_file(\"bin\", Rcpp::Named(\"package\") = \"OpenCLeaR\"));\n",
@@ -431,8 +533,8 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         "    device->set_kernel_path(kernel_dir);\n",
         "    device->set_kernel_file(\"", kernel_file, "\");\n",
         "    device->set_kernel_name(\"", kernel_file, "\");\n",
-	## add build options, currently used for RNGkind
-	"    device->set_build_options(\"", build_opt_str, "\");\n",
+	      ## add build options, currently used for RNGkind
+	      "    device->set_build_options(\"", build_opt_str, "\");\n",
         "    device->initialize_binary_cache_path();\n",
         if (isTRUE(force_float)) {
             "    device->info.is_fp64_capable = 0;\n"
@@ -650,17 +752,25 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
         fp64_suffix <- if(isTRUE(getOption("OpenCLeaR.has_fp64"))) "_fp64" else "_fp32"
         prec_suffix <- if (force_float) "_force_float" else "_no_force_float"
 	rng_suffix  <- if (RNGkind == "Xorshift128") "_xor" else "_mt"
-
+	resolved_libs <- .resolve_math_lib_files(math_lib)
+	lib_sig <- if (length(resolved_libs) == 0L) {
+	  "_nolib"
+	} else {
+	  mtimes <- as.character(as.integer(file.info(resolved_libs)$mtime))
+	  raw_sig <- paste(basename(resolved_libs), mtimes, collapse = "_")
+	  paste0("_lib", sum(utf8ToInt(raw_sig)) %% 1000000L)
+	}
         ## Unique cache key for this specific device compilation
         cache_key <- paste0(".",
                             kernel_base_name, "_",
                             platform_prefix, "_",
                             clean_vendor, "_",
                             clean_device, "_dev",
-                            dev_info$Index,
-                            fp64_suffix,
-                            prec_suffix,
-			    rng_suffix,
+                            dev_info$Index, "_",
+                            fp64_suffix, "_",
+                            prec_suffix, "_",
+			                      rng_suffix, "_",
+			                      lib_sig, "_",
                             "_ocl_internal")
 
         cache_env <- asNamespace("OpenCLeaR")$.OpenCLeaR_Env
@@ -688,13 +798,13 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
                     last_device_id   <<- current_id
                     last_fp64_state  <<- current_fp64
                     last_force_float <<- force_float
-		    last_rng_kind    <<- RNGkind
+		                last_rng_kind    <<- RNGkind
                     return(compiled_func(...))
                 }
             }
 
             ## If absolutely nothing exists in the cache -> (Re)Compile
-            cat(" [OpenCLeaR Runtime] hardware change or float/double mode change detected! recompile ...\n")
+            cat(" [OpenCLeaR Runtime] hardware change, RNGkind change or float/double mode change detected! recompile ...\n")
             compiled_func <<- OpenCLeaR::inlineCL(
                                              signature      = signature,
                                              kernel_file    = kernel_file,
@@ -710,6 +820,7 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
             last_device_id   <<- current_id
             last_fp64_state  <<- current_fp64
             last_force_float <<- force_float
+            last_rng_kind    <<- RNGkind   
 
             ## Save to global cache for future switches
             if (cache) {

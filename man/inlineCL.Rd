@@ -24,7 +24,11 @@ inlineCL(
 
 \item{debug}{Logical value. If \code{TRUE}, the complete with}
 
-\item{math_lib}{Logical value. If \code{TRUE}, the mathematical library libkernel.cl is loaded.}
+\item{math_lib}{Logical value or character vector. If \code{TRUE}, \code{"libkernel.cl"} is loaded.
+If a character vector (e.g., \code{c("libkernel.cl", "./mylib.cl", "otherpkg::extra.cl")}),
+each entry is resolved in order (package kernel directory, local path starting with \code{"./"},
+or \code{"pkg::file.cl"} from another package's \code{kernel} directory) and concatenated
+before injection.}
 
 \item{RNGkind}{character, chooses random number genreator from
 \code{c("Mersenne-Twister", "Xorshift128","nmath")}, "nmath" not yet active,
@@ -183,6 +187,60 @@ res = idw_gpu(xm,ym,xi,yi,fi,1.0)
 res = matrix(res,nx,ny)
 
 image(x,y,res)
+}
+# show usage og "math_lib" argument, featuring several library files
+# concatenated to each other:
+
+if (EnsureOpenclInitialized()) {
+  ActivateDevice(0)
+  
+## 1. Create your own small OpenCL helper library locally
+  writeLines("
+  inline real add_scaled_normal(real x, real scale, RNG_PROTOTYPE) {
+      return x + scale * rnorm_internal((real)0.0f, (real)1.0f, RNG_01_ARGS);
+  }
+  ", "./custom_math.cl")
+  
+  
+## 2. Kernel uses functions from libkernel.cl AND ./custom_math.cl
+  writeLines("
+  __kernel void test_multi_lib(__global const real* x, __global real* out,
+                               const int n, const real scale, const int seed) {
+      int i = get_global_id(0);
+      if (i >= n) return;
+      INIT_RNG(seed + i);
+      out[i] = add_scaled_normal(x[i], scale, RNG_ARGS);
+  }
+  ", "./test_multi_lib.cl")
+  
+  writeLines("
+  NumericVector rx(x);
+  int n = rx.size();
+  Memory<real> gx(*device, n), gout(*device, n);
+  for (int i = 0; i < n; ++i) gx[i] = rx[i];
+  gx.write_to_device();
+  Kernel k(*device, n, \"test_multi_lib\", gx, gout, n, as<real>(scale), as<int>(seed));
+  k.run();
+  gout.read_from_device();
+  NumericVector res(n);
+  for (int i = 0; i < n; ++i) res[i] = gout[i];
+  return res;
+  ", "./test_multi_lib.cpp")
+  
+# 3. Integrate both libraries in an orderly manner
+  sim_fn <- oclFunction(
+    signature      = signature(x = "numeric", scale = "numeric", seed = "integer"),
+    kernel_file    = "./test_multi_lib.cl",
+    interface_file = "./test_multi_lib.cpp",
+    math_lib       = c("libkernel.cl", "./custom_math.cl"),
+    RNGkind        = "Xorshift128"
+  )
+  
+  print(sim_fn(1:5, scale = 0.1, seed = 42L))
+  
+  ## Clean up
+  unlink(c("./custom_math.cl", "./test_multi_lib.cl", "./test_multi_lib.cpp"))
+  CleanCLCache()
 }
 }
 }

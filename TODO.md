@@ -19,7 +19,7 @@
 ### 📝 Task 1: Technical Whitepaper & Journal Manuscript (Next Step)
 - [ ] Document the conceptual architecture of the R -> Rcpp -> OpenCL Driver JIT pipeline.
 - [ ] Detail the internal mechanics, memory marshalling, and caching layout backing the `oclFunction` environment.
-- [ ] Validate numerical stability and baseline performance using a parallel IDW / Kriging configuration.
+- [x] Validate numerical stability and baseline performance using a parallel IDW / Kriging configuration.
 
 ### 🧊 Task 2: 3D Voxel Diffusion Prototype (Future Extension)
 - [ ] Implement a 3D execution grid kernel mapping three spatial index planes (`get_global_id` 0, 1, 2).
@@ -32,6 +32,6 @@
 - [x] Implement lightweight 16-byte `Xorshift128` backend (`-D USE_FAST_RNG`) alongside default 2.5 KB `Mersenne-Twister` (`MT19937`) to comply with Apple Silicon Metal per-thread private memory limits.
 - [x] Forward compiler build options (`-o "-D USE_FAST_RNG"`) through `Device::set_build_options()` into `ocl_compiler` and isolate `.bin` cache entries via `_xor` / `_mt` suffixes.
 - [x] Add runtime `RNGkind` switching via `.extract_rng_kind(...)` and RNG-aware `.OpenCLeaR_Env` cache keys in `oclFunction()` and `rnormOCL()`.
-- [ ] Persist `last_rng_kind <<- RNGkind` in the recompile branch of `oclFunction()` (`R/inline.R`) and roll out `.extract_rng_kind(...)` across all remaining `r*OCL()` wrappers (`runifOCL`, `rtOCL`, `rgammaOCL`, `rpoisOCL`, `rmvnormOCL`, etc.).
-- [ ] Support ordered vector notation for `math_lib = c("libkernel.cl", "./mylib.cl", "dependentpkg::otherlib.cl")` in `inlineCL()` / `oclFunction()`, resolving package kernels, local files, and external package headers in sequence with mtime-aware cache invalidation.
+- [x] Persist `last_rng_kind <<- RNGkind` in the recompile branch of `oclFunction()` (`R/inline.R`) and roll out `.extract_rng_kind(...)` across all remaining `r*OCL()` wrappers (`runifOCL`, `rtOCL`, `rgammaOCL`, `rpoisOCL`, `rmvnormOCL`, etc.).
+- [x] Support ordered vector notation for `math_lib = c("libkernel.cl", "./mylib.cl", "dependentpkg::otherlib.cl")` in `inlineCL()` / `oclFunction()`, resolving package kernels, local files, and external package headers in sequence with mtime-aware cache invalidation.
 - [ ] Optional: Add standalone R `nmath` PRNG backend (`RNGkind = "nmath"`) in `libkernel.cl`.
