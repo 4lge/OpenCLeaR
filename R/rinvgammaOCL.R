@@ -29,12 +29,16 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 rinvgammaOCL <- (function() {
   .rinvgamma_ocl_internal <- NULL
+  last_RNGkind <- NULL
+
   function(n, shape, rate = 1, ...) {
-    if (is.null(.rinvgamma_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.rinvgamma_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
       .rinvgamma_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = methods::signature(n = "integer", shape = "numeric", rate = "numeric"),
         kernel_file = "rinvgamma.cl", interface_file = "rinvgamma.cpp", ...
       )
+      last_RNGkind <<- parsed$RNGkind
     }
     return(.rinvgamma_ocl_internal(n, shape, rate))
   }

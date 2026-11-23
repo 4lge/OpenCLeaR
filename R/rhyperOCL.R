@@ -13,12 +13,16 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 rhyperOCL <- (function() {
   .rhyper_ocl_internal <- NULL
+  last_RNGkind <- NULL
+
   function(nn, m, n, k, ...) {
-    if (is.null(.rhyper_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.rhyper_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
       .rhyper_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = methods::signature(nn = "integer", m = "numeric", n = "numeric", k = "numeric"),
         kernel_file = "rhyper.cl", interface_file = "rhyper.cpp", ...
       )
+      last_RNGkind <<- parsed$RNGkind
     }
     return(.rhyper_ocl_internal(nn, m, n, k))
   }

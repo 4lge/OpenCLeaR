@@ -11,12 +11,16 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 rtOCL <- (function() {
   .rt_ocl_internal <- NULL
+  last_RNGkind <- NULL
+
   function(n, df, ...) {
-    if (is.null(.rt_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.rt_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
       .rt_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = methods::signature(n = "integer", df = "integer"),
         kernel_file = "rt.cl", interface_file = "rt.cpp", ...
       )
+      last_RNGkind <<- parsed$RNGkind
     }
     return(.rt_ocl_internal(n, df))
   }

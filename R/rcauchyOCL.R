@@ -12,12 +12,16 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 rcauchyOCL <- (function() {
   .rcauchy_ocl_internal <- NULL
+  last_RNGkind <- NULL
+
   function(n, location = 0, scale = 1, ...) {
-    if (is.null(.rcauchy_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.rcauchy_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
       .rcauchy_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = methods::signature(n = "integer", location = "numeric", scale = "numeric"),
         kernel_file = "rcauchy.cl", interface_file = "rcauchy.cpp", ...
       )
+      last_RNGkind <<- parsed$RNGkind
     }
     return(.rcauchy_ocl_internal(n, location, scale))
   }

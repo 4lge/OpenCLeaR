@@ -12,14 +12,18 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 rmvnormOCL <- (function() {
   .rmvnorm_ocl_internal <- NULL
+  last_RNGkind <- NULL
+
   function(n, mean, sigma, ...) {
-    if (is.null(.rmvnorm_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.rmvnorm_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
       .rmvnorm_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = methods::signature(n = "integer", mean = "numeric", sigma = "matrix"),
         kernel_file = "rmvnorm.cl",    
         interface_file = "rmvnorm.cpp",
         ...
       )
+      last_RNGkind <<- parsed$RNGkind
     }
     return(.rmvnorm_ocl_internal(as.integer(n), as.numeric(mean), as.matrix(sigma)))
   }

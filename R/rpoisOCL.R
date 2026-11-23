@@ -14,14 +14,18 @@ if (getRversion() >= "2.15.1") {
 rpoisOCL <- (function() {
   
     .rpois_ocl_internal <- NULL  
+    last_RNGkind <- NULL
+
     function(n, lambda, ...) {   
-    if (is.null(.rpois_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.rpois_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
         .rpois_ocl_internal <<- OpenCLeaR::oclFunction(
           signature      = methods::signature(n = "integer", lambda = "numeric"),
             kernel_file    = "rpois.cl",
             interface_file = "rpois.cpp",
             ...
        )
+        last_RNGkind <<- parsed$RNGkind
     }
         return(.rpois_ocl_internal(as.integer(n), lambda))
     }

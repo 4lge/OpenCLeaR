@@ -12,12 +12,16 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 rlogisOCL <- (function() {
   .rlogis_ocl_internal <- NULL
+  last_RNGkind <- NULL
+
   function(n, location = 0, scale = 1, ...) {
-    if (is.null(.rlogis_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.rlogis_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
       .rlogis_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = methods::signature(n = "integer", location = "numeric", scale = "numeric"),
         kernel_file = "rlogis.cl", interface_file = "rlogis.cpp", ...
       )
+      last_RNGkind <<- parsed$RNGkind
     }
     return(.rlogis_ocl_internal(n, location, scale))
   }

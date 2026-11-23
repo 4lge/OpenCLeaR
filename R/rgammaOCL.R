@@ -12,12 +12,16 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 rgammaOCL <- (function() {
   .rgamma_ocl_internal <- NULL
+  last_RNGkind <- NULL
+
   function(n, shape, rate = 1, ...) {
-    if (is.null(.rgamma_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.rgamma_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
       .rgamma_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = methods::signature(n = "integer", shape = "numeric", rate = "numeric"),
         kernel_file = "rgamma.cl", interface_file = "rgamma.cpp", ...
       )
+      last_RNGkind <<- parsed$RNGkind
     }
     return(.rgamma_ocl_internal(n, shape, rate))
   }

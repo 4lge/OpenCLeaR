@@ -18,8 +18,11 @@ if (getRversion() >= "2.15.1") {
 runifOCL <- (function() {
   
   .runif_ocl_internal <- NULL
+  last_RNGkind <- NULL
+
   function(n, min = 0, max = 1, ...) {
-    if (is.null(.runif_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.runif_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
       .runif_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = signature(n = "integer", 
                               min = "numeric",
@@ -28,6 +31,7 @@ runifOCL <- (function() {
         interface_file = "runif.cpp",
         ...
         )
+      last_RNGkind <<- parsed$RNGkind
     }
     return(.runif_ocl_internal(as.integer(n), min, max))
   }

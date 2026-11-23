@@ -12,12 +12,16 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 rnbinomOCL <- (function() {
   .rnbinom_ocl_internal <- NULL
+  last_RNGkind <- NULL
+
   function(n, size, prob, ...) {
-    if (is.null(.rnbinom_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.rnbinom_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
       .rnbinom_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = methods::signature(n = "integer", size = "integer", prob = "numeric"),
         kernel_file = "rnbinom.cl", interface_file = "rnbinom.cpp", ...
       )
+      last_RNGkind <<- parsed$RNGkind
     }
     return(.rnbinom_ocl_internal(n, size, prob))
   }

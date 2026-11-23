@@ -11,12 +11,16 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 rgeomOCL <- (function() {
   .rgeom_ocl_internal <- NULL
+  last_RNGkind <- NULL
+
   function(n, prob, ...) {
-    if (is.null(.rgeom_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.rgeom_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
       .rgeom_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = methods::signature(n = "integer", prob = "numeric"),
         kernel_file = "rgeom.cl", interface_file = "rgeom.cpp", ...
       )
+      last_RNGkind <<- parsed$RNGkind
     }
     return(.rgeom_ocl_internal(n, prob))
   }

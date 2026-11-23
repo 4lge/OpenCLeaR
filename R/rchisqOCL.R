@@ -11,12 +11,16 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 rchisqOCL <- (function() {
   .rchisq_ocl_internal <- NULL
+  last_RNGkind <- NULL
+
   function(n, df, ...) {
-    if (is.null(.rchisq_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.rchisq_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
       .rchisq_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = methods::signature(n = "integer", df = "integer"),
         kernel_file = "rchisq.cl", interface_file = "rchisq.cpp", ...
       )
+      last_RNGkind <<- parsed$RNGkind
     }
     return(.rchisq_ocl_internal(n, df))
   }

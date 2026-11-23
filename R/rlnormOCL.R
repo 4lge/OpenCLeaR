@@ -12,12 +12,16 @@ if (getRversion() >= "2.15.1") {
 ##' @export
 rlnormOCL <- (function() {
   .rlnorm_ocl_internal <- NULL
+  last_RNGkind <- NULL
+
   function(n, meanlog = 0, sdlog = 1, ...) {
-    if (is.null(.rlnorm_ocl_internal)) {
+    parsed <- .extract_rng_kind(...)
+    if (is.null(.rlnorm_ocl_internal) || !identical(last_RNGkind, parsed$RNGkind)) {
       .rlnorm_ocl_internal <<- OpenCLeaR::oclFunction(
         signature = methods::signature(n = "integer", meanlog = "numeric", sdlog = "numeric"),
         kernel_file = "rlnorm.cl", interface_file = "rlnorm.cpp", ...
       )
+      last_RNGkind <<- parsed$RNGkind
     }
     return(.rlnorm_ocl_internal(n, meanlog, sdlog))
   }
