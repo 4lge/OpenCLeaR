@@ -5,7 +5,8 @@
 ^src/backend/lib/OpenCL-CLHPP/\.git(/|$)
 ^src/backend/lib/OpenCL-Headers/\.git(/|$)
 ^src/backend/lib/OpenCL-Wrapper\.git(/|$)
-
+^src/backend/build$
+^src/backend/build/
 
 # 2. Ignoriert den kompletten CMake-Build-Ordner und lokale Installationen im Backend
 ^src/backend/build(/|$)
