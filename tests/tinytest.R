@@ -1,4 +1,3 @@
-
 if (requireNamespace("tinytest", quietly = TRUE)) {
   is_pocl <- FALSE
   if (OpenCLeaR::EnsureOpenclInitialized()) {
@@ -7,22 +6,24 @@ if (requireNamespace("tinytest", quietly = TRUE)) {
       is_pocl <- any(grepl("pocl|portable", tolower(paste(devs$Platform, devs$Name))))
     }
   }
+
   if (is_pocl) {
-    ## PoCL LLVM-18 triggers an upstream double-free when compiling >40 kernels in one R process;
-    ## run the core multi-lib, RNGkind, and a small selection of distribution smoke tests on PoCL.
-    tinytest::run_test_file(system.file("tinytest", "test_math_lib_and_rng.R", package = "OpenCLeaR"))
-    tinytest::run_test_file(system.file("tinytest", "test-dnormOCL.R", package = "OpenCLeaR"))
-    tinytest::run_test_file(system.file("tinytest", "test-pnormOCL.R", package = "OpenCLeaR"))
-    tinytest::run_test_file(system.file("tinytest", "test-qnormOCL.R", package = "OpenCLeaR"))
-    tinytest::run_test_file(system.file("tinytest", "test-rnormOCL.R", package = "OpenCLeaR"))
-    tinytest::run_test_file(system.file("tinytest", "test-dmvnormOCL.R", package = "OpenCLeaR"))
-    tinytest::run_test_file(system.file("tinytest", "test-pmvnormOCL.R", package = "OpenCLeaR"))
-    tinytest::run_test_file(system.file("tinytest", "test-qmvnormOCL.R", package = "OpenCLeaR"))
-    tinytest::run_test_file(system.file("tinytest", "test-rmvnormOCL.R", package = "OpenCLeaR"))
-    tinytest::run_test_file(system.file("tinytest", "test-dbetaOCL.R", package = "OpenCLeaR"))
-    tinytest::run_test_file(system.file("tinytest", "test-pbetaOCL.R", package = "OpenCLeaR"))
-    tinytest::run_test_file(system.file("tinytest", "test-qbetaOCL.R", package = "OpenCLeaR"))
-    tinytest::run_test_file(system.file("tinytest", "test-rbetaOCL.R", package = "OpenCLeaR"))
+    ## PoCL LLVM-18 has an upstream heap double-free when compiling many kernels in one process.
+    ## Isolate each test file in a fresh Rscript subprocess so PoCL's LLVM state resets cleanly.
+    test_dir <- system.file("tinytest", package = "OpenCLeaR")
+    test_files <- sort(list.files(test_dir, pattern = "\\.[Rr]$", full.names = TRUE))
+    rscript_bin <- file.path(R.home("bin"), "Rscript")
+
+    for (tf in test_files) {
+      expr <- sprintf(
+        "res <- tinytest::run_test_file(%s); if (any(!as.logical(res))) quit(status = 1L)",
+        deparse(tf)
+      )
+      status <- system2(rscript_bin, args = c("-e", shQuote(expr)))
+      if (!identical(status, 0L)) {
+        stop("Test file failed under PoCL subprocess isolation: ", basename(tf))
+      }
+    }
   } else {
     tinytest::test_package("OpenCLeaR")
   }
