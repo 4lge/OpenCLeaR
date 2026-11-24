@@ -8,19 +8,20 @@ if (requireNamespace("tinytest", quietly = TRUE)) {
   }
 
   if (is_pocl) {
-    ## PoCL LLVM-18 has an upstream heap double-free when compiling many kernels in one process.
-    ## Isolate each test file in a fresh Rscript subprocess so PoCL's LLVM state resets cleanly.
+    ## PoCL LLVM-18 has an upstream heap double-free during process teardown when compiling
+    ## multiple kernels. Isolate each test file in a subprocess and terminate cleanly via
+    ## SIGKILL once all assertions pass to bypass PoCL's buggy atexit() destructor.
     test_dir <- system.file("tinytest", package = "OpenCLeaR")
     test_files <- sort(list.files(test_dir, pattern = "\\.[Rr]$", full.names = TRUE))
     rscript_bin <- file.path(R.home("bin"), "Rscript")
 
     for (tf in test_files) {
       expr <- sprintf(
-        "res <- tinytest::run_test_file(%s); if (any(!as.logical(res))) quit(status = 1L)",
+        "res <- tinytest::run_test_file(%s); if (any(!as.logical(res))) quit(status = 1L, save = 'no'); tools::pskill(Sys.getpid(), 9L)",
         deparse(tf)
       )
       status <- system2(rscript_bin, args = c("-e", shQuote(expr)))
-      if (!identical(status, 0L)) {
+      if (!identical(status, 0L) && !identical(status, 137L) && !identical(status, 9L)) {
         stop("Test file failed under PoCL subprocess isolation: ", basename(tf))
       }
     }

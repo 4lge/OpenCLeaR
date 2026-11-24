@@ -549,6 +549,12 @@ idwOCL <- (function() {
 })()
 ```
 
+
+## Last R CMD check result
+
+[![R-CMD-check](https://github.com/4lge/OpenCLeaR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/4lge/OpenCLeaR/actions/workflows/R-CMD-check.yaml)
+
+
 ## 📚 Resources
 
 - [CMake Documentation](https://cmake.org/documentation/)
