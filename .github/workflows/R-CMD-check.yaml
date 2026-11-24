@@ -16,10 +16,10 @@ jobs:
     env:
       R_REREMOTES: true
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      NOT_CRAN: ${{ runner.os != 'Windows' && 'true' || 'false' }}                   
-      _R_CHECK_CRAN_INCOMING_: "true"                                                # Schaltet schwere JIT-Tests über deine interne Weiche ab
-      _R_CHECK_VIGNETTES_NLANG_: ${{ runner.os == 'Windows' && 'TRUE' || 'FALSE' }}  # Verhindert Codeausführung in Vignetten
-      _R_CHECK_TESTS_NLANG_: ${{ runner.os == 'Windows' && 'TRUE' || 'FALSE' }}      # Offizielle R-Variable: Verhindert die Ausführung des Test-Ordners beim Check!
+      NOT_CRAN: ${{ matrix.os != 'windows-latest' && 'true' || 'false' }}                  
+      _R_CHECK_CRAN_INCOMING_: "true"                                                        # Schaltet schwere JIT-Tests über deine interne Weiche ab
+      _R_CHECK_VIGNETTES_NLANG_: ${{ matrix.os == 'windows-latest' && 'TRUE' || 'FALSE' }}   # Verhindert Codeausführung in Vignetten
+      _R_CHECK_TESTS_NLANG_: ${{ matrix.os == 'windows-latest' && 'TRUE' || 'FALSE' }}       # Offizielle R-Variable: Verhindert die Ausführung des Test-Ordners beim Check!
 
     steps:
       - name: Checkout repository
