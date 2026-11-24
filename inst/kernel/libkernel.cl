@@ -1,6 +1,10 @@
 // -*- c -*-
 
-//  define seveeal constants regarding float/double differences
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wnan-infinity-disabled"
+#endif
+
+//  define several constants regarding float/double differences
 #if defined(cl_khr_fp64) || defined(cl_amd_fp64)
 #define GPGPU_EPSILON 1e-16
 #define GPGPU_SAFE_MAX 1e-300

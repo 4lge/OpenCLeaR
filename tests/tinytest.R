@@ -1,11 +1,7 @@
 if (requireNamespace("tinytest", quietly = TRUE)) {
-  is_pocl <- FALSE
-  if (OpenCLeaR::EnsureOpenclInitialized()) {
-    devs <- tryCatch(OpenCLeaR::GetDeviceList(), error = function(e) NULL)
-    if (!is.null(devs) && nrow(devs) > 0L) {
-      is_pocl <- any(grepl("pocl|portable", tolower(paste(devs$Platform, devs$Name))))
-    }
-  }
+  devs <- tryCatch(OpenCLeaR::GetDeviceList(), error = function(e) NULL)
+  is_pocl <- !is.null(devs) && nrow(devs) > 0L &&
+    any(grepl("pocl|portable", tolower(paste(devs$Platform, devs$Name))))
 
   if (is_pocl) {
     ## PoCL 6.0 / LLVM-18 triggers upstream codegen/teardown crashes on certain complex
