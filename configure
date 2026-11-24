@@ -80,7 +80,7 @@ if [ "${UNAME}" = "Darwin" ]; then
     #  macOS version: Search path expanded to ../lib/ relative to libs/OpenCLeaR.so
     cat << 'EOF' > src/Makevars
 PKG_CPPFLAGS = -I./backend/include -I./backend/build/local_install/include -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD
-PKG_LIBS = -Wl,-rpath,@loader_path/../lib/ -Wl,-rpath,@loader_path/ -L. -lBACKEND
+PKG_LIBS = -Wl,-rpath,@loader_path/../lib/ -Wl,-rpath,@loader_path/ -Wl,-rpath,$(CURDIR)/backend/build/ -L. -lBACKEND
 
 .PHONY: all prebuild
 

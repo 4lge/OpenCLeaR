@@ -50,6 +50,7 @@ jobs:
             any::roxygen2
 
       - name: Generate NAMESPACE and Rd Documentation via Makefile
+        if: runner.os == 'Linux'        
         run: |
           # 1. Dokumentation, Exporte und RcppSchnittstellen frisch aufbauen
           touch NAMESPACE.in

@@ -15,9 +15,14 @@
 * Win-builder: No OpenCL runtime available; compilation succeeds because
   the Khronos OpenCL ICD Loader is built via CMake. Hardware-dependent
   tinytests, vignettes, and examples are gracefully skipped (see below).
-* GitHub Actions CI (Ubuntu 24.04.5 LTS, R 4.6.2, Intel Core CPU with
-  PoCL driver), headless environment; examples run successfully, while
-  vignettes and tinytests are skipped due to runtime limits (see below).
+* GitHub Actions CI across three platforms (`ubuntu-latest`, `macos-latest`,
+  and `windows-latest`):
+  - Linux (Ubuntu 24.04, Intel CPU with PoCL driver) and macOS (Apple Silicon
+    M-series GPU via Apple OpenCL Framework): full `R CMD check --as-cran`
+    including examples, vignettes, and the complete `tinytest` suite.
+  - Windows (`windows-latest`, headless runner without OpenCL ICD): clean
+    CMake/Rcpp compilation via the bundled Khronos OpenCL ICD Loader;
+    hardware-dependent tests and vignettes are skipped.
 
 ## Known unsupported platforms
 
