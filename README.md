@@ -26,7 +26,7 @@ ___
   kernel strings at runtime using an automated host-interface gateway
   powered by `oclFunction()`. This functionality is made accessible via the 
   **inline** package using the provided plugin and provides simple Rcpp 
-   ntegration to access the OpenCL backend.
+   integration to access the OpenCL backend.
 - ✅ **Platform-Independent Topologies:** Platform-independent
   configuration and linkage is achieved using **CMake**, this is
   inherited from **rcpp-cmake-template** package as upstream
@@ -34,7 +34,7 @@ ___
   and makes OpenCL platforms based on NVIDIA CUDA, AMD ROCm, Intel
   oneAPI (CPU & GPU), Apple OpenCL Framework (macOS Apple
   Silicon/Intel), and headless Portable Compute Layers (PoCL) useable.
-- ✅ **C++ Abstraction of low level OpenCL wrk:** Easy access to
+- ✅ **C++ Abstraction of low level OpenCL work:** Easy access to
   lowlevel OpenCL interface is available via a C++ interface taken
   from (a fork of) **OpenCL-Wrapper** featuring `Device`, `Memory` and
   `Kernel` classes.
@@ -44,6 +44,9 @@ ___
   functions like rnorm, dnorm, pnorm, qmvnorm ... Some linear algebra
   functions are also available enabling full Generalized Least Squares
   (`wls_gls_fit`) and Cholesky decomposition workflows.
+  Via the `math_lib` argument, you can also chain multiple helper
+  libraries in order across packages and local files, e.g.,
+  `math_lib = c("libkernel.cl", "./mylib.cl", "otherpkg::extra.cl")`.
 - ✅ **Persistent Binary Cache Management:** Utilizes scoped
   Immediately Invoked Function Expression (IIFE) closure patterns to
   cache compiled device binaries within the active R session,

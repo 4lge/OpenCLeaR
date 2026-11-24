@@ -12,8 +12,8 @@ samples <- rmvnormOCL(200000L, mean = mu3, sigma = Sigma3)
 
 expect_equal(dim(samples), c(200000L, 3L))
 
-d_r <- mvtnorm::dmvnorm(samples, mean = mu, sigma = Sigma, log = TRUE)
-d_ocl <-     dmvnormOCL(samples, mean = mu, sigma = Sigma, log = TRUE)
+d_r <- mvtnorm::dmvnorm(samples, mean = mu3, sigma = Sigma3, log = TRUE)
+d_ocl <-     dmvnormOCL(samples, mean = mu3, sigma = Sigma3, log = TRUE)
 
 max_diff_d <- max(abs(d_r - d_ocl))
 

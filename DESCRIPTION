@@ -28,7 +28,7 @@ SystemRequirements: CMake (>= 3.10), OpenCL
 Encoding: UTF-8
 License: MIT + file LICENSE
 Config/roxygen2/version: 8.0.0
-Suggests: knitr (>= 1.50), rmarkdown, opencltools, tinytest, nmathopencl, ggplot2, gridExtra, RcppParallel
+Suggests: knitr (>= 1.50), rmarkdown, opencltools, tinytest, nmathopencl, ggplot2, gridExtra, RcppParallel, mvtnorm
 Config/testthat/edition: 3
 RoxygenNote: 7.3.3
 NeedsCompilation: yes
