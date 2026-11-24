@@ -552,8 +552,11 @@ idwOCL <- (function() {
 
 ## Last R CMD check result
 
-[![R-CMD-check](https://github.com/4lge/OpenCLeaR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/4lge/OpenCLeaR/actions/workflows/R-CMD-check.yaml)
+Latest results of the included CI runners:
 
+* [![Linux](https://img.shields.io/github/actions/workflow/status/4lge/OpenCLeaR/R-CMD-check.yaml?branch=main&job=R-CMD-check%20(ubuntu-latest)&label=Linux)](https://github.com/4lge/OpenCLeaR/actions/workflows/R-CMD-check.yaml)
+* [![macOS](https://img.shields.io/github/actions/workflow/status/4lge/OpenCLeaR/R-CMD-check.yaml?branch=main&job=R-CMD-check%20(macos-latest)&label=macOS)](https://github.com/4lge/OpenCLeaR/actions/workflows/R-CMD-check.yaml)
+* [![Windows](https://img.shields.io/github/actions/workflow/status/4lge/OpenCLeaR/R-CMD-check.yaml?branch=main&job=R-CMD-check%20(windows-latest)&label=Windows)](https://github.com/4lge/OpenCLeaR/actions/workflows/R-CMD-check.yaml)
 
 ## 📚 Resources
 
