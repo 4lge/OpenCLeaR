@@ -49,12 +49,14 @@ inlineCxxPlugin <- function(...) {
     }
 
     ## Add flags for output suppression to the CPPFLAGS to mute opencl.hpp
-    ## and use Rcpp::Rcout for output control.
+    ## and use Rcpp::Rcout for output control, plus current working dir for local headers.
+    wd_inc <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
     settings$env$PKG_CPPFLAGS <- paste(
         settings$env$PKG_CPPFLAGS,
-        " -DPLUGIN=1 -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD -I",
+        " -DPLUGIN=1 -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD -I\"",
         system.file("include", package = "OpenCLeaR"),
-        sep=""
+        "\" -I\"", wd_inc, "\"",
+        sep = ""
     )
 
     ## Without this entry the Tinytest aborts when parsing opencl.hpp,
@@ -91,11 +93,15 @@ inlineCxxPluginFloat <- function(...) {
         settings$env$PKG_CXXFLAGS <- paste(settings$env$PKG_CXXFLAGS, " -mstackrealign ", sep="")
     }
     ## Add flags for output suppression to the CPPFLAGS to mute opencl.hpp
-    ## and use Rcpp::Rcout for output control.
+    ## and use Rcpp::Rcout for output control. Force FP32 and plus current 
+    ## working dir for local headers.
+
+    wd_inc <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
     settings$env$PKG_CPPFLAGS <- paste(
         settings$env$PKG_CPPFLAGS,
-        " -DFP64_MODE=0 -DPLUGIN=1 -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD -I",
+        " -DFP64_MODE=0 -DPLUGIN=1 -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD -I\"",
         system.file("include", package = "OpenCLeaR"),
+        "\" -I\"", wd_inc, "\"",
         sep=""
     )
 
@@ -133,11 +139,14 @@ inlineCxxPluginDouble <- function(...) {
         settings$env$PKG_CXXFLAGS <- paste(settings$env$PKG_CXXFLAGS, " -mstackrealign ", sep="")
     }
     ## Add flags for output suppression to the CPPFLAGS to mute opencl.hpp
-    ## and use Rcpp::Rcout for output control.
+    ## and use Rcpp::Rcout for output control. Force FP64 plus current
+    ## working dir for local headers.
+    wd_inc <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
     settings$env$PKG_CPPFLAGS <- paste(
         settings$env$PKG_CPPFLAGS,
-        " -DFP64_MODE=1 -DPLUGIN=1 -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD -I",
+        " -DFP64_MODE=1 -DPLUGIN=1 -DOPENCLEAR_NO_OUTPUT -DOPENCLEAR_R_BUILD -I\"",
         system.file("include", package = "OpenCLeaR"),
+        "\" -I\"", wd_inc, "\"",
         sep=""
     )
 
@@ -542,20 +551,40 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
             ""
         },
         math_lib_injection,
-        if (isTRUE(debug)) {
-            paste0(
-                "    std::ofstream debug_file(\"debug_kernel.cl\");\n",
-                "    debug_file << device->get_compiled_code();\n",
-                "    debug_file.close();\n"
-            )
-        } else {
-            "\n"
-        },
         "    std::string compiler_folder = compiler_dir;\n",
         "    device->set_compiler_path(compiler_folder);\n",
+	## pepare kerenl debug
+        if (isTRUE(debug)) {
+            paste0(
+                "#ifdef _WIN32\n",
+                "    _putenv_s(\"OPENCLEAR_DEBUG_KERNEL\", \"1\");\n",
+                "#else\n",
+                "    setenv(\"OPENCLEAR_DEBUG_KERNEL\", \"1\", 1);\n",
+                "#endif\n"
+            )
+        } else {
+            ""
+        },
         ## STEP 2: Only now call the compiler
-        "    device->load_or_build_kernel();\n"
+        "    device->load_or_build_kernel();\n",
+	## stop kerenl debug
+        if (isTRUE(debug)) {
+            paste0(
+                "#ifdef _WIN32\n",
+                "    _putenv_s(\"OPENCLEAR_DEBUG_KERNEL\", \"\");\n",
+                "#else\n",
+                "    unsetenv(\"OPENCLEAR_DEBUG_KERNEL\");\n",
+                "#endif\n"
+            )
+        } else {
+            ""
+        }
     )
+    if (isTRUE(debug)) {
+        old_dbg <- Sys.getenv("OPENCLEAR_DEBUG_KERNEL", unset = NA)
+        on.exit(if (is.na(old_dbg)) Sys.unsetenv("OPENCLEAR_DEBUG_KERNEL") else Sys.setenv(OPENCLEAR_DEBUG_KERNEL = old_dbg), add = TRUE)
+        Sys.setenv(OPENCLEAR_DEBUG_KERNEL = "1")
+    }
     ## =========================================================================
     ## tunnel the device address into to shared object: No DLL locks on JIT run
     ## =========================================================================
