@@ -604,6 +604,22 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
         full_cl_code,
         cpp_source
     )
+    if (isTRUE(debug)) {
+        sig_str <- paste(names(extended_signature), unname(extended_signature), sep = " = ", collapse = ", ")
+        debug_cpp_dump <- paste0(
+            "// === OpenCLeaR DEBUG INTERFACE DUMP ===\n",
+            "// Kernel file    : ", kernel_path_final, "\n",
+            "// Interface file : ", interface_path_final, "\n",
+            "// Plugin         : ", chosen_plugin, "\n",
+            "// R Signature    : c(", sig_str, ")\n",
+            "// ======================================\n\n",
+            "#include <Rcpp.h>\n#include \"CLpp.hpp\"\n#include \"init.hpp\"\n\n",
+            "SEXP debug_entry(", paste(paste("SEXP", names(extended_signature)), collapse = ", "), ") {\n",
+            modified_cpp_body,
+            "\n}\n"
+        )
+        writeLines(debug_cpp_dump, "./debug_interface.cpp")
+    }    
     executable_r_func <- inline::cxxfunction(
                                      sig     = extended_signature,
                                      body    = modified_cpp_body,
@@ -752,6 +768,8 @@ inlineCL <- function(signature, kernel_file, interface_file, debug = FALSE, math
 oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE, RNGkind = "Mersenne-Twister", force_float = FALSE, verbose = FALSE, debug = FALSE, cache = TRUE) {
     ## handle cached version
     kernel_base_name <- tools::file_path_sans_ext(basename(kernel_file))
+    iface_base_name  <- tools::file_path_sans_ext(basename(interface_file))
+
 
     ## Hide local state via lexical scoping for fast hot-path checks
     compiled_func    <- NULL
@@ -789,17 +807,22 @@ oclFunction <- function(signature, kernel_file, interface_file, math_lib = TRUE,
 	  raw_sig <- paste(basename(resolved_libs), mtimes, collapse = "_")
 	  paste0("_lib", sum(utf8ToInt(raw_sig)) %% 1000000L)
 	}
+        src_files  <- c(kernel_file, interface_file)
+        src_mtimes <- as.character(as.integer(file.info(src_files)$mtime))
+        src_sig    <- paste0("_src", sum(utf8ToInt(paste(basename(src_files), src_mtimes, collapse = "_"))) %% 1000000L)
         ## Unique cache key for this specific device compilation
         cache_key <- paste0(".",
                             kernel_base_name, "_",
+                            iface_base_name, "_",
                             platform_prefix, "_",
                             clean_vendor, "_",
                             clean_device, "_dev",
                             dev_info$Index, "_",
                             fp64_suffix, "_",
                             prec_suffix, "_",
-			                      rng_suffix, "_",
-			                      lib_sig, "_",
+                            rng_suffix, "_",
+                            src_sig, "_",
+                            lib_sig, "_",
                             "_ocl_internal")
 
         cache_env <- asNamespace("OpenCLeaR")$.OpenCLeaR_Env
